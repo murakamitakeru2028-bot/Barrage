@@ -1829,58 +1829,7 @@ function drawHUD(){
 //  ウェーブバナー
 // ─────────────────────────────────────
 function drawTouchControls(){
-  if(!hasTouchInput || state!=='play') return;
-  ctx.save();
-  if(touchControlMode()==='stick'){
-    const baseX=stickState.active?stickState.baseX:TOUCH_STICK.idleX;
-    const baseY=stickState.active?stickState.baseY:TOUCH_STICK.y;
-    const knobX=stickState.active?stickState.knobX:baseX;
-    const knobY=stickState.active?stickState.knobY:baseY;
-    ctx.strokeStyle=stickState.active?'rgba(0,240,255,.72)':'rgba(232,232,240,.22)';
-    ctx.fillStyle=stickState.active?'rgba(0,240,255,.11)':'rgba(232,232,240,.045)';
-    ctx.lineWidth=stickState.active?2:1.2;
-    ctx.shadowColor='#00f0ff';
-    ctx.shadowBlur=stickState.active?14:4;
-    ctx.beginPath();ctx.arc(baseX,baseY,TOUCH_STICK.baseR,0,Math.PI*2);ctx.fill();ctx.stroke();
-    ctx.beginPath();ctx.moveTo(baseX-22,baseY);ctx.lineTo(baseX+22,baseY);ctx.stroke();
-    ctx.fillStyle=stickState.active?'#00f0ff':'rgba(232,232,240,.46)';
-    ctx.beginPath();ctx.arc(knobX,knobY,TOUCH_STICK.knobR,0,Math.PI*2);ctx.fill();
-    ctx.shadowBlur=0;
-    ctx.restore();
-    return;
-  }
-  const pads=[
-    {x:TOUCH_PAD.edge,y:TOUCH_PAD.y,w:TOUCH_PAD.w,h:TOUCH_PAD.h,dir:-1},
-    {x:W-TOUCH_PAD.edge-TOUCH_PAD.w,y:TOUCH_PAD.y,w:TOUCH_PAD.w,h:TOUCH_PAD.h,dir:1}
-  ];
-  for(const p of pads){
-    const active=touchDir===p.dir;
-    rr(p.x,p.y,p.w,p.h,8);
-    ctx.fillStyle=active?'rgba(0,240,255,.18)':'rgba(232,232,240,.055)';
-    ctx.fill();
-    ctx.strokeStyle=active?'rgba(0,240,255,.72)':'rgba(232,232,240,.18)';
-    ctx.lineWidth=active?1.8:1;
-    rr(p.x,p.y,p.w,p.h,8);
-    ctx.stroke();
-    ctx.shadowColor='#00f0ff';
-    ctx.shadowBlur=active?14:4;
-    ctx.fillStyle=active?'#00f0ff':'rgba(232,232,240,.48)';
-    ctx.beginPath();
-    const cx=p.x+p.w/2, cy=p.y+p.h/2, s=17;
-    if(p.dir<0){
-      ctx.moveTo(cx-s,cy);
-      ctx.lineTo(cx+s*.45,cy-s);
-      ctx.lineTo(cx+s*.45,cy+s);
-    }else{
-      ctx.moveTo(cx+s,cy);
-      ctx.lineTo(cx-s*.45,cy-s);
-      ctx.lineTo(cx-s*.45,cy+s);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.shadowBlur=0;
-  }
-  ctx.restore();
+  return;
 }
 function pauseButtonRect(i){
   const w=PAUSE_MENU.panelW-44, h=50, gap=12;
@@ -2956,7 +2905,7 @@ function startTouchMove(cx){
   touchAxis=touchDir;
 }
 function startStickMove(cx,cy){
-  const minY=HUD_T+50, maxY=H-HUD_B-34;
+  const minY=H-HUD_B+8, maxY=H-24;
   stickState.active=true;
   stickState.baseX=Math.max(TOUCH_STICK.baseR+10,Math.min(W-TOUCH_STICK.baseR-10,cx));
   stickState.baseY=Math.max(minY,Math.min(maxY,cy));
