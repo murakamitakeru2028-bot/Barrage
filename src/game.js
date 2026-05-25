@@ -10,27 +10,36 @@ const REGEN_STEP    = 0.5;
 const SHIELD_DELAY  = 300;
 const MAX_SPECIAL_TYPES = 5;
 const REROLL_COST  = 5;
-const TOKEN_SCORE_UNIT = 1000;
+const TOKEN_SCORE_UNIT = 100;
 const BODY_STAT_GROWTH = 1.05;
-const MAX_PARTICLES = 180;
-const MAX_EP_ORBS   = 50;
-const MAX_ARROWS    = 160;
+const MAX_PARTICLES = 120;
+const MAX_EP_ORBS   = 42;
+const MAX_ARROWS    = 140;
+const MAX_FLOAT_TEXTS = 28;
 const GRACE_FRAMES  = 120;
-const ENEMY_HP_BASE = 54;
-const ENEMY_HP_LINEAR = 30;
-const ENEMY_HP_QUAD = 2.6;
+const ENEMY_HP_BASE = 58;
+const ENEMY_HP_LINEAR = 32;
+const ENEMY_HP_QUAD = 2.8;
 const ENEMY_HP_EXP = 1.035;
-const MULTISHOT_DAMAGE_EXP = 0.45;
+const DAMAGE_XP_RATE = 0.032;
+const MULTISHOT_DAMAGE_EXP = 0.34;
+const MULTISHOT_FIRE_DELAY_STEP = 0.07;
+const GATLING_FIRE_STEP = 0.14;
+const GATLING_DAMAGE_STEP = 0.06;
+const GATLING_SIZE_STEP = 0.035;
 const SPLIT_DAMAGE_BASE = 0.62;
 const SPLIT_PARENT_RETENTION = 0.68;
-const UPGRADE_ZONE={w:106,h:74,vy:.92,missY:H+24};
+const UPGRADE_ZONE={w:110,h:96,vy:.92,missY:H+44};
 const BASE_ARROW_RANGE = 255;
-const HUD_T         = 52;   // 上部HUD高さ
-const HUD_B         = 108;  // 下部HUD高さ
+const HUD_T         = 32;   // 上部HUD高さ
+const HUD_B         = 132;  // 下部HUD高さ
+const PLAYER_Y      = H - HUD_B - 48;
 
 const canvas = document.getElementById('canvas');
 const ctx    = canvas.getContext('2d');
 let renderScaleX = 1, renderScaleY = 1;
+let bgBaseGradient=null, bgNebulaA=null, bgNebulaB=null, bgScanGradient=null;
+let hudTopGradient=null, hudBottomGradient=null, pauseButtonGradient=null;
 
 function resizeCanvas(){
   const rect = canvas.getBoundingClientRect();
@@ -126,6 +135,7 @@ const SPECIAL_DEFS = [
   { id:'homing',    name:'ホーミング',     icon:'⊕',   color:'#cc00ff', desc:lv=>`誘導力 Lv.${lv}` },
   { id:'piercing',  name:'貫通',           icon:'◆',   color:'#ffe040', desc:lv=>`${lv}体まで貫通` },
   { id:'powerShot', name:'強化弾',         icon:'✦',   color:'#ff6020', desc:lv=>`ダメージ +${lv*30}%` },
+  { id:'gatling',   name:'Gatling', icon:'////', color:'#00dd77', desc:lv=>`Fire rate +${Math.round(gatlingFireBonus(lv)*100)}% / DMG ${Math.round(gatlingDamageScale(lv)*100)}% / SIZE ${Math.round(gatlingBulletScale(lv)*100)}%` },
   { id:'supportDrone', name:'支援ドローン', icon:'◉', color:'#66ccff', desc:lv=>`${lv}機が旋回射撃` },
   { id:'explosive',    name:'炸裂弾',       icon:'✹', color:'#ff7040', desc:lv=>`半径${34+lv*6}pxの範囲攻撃` },
   { id:'ricochet',     name:'跳弾',         icon:'↯', color:'#ffe040', desc:lv=>`${lv}回まで跳ね返る` },
@@ -147,12 +157,13 @@ let score   = 0, wave = 1, frame = 0;
 let coins   = 0;
 let tokensEarned = 0;
 let hp      = 100, maxHp = 100;
-let xp      = 0, xpLevel = 0;
+let xp      = 0, xpLevel = 0, hitXpBank = 0;
 let invincible = 0, skillPoints = 0, fireTimer = 0;
 let regenBank = 0;
 let shield = 0, shieldCooldown = 0, droneTimer = 0, bitTimer = 0;
-let touchDir = 0, touchTargetX = null, mouseX = -1, mouseY = -1;
+let touchDir = 0, touchAxis = 0, touchTargetX = null, mouseX = -1, mouseY = -1;
 let activePointerId = null, suppressNextClick = false;
+let stickState = { active:false, baseX:W/2, baseY:H-166, knobX:W/2, knobY:H-166 };
 let installPromptEvent = null, appInstalled = (window.matchMedia?.('(display-mode: standalone)').matches ?? false) || navigator.standalone === true;
 let shakeT = 0, shakeAmp = 0;
 let waveBanner = 0;
@@ -165,9 +176,8 @@ let arrows=[], enemies=[], particles=[];
 let epOrbs=[], floatTexts=[];
 let pendingSpecials=[];
 let upgradeZones=[];
-let bgStars=[], bgLines=[];
-let playerTrail=[];
-let player = { x:W/2, y:H-75, size:14 };
+let bgStars=[], bgLines=[], bgBeams=[];
+let player = { x:W/2, y:PLAYER_Y, prevX:W/2, prevY:PLAYER_Y, size:14 };
 let meta = {
   tokens:0,
   upgrades:{ hp:0, defense:0, attack:0, fireRate:0 },
@@ -178,11 +188,15 @@ let meta = {
   ownedCores:{basic:true},
   ownedParts:{},
   coreLevels:{basic:0},
-  mountedParts:{}
+  mountedParts:{},
+  settings:{ touchControl:'buttons' }
 };
-let homeState = 'home'; // 'home' | 'store' | 'warehouse' | 'upgrade'
+let homeState = 'home'; // 'home' | 'store' | 'warehouse' | 'upgrade' | 'settings' | 'codex'
 let storeTab = 'ship';   // 'ship' | 'core' | 'part'
 let warehouseTab = 'ship'; // 'ship' | 'part'
+let codexTab = 'special';
+let codexPage = 0;
+let pauseView = 'menu';
 
 // ─────────────────────────────────────
 //  ステータス計算
@@ -206,10 +220,13 @@ const partsMult = id => mountedPartIds().reduce((m,pid)=>{
   return m * (p?.mult?.[id] ?? 1);
 },1);
 const bodyMult = id => bodyMultFor(bodyLevel(id)) * shipMult(id) * coreMult(id) * partsMult(id);
-const bodyUpgradeCost = id => 2 + bodyLevel(id);
+const bodyUpgradeCost = id => 1 + bodyLevel(id);
 // ホームアップグレードコスト: レベルごとに30%増加（青天井）
-const homeUpgradeCost = id => Math.floor(5 * Math.pow(1.3, meta.homeUpgrades[id] || 0));
-const coreUpgradeCost = () => 3 + selectedCoreLevel()*2;
+const homeUpgradeCost = id => {
+  const lv=meta.homeUpgrades[id] || 0;
+  return lv===0 ? 2 : Math.floor(4 * Math.pow(1.32, lv-1));
+};
+const coreUpgradeCost = () => 2 + selectedCoreLevel()*2;
 const hpRatio   = () => maxHp>0 ? hp/maxHp : 0;
 const adrenalinePower = () => specialLevels.adrenaline * .25 * (1-hpRatio());
 const synergyMult = () => 1 + Math.max(0, statMult('bulletSpeed')-1) * specialLevels.statSynergy * .35;
@@ -218,7 +235,7 @@ const bulletSpd = () => 9 * statMult('bulletSpeed');
 const arrowRange = () => BASE_ARROW_RANGE * statMult('range');
 const damage    = () => (10 + wave*2) * statMult('damage') * bodyMult('attack') * (1 + specialLevels.powerShot*0.30) * (1+adrenalinePower()) * synergyMult();
 const xpMult    = () => statMult('xpMult');
-const moveSpeed = () => 4.5 * statMult('speed');
+const moveSpeed = () => 3.7 * statMult('speed');
 const critChance  = () => Math.min(1, effectiveStatLevel('critChance') * CRIT_STEP);
 const doubleCritChance = () => Math.min(1, Math.max(0, effectiveStatLevel('critChance')-20) * CRIT_STEP);
 const critDamage  = () => CRIT_BASE_DAMAGE * statMult('critDamage');
@@ -226,9 +243,14 @@ const regenPerSec = () => effectiveStatLevel('regen') * REGEN_STEP;
 const arrowCnt  = () => 1 + specialLevels.multiShot;
 const multiShotDamageScale = (n=arrowCnt()) => 1 / Math.pow(Math.max(1,n), MULTISHOT_DAMAGE_EXP);
 const splitDamageScale = (parentScale,n) => parentScale * Math.max(.16, SPLIT_DAMAGE_BASE / Math.sqrt(Math.max(1,n)));
+const gatlingFireBonus = (lv=specialLevels.gatling) => lv * GATLING_FIRE_STEP;
+const gatlingFireMult = (lv=specialLevels.gatling) => 1 + gatlingFireBonus(lv);
+const gatlingDamageScale = (lv=specialLevels.gatling) => 1 / (1 + lv * GATLING_DAMAGE_STEP);
+const gatlingBulletScale = (lv=specialLevels.gatling) => Math.max(.65, 1 - lv * GATLING_SIZE_STEP);
 const homingStr = () => specialLevels.homing * 0.13;
 const pierce    = () => specialLevels.piercing;
-const fireInterval = () => Math.max(1, fireRate() / (1+adrenalinePower()));
+const multiShotFireDelay = () => 1 + specialLevels.multiShot * MULTISHOT_FIRE_DELAY_STEP;
+const fireInterval = () => Math.max(1, fireRate() * multiShotFireDelay() / ((1+adrenalinePower()) * gatlingFireMult()));
 const shieldMax = () => specialLevels.energyShield>0 ? 1+Math.floor((specialLevels.energyShield-1)/3) : 0;
 const stasisRadius = () => 72 + specialLevels.stasisAura*10;
 const stasisMult = () => Math.max(.35, 1-specialLevels.stasisAura*.07);
@@ -284,6 +306,8 @@ function loadMeta(){
       meta.ownedParts={...(saved.ownedParts||{})};
       meta.coreLevels={basic:0,...(saved.coreLevels||{})};
       meta.mountedParts={...(saved.mountedParts||{})};
+      meta.settings={touchControl:'buttons',...(saved.settings||{})};
+      if(!['buttons','stick'].includes(meta.settings.touchControl)) meta.settings.touchControl='buttons';
       if(legacyLoad) meta.selectedShip='coreOnly';
       if(!meta.ownedShips[meta.selectedShip]) meta.selectedShip='coreOnly';
       if(!meta.ownedCores[meta.selectedCore]) meta.selectedCore='basic';
@@ -293,6 +317,14 @@ function loadMeta(){
 }
 function saveMeta(){
   try{localStorage.setItem('barrage-meta',JSON.stringify(meta));}catch(e){}
+}
+const touchControlMode = () => meta.settings?.touchControl==='stick' ? 'stick' : 'buttons';
+function setTouchControlMode(mode){
+  meta.settings={touchControl:'buttons',...(meta.settings||{})};
+  meta.settings.touchControl=mode==='stick' ? 'stick' : 'buttons';
+  saveMeta();
+  stopTouchMove();
+  addFloat(W/2,142,meta.settings.touchControl==='stick'?'STICK CONTROL':'BUTTON CONTROL','#00f0ff',11);
 }
 function awardTokens(){
   const gain=Math.floor(score/TOKEN_SCORE_UNIT);
@@ -494,6 +526,7 @@ function rrTop(x,y,w,h,r){
 }
 function shake(amp){ shakeT=14; shakeAmp=amp; }
 function addFloat(x,y,text,color,size=13){
+  if(floatTexts.length>=MAX_FLOAT_TEXTS) floatTexts.shift();
   floatTexts.push({x,y,text,color,size,life:65,maxLife:65,vy:-0.9});
 }
 const distSq = (ax,ay,bx,by) => {
@@ -514,33 +547,112 @@ function nearestEnemy(x,y,exclude=null,range=Infinity){
 //  背景
 // ─────────────────────────────────────
 function initBg(){
+  bgBaseGradient=ctx.createLinearGradient(0,0,W,H);
+  bgBaseGradient.addColorStop(0,'#050713');
+  bgBaseGradient.addColorStop(.52,'#070713');
+  bgBaseGradient.addColorStop(1,'#04040b');
+  bgNebulaA=ctx.createRadialGradient(W*.22,H*.17,8,W*.22,H*.17,230);
+  bgNebulaA.addColorStop(0,'rgba(0,240,255,.13)');
+  bgNebulaA.addColorStop(.42,'rgba(0,120,255,.045)');
+  bgNebulaA.addColorStop(1,'rgba(0,0,0,0)');
+  bgNebulaB=ctx.createRadialGradient(W*.88,H*.72,12,W*.88,H*.72,260);
+  bgNebulaB.addColorStop(0,'rgba(255,45,120,.10)');
+  bgNebulaB.addColorStop(.48,'rgba(204,0,255,.035)');
+  bgNebulaB.addColorStop(1,'rgba(0,0,0,0)');
+  bgScanGradient=ctx.createLinearGradient(0,0,0,H);
+  bgScanGradient.addColorStop(0,'rgba(255,255,255,.018)');
+  bgScanGradient.addColorStop(.5,'rgba(255,255,255,0)');
+  bgScanGradient.addColorStop(1,'rgba(255,255,255,.012)');
+  hudTopGradient=ctx.createLinearGradient(0,0,0,HUD_T+16);
+  hudTopGradient.addColorStop(0,'rgba(6,6,14,.92)');
+  hudTopGradient.addColorStop(.72,'rgba(6,6,14,.64)');
+  hudTopGradient.addColorStop(1,'rgba(6,6,14,0)');
+  hudBottomGradient=ctx.createLinearGradient(0,H-HUD_B-18,0,H);
+  hudBottomGradient.addColorStop(0,'rgba(6,6,14,0)');
+  hudBottomGradient.addColorStop(.4,'rgba(6,6,14,.82)');
+  hudBottomGradient.addColorStop(1,'rgba(6,6,14,.97)');
+  pauseButtonGradient=ctx.createLinearGradient(PAUSE_BTN.x,PAUSE_BTN.y,PAUSE_BTN.x+PAUSE_BTN.w,PAUSE_BTN.y+PAUSE_BTN.h);
+  pauseButtonGradient.addColorStop(0,'rgba(232,232,240,.10)');
+  pauseButtonGradient.addColorStop(.55,'rgba(12,16,28,.82)');
+  pauseButtonGradient.addColorStop(1,'rgba(6,6,14,.90)');
   bgLines=[];
   for(let x=0;x<=W;x+=40) bgLines.push({t:'v',x});
   for(let y=0;y<=H;y+=40) bgLines.push({t:'h',y});
   bgStars=[];
-  for(let i=0;i<100;i++) bgStars.push({
+  for(let i=0;i<105;i++) bgStars.push({
     x:Math.random()*W, y:Math.random()*H,
-    r:Math.random()*1.4+.3, phase:Math.random()*Math.PI*2, spd:Math.random()*.02+.01
+    r:Math.random()*1.5+.25,
+    layer:Math.random()<.72?0:1,
+    phase:Math.random()*Math.PI*2,
+    spd:Math.random()*.018+.006
+  });
+  bgBeams=[];
+  for(let i=0;i<8;i++) bgBeams.push({
+    x:-W+Math.random()*W*2,
+    y:Math.random()*H,
+    len:90+Math.random()*170,
+    spd:.12+Math.random()*.32,
+    a:.025+Math.random()*.045,
+    c:Math.random()<.55?'0,240,255':'255,45,120'
   });
 }
 function drawBg(){
-  ctx.fillStyle='#06060e'; ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle='rgba(0,240,255,0.045)'; ctx.lineWidth=.5;
+  const t=(globalThis.performance?.now?.() ?? Date.now())*.001;
+  ctx.fillStyle=bgBaseGradient; ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  ctx.fillStyle=bgNebulaA;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=bgNebulaB;ctx.fillRect(0,0,W,H);
+  ctx.restore();
+
+  const gridShift=(t*8)%40;
+  ctx.strokeStyle='rgba(0,240,255,0.026)'; ctx.lineWidth=.5;
   for(const l of bgLines){
     ctx.beginPath();
-    l.t==='v'?(ctx.moveTo(l.x,0),ctx.lineTo(l.x,H)):(ctx.moveTo(0,l.y),ctx.lineTo(W,l.y));
+    if(l.t==='v'){
+      const x=(l.x+Math.sin(t*.22+l.x*.04)*2);
+      ctx.moveTo(x,0);ctx.lineTo(x,H);
+    }else{
+      const y=(l.y+gridShift)%H;
+      ctx.moveTo(0,y);ctx.lineTo(W,y);
+    }
     ctx.stroke();
   }
-  ctx.strokeStyle='rgba(255,45,120,0.04)'; ctx.setLineDash([5,18]); ctx.lineWidth=1;
-  for(let i=-5;i<18;i++){const o=i*80;ctx.beginPath();ctx.moveTo(o,0);ctx.lineTo(o+H,H);ctx.stroke();}
+
+  ctx.strokeStyle='rgba(255,45,120,0.020)'; ctx.setLineDash([5,18]); ctx.lineWidth=1;
+  for(let i=-5;i<18;i++){
+    const o=i*80+(t*10)%80;
+    ctx.beginPath();ctx.moveTo(o,0);ctx.lineTo(o+H,H);ctx.stroke();
+  }
   ctx.setLineDash([]);
+
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  for(const b of bgBeams){
+    const x=((b.x+t*b.spd*120)%(W+260))-130;
+    ctx.strokeStyle=`rgba(${b.c},${b.a})`;
+    ctx.lineWidth=1.2;
+    ctx.beginPath();
+    ctx.moveTo(x,b.y);
+    ctx.lineTo(x+b.len,b.y+b.len*.35);
+    ctx.stroke();
+  }
+  ctx.restore();
+
   for(const s of bgStars){
     s.phase+=s.spd;
-    const a=.15+Math.abs(Math.sin(s.phase))*.25;
+    const drift=s.layer?((t*9+s.x*.02)%H):0;
+    const y=s.layer?(s.y+drift)%H:s.y;
+    const a=(s.layer?.13:.08)+Math.abs(Math.sin(s.phase))*(s.layer?.22:.14);
     ctx.fillStyle=`rgba(200,220,255,${a})`;
-    ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(s.x,y,s.r,0,Math.PI*2);ctx.fill();
   }
-  ctx.strokeStyle='rgba(0,240,255,0.25)'; ctx.lineWidth=1.5;
+
+  ctx.fillStyle=bgScanGradient;
+  for(let y=(t*24)%24;y<H;y+=24) ctx.fillRect(0,y,W,1);
+
+  ctx.strokeStyle='rgba(0,240,255,0.12)'; ctx.lineWidth=1.1;
   const L=22;
   for(const[cx,cy,sx,sy] of [[8,8,1,1],[W-8,8,-1,1],[8,H-8,1,-1],[W-8,H-8,-1,-1]]){
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+sx*L,cy);ctx.stroke();
@@ -552,10 +664,10 @@ function drawBg(){
 //  プレイヤー
 // ─────────────────────────────────────
 function drawPlayer(){
-  for(let i=0;i<playerTrail.length;i++){
-    const a=(i/playerTrail.length)*.22;
-    ctx.fillStyle=`rgba(0,240,255,${a})`;
-    ctx.beginPath();ctx.arc(playerTrail[i].x,playerTrail[i].y,3*(i/playerTrail.length),0,Math.PI*2);ctx.fill();
+  if(player.prevX!==player.x){
+    ctx.strokeStyle='rgba(0,240,255,.16)';
+    ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(player.prevX,player.prevY);ctx.lineTo(player.x,player.y);ctx.stroke();
   }
   if(invincible>0&&Math.floor(invincible/5)%2===0) return;
   drawCraft(player.x,player.y,.72);
@@ -576,7 +688,8 @@ function drawCraft(x,y,s=1,overrideShipId=null,overrideCoreId=null){
   ctx.translate(x,y);
   ctx.scale(s,s);
   ctx.lineJoin='round';
-  ctx.shadowColor=core.color;ctx.shadowBlur=18;
+  const lightCraft=s<.85;
+  ctx.shadowColor=core.color;ctx.shadowBlur=lightCraft?5:18;
 
   if(ship.id!=='coreOnly'){
     ctx.fillStyle=h2r(ship.color,.16);
@@ -599,7 +712,7 @@ function drawCraft(x,y,s=1,overrideShipId=null,overrideCoreId=null){
     const armorN=(mount.armor||[]).length;
     const droneN=(mount.drone||[]).length;
     const boostN=(mount.coreBoost||[]).length;
-    ctx.strokeStyle='#ff6020';ctx.lineWidth=2;ctx.shadowColor='#ff6020';ctx.shadowBlur=turretN?10:0;
+    ctx.strokeStyle='#ff6020';ctx.lineWidth=2;ctx.shadowColor='#ff6020';ctx.shadowBlur=lightCraft?0:(turretN?10:0);
     for(let i=0;i<turretN;i++){
       const ox=(i-(turretN-1)/2)*12;
       ctx.beginPath();ctx.moveTo(ox,-22);ctx.lineTo(ox,-36);ctx.stroke();
@@ -609,13 +722,13 @@ function drawCraft(x,y,s=1,overrideShipId=null,overrideCoreId=null){
       const side=i%2===0?-1:1;
       ctx.beginPath();ctx.moveTo(side*18,-2);ctx.lineTo(side*25,14);ctx.lineTo(side*16,24);ctx.stroke();
     }
-    ctx.fillStyle='#9cff6a';ctx.shadowColor='#9cff6a';ctx.shadowBlur=droneN?10:0;
+    ctx.fillStyle='#9cff6a';ctx.shadowColor='#9cff6a';ctx.shadowBlur=lightCraft?0:(droneN?10:0);
     for(let i=0;i<droneN;i++){
       const side=i%2===0?-1:1;
       ctx.beginPath();ctx.arc(side*(30+Math.floor(i/2)*8),-2+Math.floor(i/2)*14,3.5,0,Math.PI*2);ctx.fill();
     }
     if(boostN>0){
-      ctx.strokeStyle='#cc00ff';ctx.shadowColor='#cc00ff';ctx.shadowBlur=12;ctx.lineWidth=1.5;
+      ctx.strokeStyle='#cc00ff';ctx.shadowColor='#cc00ff';ctx.shadowBlur=lightCraft?0:12;ctx.lineWidth=1.5;
       ctx.beginPath();ctx.arc(0,0,17,0,Math.PI*2);ctx.stroke();
     }
   }else{
@@ -625,7 +738,7 @@ function drawCraft(x,y,s=1,overrideShipId=null,overrideCoreId=null){
     ctx.beginPath();ctx.arc(0,0,30,frame*.02,Math.PI*1.35+frame*.02);ctx.stroke();
   }
 
-  ctx.shadowColor=core.color;ctx.shadowBlur=20;
+  ctx.shadowColor=core.color;ctx.shadowBlur=lightCraft?6:20;
   ctx.fillStyle=h2r(core.color,.28);
   ctx.beginPath();ctx.arc(0,0,12,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle=core.color;ctx.lineWidth=2;
@@ -679,7 +792,7 @@ function drawSupportUnits(){
     ctx.save();
     ctx.strokeStyle=h2r(u.color,.18);ctx.lineWidth=1;
     ctx.beginPath();ctx.arc(player.x,player.y,u.r,0,Math.PI*2);ctx.stroke();
-    ctx.shadowColor=u.color;ctx.shadowBlur=10;ctx.fillStyle=u.color;
+    ctx.fillStyle=u.color;
     for(let i=0;i<n;i++){
       const p=dronePos(i,n,u.r,u.spin);
       ctx.beginPath();ctx.arc(p.x,p.y,u.size,0,Math.PI*2);ctx.fill();
@@ -700,7 +813,6 @@ function drawShield(){
   if(shield<=0) return;
   ctx.save();
   ctx.strokeStyle='rgba(0,240,255,.75)';
-  ctx.shadowColor='#00f0ff';ctx.shadowBlur=16;
   ctx.lineWidth=1.5;
   for(let i=0;i<shield;i++){
     ctx.beginPath();ctx.arc(player.x,player.y,24+i*5,0,Math.PI*2);ctx.stroke();
@@ -712,7 +824,6 @@ function drawStasisAura(){
   ctx.save();
   ctx.strokeStyle='rgba(136,170,255,.34)';
   ctx.fillStyle='rgba(136,170,255,.045)';
-  ctx.shadowColor='#88aaff';ctx.shadowBlur=14;
   ctx.beginPath();ctx.arc(player.x,player.y,stasisRadius(),0,Math.PI*2);ctx.fill();ctx.stroke();
   ctx.restore();
 }
@@ -737,30 +848,33 @@ function spawnArrow(x,y,angle,opts={}){
   const speed=opts.speed??Math.hypot(vx,vy);
   const life=opts.life??240;
   const range=opts.range??(opts.life ? speed*life : arrowRange());
-  arrows.push({x,y,vx,vy,speed,trail:[],pierced:0,pw,ricocheted:0,split:false,dist:0,range,life,damageScale:opts.damageScale??1,kind:opts.kind??'main'});
+  const sizeScale=opts.sizeScale??1;
+  arrows.push({x,y,prevX:x,prevY:y,vx,vy,speed,pierced:0,pw,ricocheted:0,split:opts.split??false,dist:0,range,life,damageScale:opts.damageScale??1,sizeScale,hitRadius:opts.hitRadius??(4*sizeScale),kind:opts.kind??'main'});
 }
 function fireArrows(){
   const n=arrowCnt(), sp=n===1?0:Math.min(.7,.15*n);
   const cx=player.x, cy=player.y-player.size;
-  const scale=multiShotDamageScale(n);
+  const sizeScale=gatlingBulletScale();
+  const scale=multiShotDamageScale(n)*gatlingDamageScale();
   for(let i=0;i<n;i++){
     const off=n===1?0:(i/(n-1)-.5)*sp;
-    spawnArrow(cx,cy,off,{damageScale:scale});
+    spawnArrow(cx,cy,off,{damageScale:scale,sizeScale,hitRadius:4*sizeScale});
   }
 }
 function splitArrow(a){
   const lv=specialLevels.splitter;
   if(lv<=0) return;
-  const n=Math.min(8,2+lv);
+  const n=Math.min(6,2+lv);
   const base=Math.atan2(a.vx,-a.vy);
   const spread=Math.min(1.4,.35+lv*.08);
   const scale=splitDamageScale(a.damageScale,n);
   for(let i=0;i<n;i++){
     const off=n===1?0:(i/(n-1)-.5)*spread;
-    spawnArrow(a.x,a.y,base+off,{kind:'split',damageScale:scale,life:90,range:Math.max(120,a.range*.45)});
+    const sizeScale=Math.max(.55,(a.sizeScale??1)*.85);
+    spawnArrow(a.x,a.y,base+off,{kind:'split',split:true,damageScale:scale,sizeScale,hitRadius:3.2*sizeScale,life:72,range:Math.max(110,a.range*.38)});
   }
   a.damageScale*=SPLIT_PARENT_RETENTION;
-  burst(a.x,a.y,'#ffb000',8);
+  burst(a.x,a.y,'#ffb000',5);
 }
 function redirectArrowToEnemy(a,fromEnemy){
   const target=nearestEnemy(a.x,a.y,fromEnemy,320);
@@ -777,7 +891,7 @@ function updateArrows(){
   const hs=homingStr();
   for(let i=arrows.length-1;i>=0;i--){
     const a=arrows[i];
-    if(hs>0&&enemies.length>0){
+    if(hs>0&&enemies.length>0&&a.kind!=='split'&&frame%2===0){
       let near=null;
       let nd2=240*240;
       for(const e of enemies){const d2=distSq(e.x,e.y,a.x,a.y);if(d2<nd2){nd2=d2;near=e;}}
@@ -790,8 +904,8 @@ function updateArrows(){
         a.speed=spd;
       }
     }
-    a.trail.push({x:a.x,y:a.y});
-    if(a.trail.length>9) a.trail.shift();
+    a.prevX=a.x;
+    a.prevY=a.y;
     a.x+=a.vx; a.y+=a.vy;
     a.dist+=a.speed||Math.hypot(a.vx,a.vy);
     a.life--;
@@ -805,17 +919,36 @@ function updateArrows(){
 }
 function drawArrows(){
   for(const a of arrows){
-    const col=a.pw?'#ff6020':'#00f0ff';
-    for(let t=0;t<a.trail.length;t++){
-      const al=(t/a.trail.length)*.4;
-      ctx.fillStyle=a.pw?`rgba(255,96,32,${al})`:`rgba(0,240,255,${al})`;
-      ctx.beginPath();ctx.arc(a.trail[t].x,a.trail[t].y,1.8*(t/a.trail.length),0,Math.PI*2);ctx.fill();
-    }
-    ctx.save();
-    ctx.shadowColor=col; ctx.shadowBlur=a.pw?16:8; ctx.fillStyle=col;
-    const r=a.pw?4.2+specialLevels.powerShot*.25:3;
-    ctx.beginPath();ctx.arc(a.x,a.y,r,0,Math.PI*2);ctx.fill();
-    ctx.restore();
+    const palette=a.pw
+      ? {core:'#fff1d0',main:'#ff7a24',soft:'255,120,36'}
+      : a.kind==='split'
+        ? {core:'#fff4b8',main:'#ffb000',soft:'255,176,0'}
+        : a.kind==='drone'
+          ? {core:'#e8fbff',main:'#66ccff',soft:'102,204,255'}
+          : a.kind==='bit'
+            ? {core:'#ffffff',main:'#c8d8ff',soft:'200,216,255'}
+            : {core:'#e8fbff',main:'#00f0ff',soft:'0,240,255'};
+    const spd=a.speed||Math.hypot(a.vx,a.vy)||1;
+    const ux=a.vx/spd, uy=a.vy/spd, px=-uy, py=ux;
+    const sizeScale=a.sizeScale??1;
+    const tail=(a.pw?13:9)*sizeScale;
+    const wing=(a.pw?4.2:3)*sizeScale;
+    const len=(a.pw?10:7.5)*sizeScale;
+    const nose=(a.pw?4.2:2.8)*sizeScale;
+    const backX=a.x-ux*len, backY=a.y-uy*len;
+    const tailX=a.x-ux*tail, tailY=a.y-uy*tail;
+
+    ctx.strokeStyle=`rgba(${palette.soft},${a.pw?.40:.28})`;
+    ctx.lineWidth=(a.pw?2.4:1.5)*sizeScale;
+    ctx.beginPath();ctx.moveTo(a.prevX??tailX,a.prevY??tailY);ctx.lineTo(a.x-ux*2*sizeScale,a.y-uy*2*sizeScale);ctx.stroke();
+
+    ctx.fillStyle=palette.main;
+    ctx.beginPath();
+    ctx.moveTo(a.x+ux*nose,a.y+uy*nose);
+    ctx.lineTo(backX+px*wing,backY+py*wing);
+    ctx.lineTo(backX-px*wing,backY-py*wing);
+    ctx.closePath();
+    ctx.fill();
   }
 }
 
@@ -824,40 +957,111 @@ function drawArrows(){
 // ─────────────────────────────────────
 const SHAPES=['tri','rect','hex','circle'];
 const SHAPE_PROPS={
-  tri:    { hpMult:.8,  spdMult:1.3, sizeAdj:-2, r:200,g:80, b:80  },
-  rect:   { hpMult:1.0, spdMult:1.0, sizeAdj:0,  r:80, g:160,b:220 },
-  hex:    { hpMult:1.6, spdMult:.8,  sizeAdj:4,  r:160,g:60, b:220 },
-  circle: { hpMult:.7,  spdMult:1.1, sizeAdj:-3, r:220,g:160,b:40  },
+  tri:    { hpMult:.8,  spdMult:1.3, sizeAdj:-2, rewardMult:.88, r:200,g:80, b:80  },
+  rect:   { hpMult:1.0, spdMult:1.0, sizeAdj:0,  rewardMult:1.00, r:80, g:160,b:220 },
+  hex:    { hpMult:1.6, spdMult:.8,  sizeAdj:4,  rewardMult:1.28, r:160,g:60, b:220 },
+  circle: { hpMult:.7,  spdMult:1.1, sizeAdj:-3, rewardMult:.76, r:220,g:160,b:40  },
 };
 function spawnEnemy(){
   const wB=wave-1;
   const shape=SHAPES[Math.floor(Math.random()*SHAPES.length)];
   const p=SHAPE_PROPS[shape];
-  const base=13+Math.random()*11;
+  const base=12+Math.random()*14;
   const size=Math.floor(base*(1+p.sizeAdj*.1));
   const hpCurve=(ENEMY_HP_BASE+wB*ENEMY_HP_LINEAR+wB*wB*ENEMY_HP_QUAD)*Math.pow(ENEMY_HP_EXP,wB);
-  const baseHp=Math.floor((hpCurve+Math.random()*22)*p.hpMult);
+  const sizeScale=Math.max(.55,Math.min(1.75,size/20));
+  const hpSizeMult=Math.pow(sizeScale,1.55);
+  const rewardMult=p.rewardMult*Math.pow(sizeScale,1.05);
+  const hasCore=size>=(shape==='tri'?22:18);
+  const corelessMult=hasCore?1.12:.34;
+  const baseHp=Math.max(5,Math.floor((hpCurve+Math.random()*22)*p.hpMult*hpSizeMult*corelessMult));
+  const smallRewardScale=hasCore?1:.70;
+  const xpValue=Math.max(1,Math.floor((7+wave*2.4+Math.sqrt(baseHp)*1.45)*rewardMult*smallRewardScale));
+  const scoreValue=Math.max(4,Math.floor((baseHp*.42+wave*4)*rewardMult*smallRewardScale));
+  const orbValue=Math.max(1,Math.floor(1+Math.sqrt(baseHp)*rewardMult*smallRewardScale/5.6));
+  const contactDamage=hasCore?28:10;
   const spd=(1.05+Math.random()*.6+wB*.11)*p.spdMult;
   const x=size+10+Math.random()*(W-(size+10)*2);
-  enemies.push({x,y:-size*2,vx:(Math.random()-.5)*.6,vy:spd,hp:baseHp,maxHp:baseHp,shape,size,r:p.r,g:p.g,b:p.b,flash:0});
+  const rot=Math.random()*Math.PI*2;
+  const rotSpd=(Math.random()<.5?-1:1)*(.006+Math.random()*.012);
+  enemies.push({x,y:-size*2,vx:(Math.random()-.5)*.6,vy:spd,hp:baseHp,maxHp:baseHp,xpValue,scoreValue,orbValue,contactDamage,hasCore,shape,size,r:p.r,g:p.g,b:p.b,flash:0,rot,rotSpd});
 }
 function drawEnemy(e){
-  const{x,y,size,shape,r,g,b,hp,maxHp,flash}=e;
+  const{x,y,size,shape,r,g,b,hp,maxHp,flash,rot=0}=e;
   const fl=flash>0;
+  const hpPct=Math.max(0,Math.min(1,hp/maxHp));
+  const col=`rgb(${r},${g},${b})`;
+  const fill=fl?'rgba(255,255,255,.9)':`rgba(${r},${g},${b},.50)`;
   ctx.save();
-  ctx.shadowColor=fl?'#fff':`rgb(${r},${g},${b})`; ctx.shadowBlur=fl?20:10;
-  ctx.strokeStyle=fl?'#fff':`rgb(${r},${g},${b})`;
-  ctx.fillStyle=fl?'rgba(255,255,255,.9)':`rgba(${r},${g},${b},.55)`;
-  ctx.lineWidth=1.5;
-  ctx.beginPath();
-  if(shape==='tri'){ctx.moveTo(x,y-size);ctx.lineTo(x+size,y+size*.8);ctx.lineTo(x-size,y+size*.8);ctx.closePath();}
-  else if(shape==='rect'){ctx.rect(x-size,y-size,size*2,size*2);}
-  else if(shape==='hex'){for(let i=0;i<6;i++){const a=(Math.PI/3)*i-Math.PI/6;i===0?ctx.moveTo(x+size*Math.cos(a),y+size*Math.sin(a)):ctx.lineTo(x+size*Math.cos(a),y+size*Math.sin(a));}ctx.closePath();}
-  else{ctx.arc(x,y,size,0,Math.PI*2);}
-  ctx.fill();ctx.stroke();
-  if(maxHp>20){
-    ctx.fillStyle='#0a0a18'; ctx.fillRect(x-size,y+size+4,size*2,3);
-    ctx.fillStyle=fl?'#fff':`rgb(${r},${g},${b})`; ctx.fillRect(x-size,y+size+4,size*2*(hp/maxHp),3);
+  ctx.translate(x,y);
+  ctx.rotate(rot);
+  ctx.shadowColor=fl?'#fff':col; ctx.shadowBlur=fl?14:0;
+  ctx.strokeStyle=fl?'#fff':col;
+  ctx.fillStyle=fill;
+  ctx.lineWidth=1.4;
+  const hasCore=e.hasCore ?? size>=(shape==='tri'?22:18);
+  const bodyInner=hasCore?Math.max(10,size*.48):0;
+  const spokeFrom=hasCore?bodyInner:0;
+
+  if(shape==='circle'){
+    ctx.beginPath();ctx.arc(0,0,size,0,Math.PI*2);ctx.fill();ctx.stroke();
+    if(hasCore){
+      ctx.strokeStyle=`rgba(${r},${g},${b},.36)`;ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(0,0,(bodyInner+size)*.5,0,Math.PI*2);ctx.stroke();
+    }
+  }else{
+    const sides=shape==='tri'?3:(shape==='rect'?4:6);
+    const offset=shape==='rect'?Math.PI/4:(shape==='tri'?-Math.PI/2:-Math.PI/6);
+    ctx.beginPath();
+    for(let i=0;i<sides;i++){
+      const a=offset+i*Math.PI*2/sides;
+      i===0?ctx.moveTo(size*Math.cos(a),size*Math.sin(a)):ctx.lineTo(size*Math.cos(a),size*Math.sin(a));
+    }
+    ctx.closePath();ctx.fill();ctx.stroke();
+    if(hasCore){
+      ctx.strokeStyle=`rgba(${r},${g},${b},.42)`;ctx.lineWidth=1;
+      for(let i=0;i<sides;i++){
+        const a=offset+i*Math.PI*2/sides;
+        ctx.beginPath();
+        ctx.moveTo(spokeFrom*Math.cos(a),spokeFrom*Math.sin(a));
+        ctx.lineTo(size*Math.cos(a),size*Math.sin(a));
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.rotate(-rot);
+  if(!hasCore){
+    ctx.restore();
+    if(e.flash>0) e.flash--;
+    return;
+  }
+  const coreY=0;
+  const coreR=Math.max(4.5,Math.min(8,size*.34));
+  const hpStage=hpPct>.66?3:(hpPct>.33?2:(hpPct>.12?1:0));
+  const coreScale=[.54,.68,.84,1][hpStage];
+  const coreColor=fl?'255,255,255':`${r},${g},${b}`;
+  ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(6,6,14,.84)';
+  ctx.beginPath();ctx.arc(0,coreY,coreR+5,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=`rgba(${coreColor},${hpStage===0?.34:.48})`;
+  ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.arc(0,coreY,coreR+4,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle=`rgba(${coreColor},${hpStage===0?.48:.82})`;
+  ctx.beginPath();ctx.arc(0,coreY,coreR*coreScale,0,Math.PI*2);ctx.fill();
+  if(hpStage>=2){
+    ctx.strokeStyle='rgba(232,232,240,.18)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(0,coreY,coreR*(hpStage===3?1.35:1.18),0,Math.PI*2);ctx.stroke();
+  }
+  if(hpStage<=1){
+    ctx.strokeStyle=`rgba(${coreColor},.72)`;ctx.lineWidth=1;
+    const crack=coreR*(hpStage===0?.95:.72);
+    ctx.beginPath();ctx.moveTo(-crack*.55,coreY-crack*.36);ctx.lineTo(-crack*.12,coreY+crack*.08);ctx.lineTo(crack*.18,coreY-crack*.02);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(crack*.52,coreY-crack*.28);ctx.lineTo(crack*.18,coreY+crack*.18);ctx.lineTo(crack*.46,coreY+crack*.42);ctx.stroke();
+  }
+  if(hpStage===0){
+    ctx.fillStyle=`rgba(${coreColor},.34)`;
+    ctx.fillRect(-coreR*.9,coreY+coreR*.95,coreR*.55,1);
+    ctx.fillRect(coreR*.25,coreY-coreR*1.1,coreR*.62,1);
   }
   ctx.restore();
   if(e.flash>0) e.flash--;
@@ -867,7 +1071,7 @@ function drawEnemy(e){
 //  パーティクル
 // ─────────────────────────────────────
 function burst(x,y,color,n){
-  const cnt=Math.min(n, MAX_PARTICLES-particles.length);
+  const cnt=Math.min(Math.ceil(n*.65), MAX_PARTICLES-particles.length);
   for(let i=0;i<cnt;i++){
     const angle=Math.random()*Math.PI*2, spd=1+Math.random()*3.5;
     particles.push({x,y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,life:28+Math.random()*22,maxLife:50,color,size:1.5+Math.random()*2});
@@ -882,7 +1086,8 @@ function updateParticles(){
 function drawParticles(){
   for(const p of particles){
     ctx.globalAlpha=p.life/p.maxLife; ctx.fillStyle=p.color;
-    ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();
+    const s=p.size;
+    ctx.fillRect(p.x-s*.5,p.y-s*.5,s,s);
   }
   ctx.globalAlpha=1;
 }
@@ -894,31 +1099,37 @@ function spawnEpOrbs(x,y,n){
   const cnt=Math.min(n, MAX_EP_ORBS-epOrbs.length);
   for(let i=0;i<cnt;i++){
     const angle=Math.random()*Math.PI*2, spd=1.5+Math.random()*2.5;
-    epOrbs.push({x,y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,delay:6+Math.floor(Math.random()*16),trail:[],size:2.3+Math.random()*1.5});
+    epOrbs.push({x,y,prevX:x,prevY:y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,delay:6+Math.floor(Math.random()*16),size:2.3+Math.random()*1.5});
   }
 }
 function updateEpOrbs(){
   for(let i=epOrbs.length-1;i>=0;i--){
     const o=epOrbs[i];
-    o.trail.push({x:o.x,y:o.y});if(o.trail.length>6) o.trail.shift();
+    o.prevX=o.x;
+    o.prevY=o.y;
+    const dx=player.x-o.x, dy=player.y-o.y, dist2=dx*dx+dy*dy;
+    if(dist2<16*16 || (dist2<28*28 && o.vx*o.vx+o.vy*o.vy>7*7)){
+      epOrbs.splice(i,1);
+      continue;
+    }
     if(o.delay>0){o.delay--;o.vx*=.86;o.vy*=.86;}
     else{
-      const dx=player.x-o.x, dy=player.y-o.y, dist=Math.hypot(dx,dy);
-      if(dist<8){epOrbs.splice(i,1);continue;}
-      o.vx+=(dx/dist)*1.2; o.vy+=(dy/dist)*1.2;
-      const s=Math.hypot(o.vx,o.vy);if(s>10){o.vx=o.vx/s*10;o.vy=o.vy/s*10;}
+      const dist=Math.sqrt(dist2)||1;
+      const pull=Math.min(1.8,.75+dist/140);
+      o.vx+=(dx/dist)*pull; o.vy+=(dy/dist)*pull;
+      const s2=o.vx*o.vx+o.vy*o.vy;if(s2>10*10){const s=Math.sqrt(s2);o.vx=o.vx/s*10;o.vy=o.vy/s*10;}
     }
     o.x+=o.vx; o.y+=o.vy;
+    if(distSq(o.x,o.y,player.x,player.y)<20*20) epOrbs.splice(i,1);
   }
 }
 function drawEpOrbs(){
   for(const o of epOrbs){
-    for(let t=0;t<o.trail.length;t++){
-      ctx.fillStyle=`rgba(0,220,100,${(t/o.trail.length)*.45})`;
-      ctx.beginPath();ctx.arc(o.trail[t].x,o.trail[t].y,o.size*(t/o.trail.length),0,Math.PI*2);ctx.fill();
-    }
-    ctx.save();ctx.shadowColor='#00dd77';ctx.shadowBlur=12;ctx.fillStyle='#66ffbb';
-    ctx.beginPath();ctx.arc(o.x,o.y,o.size,0,Math.PI*2);ctx.fill();ctx.restore();
+    ctx.strokeStyle='rgba(0,220,100,.24)';
+    ctx.lineWidth=Math.max(1,o.size*.55);
+    ctx.beginPath();ctx.moveTo(o.prevX,o.prevY);ctx.lineTo(o.x,o.y);ctx.stroke();
+    ctx.fillStyle='#66ffbb';
+    ctx.beginPath();ctx.arc(o.x,o.y,o.size,0,Math.PI*2);ctx.fill();
   }
 }
 
@@ -935,9 +1146,8 @@ function drawFloatTexts(){
   for(const t of floatTexts){
     ctx.globalAlpha=t.life/t.maxLife;
     ctx.save();
-    ctx.font=`bold ${t.size}px "Space Mono",monospace`;
+    ctx.font=`bold ${t.size}px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif`;
     ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.shadowColor=t.color;ctx.shadowBlur=8;
     ctx.fillStyle=t.color;ctx.fillText(t.text,t.x,t.y);
     ctx.restore();
   }
@@ -1028,18 +1238,18 @@ function spawnUpgradeZones(){
   upgradeZones=opts.map((d,i)=>({
     id:d.id,
     x:xs[i]-UPGRADE_ZONE.w/2,
-    y:-UPGRADE_ZONE.h-i*12,
+    y:-UPGRADE_ZONE.h,
     w:UPGRADE_ZONE.w,
     h:UPGRADE_ZONE.h,
     vy:UPGRADE_ZONE.vy,
     pulse:Math.random()*Math.PI*2
   }));
-  addFloat(W/2,118,'UPGRADE ZONES','#ffe040',12);
+  addFloat(W/2,118,'BASE UPGRADE','#e8e8f0',10);
 }
 function upgradeZoneHit(z){
-  const nx=Math.max(z.x,Math.min(player.x,z.x+z.w));
-  const ny=Math.max(z.y,Math.min(player.y,z.y+z.h));
-  return Math.hypot(player.x-nx,player.y-ny)<player.size+4;
+  const nx=Math.max(z.x+8,Math.min(player.x,z.x+z.w-8));
+  const ny=Math.max(z.y+8,Math.min(player.y,z.y+z.h-8));
+  return Math.hypot(player.x-nx,player.y-ny)<player.size+3;
 }
 function updateUpgradeZones(){
   if(upgradeZones.length===0) return;
@@ -1049,41 +1259,68 @@ function updateUpgradeZones(){
     if(upgradeZoneHit(z)){
       const d=basicSkillDef(z.id);
       applyBasicSkill(z.id);
-      burst(z.x+z.w/2,z.y+z.h/2,d.color,28);
-      addFloat(W/2,132,'UPGRADE ACQUIRED',d.color,12);
+      burst(z.x+z.w/2,z.y+z.h/2,d.color,18);
+      addFloat(W/2,132,'BASE UPGRADE',d.color,11);
       upgradeZones=[];
       return;
     }
   }
   if(upgradeZones.every(z=>z.y>UPGRADE_ZONE.missY)){
     upgradeZones=[];
-    addFloat(W/2,132,'UPGRADE MISSED','rgba(232,232,240,.70)',11);
+    addFloat(W/2,132,'BASE MISSED','rgba(232,232,240,.70)',11);
   }
 }
 function drawUpgradeZones(){
   if(upgradeZones.length===0) return;
   ctx.save();
+  const minX=Math.min(...upgradeZones.map(z=>z.x));
+  const maxX=Math.max(...upgradeZones.map(z=>z.x+z.w));
+  const y=upgradeZones[0].y;
+  const h=upgradeZones[0].h;
+  const topFade=ctx.createLinearGradient(0,y-22,0,y+12);
+  topFade.addColorStop(0,'rgba(6,6,14,0)');
+  topFade.addColorStop(1,'rgba(6,6,14,.54)');
+  ctx.fillStyle=topFade;ctx.fillRect(0,y-22,W,34);
+  ctx.fillStyle='rgba(6,6,14,.30)';ctx.fillRect(0,y+12,W,h-24);
+  const bottomFade=ctx.createLinearGradient(0,y+h-12,0,y+h+22);
+  bottomFade.addColorStop(0,'rgba(6,6,14,.54)');
+  bottomFade.addColorStop(1,'rgba(6,6,14,0)');
+  ctx.fillStyle=bottomFade;ctx.fillRect(0,y+h-12,W,34);
+  ctx.strokeStyle='rgba(232,232,240,.06)';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(minX-10,y+14);ctx.lineTo(maxX+10,y+14);
+  ctx.moveTo(minX-10,y+h-14);ctx.lineTo(maxX+10,y+h-14);
+  ctx.stroke();
   for(const z of upgradeZones){
     const d=basicSkillDef(z.id), lv=statLevels[z.id]||0;
-    const cx=z.x+z.w/2, cy=z.y+z.h/2;
-    const glow=.12+Math.sin(z.pulse)*.04;
-    rr(z.x,z.y,z.w,z.h,7);
-    const g=ctx.createLinearGradient(z.x,z.y,z.x,z.y+z.h);
-    g.addColorStop(0,h2r(d.color,.22+glow));
-    g.addColorStop(1,'rgba(6,6,14,.72)');
-    ctx.fillStyle=g;ctx.fill();
-    ctx.shadowColor=d.color;ctx.shadowBlur=18;
-    ctx.strokeStyle=d.color;ctx.lineWidth=1.6;rr(z.x,z.y,z.w,z.h,7);ctx.stroke();
-    ctx.shadowBlur=0;
+    const cx=z.x+z.w/2;
+    const pulse=.5+Math.sin(z.pulse)*.5;
+    const x=z.x+8, yy=z.y+16, w=z.w-16, hh=z.h-32;
+    const card=ctx.createLinearGradient(0,yy,0,yy+hh);
+    card.addColorStop(0,'rgba(20,24,36,.84)');
+    card.addColorStop(.5,'rgba(8,10,18,.88)');
+    card.addColorStop(1,'rgba(12,16,28,.72)');
+    ctx.fillStyle=card;
+    ctx.fillRect(x,yy,w,hh);
+    ctx.strokeStyle=h2r(d.color,.30+pulse*.06);
+    ctx.lineWidth=1;
+    ctx.strokeRect(x,yy,w,hh);
+
+    ctx.fillStyle=h2r(d.color,.58+pulse*.08);
+    ctx.fillRect(x,yy,3,hh);
+    ctx.fillRect(x+8,yy+8,w-16,1);
+
     ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.font=d.icon.length>1?'bold 13px "Space Mono",monospace':'18px serif';
-    ctx.fillStyle='#fff';ctx.fillText(d.icon,cx,z.y+17);
-    ctx.font='bold 8px "Space Mono",monospace';ctx.fillStyle=d.color;
-    ctx.fillText(d.name,cx,z.y+36);
-    ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.62)';
-    ctx.fillText(`Lv.${lv}  ->  ${basicGainText(z.id,lv)}`,cx,z.y+52);
-    ctx.fillStyle='rgba(232,232,240,.35)';
-    ctx.fillRect(z.x+10,z.y+z.h-10,z.w-20,2);
+    ctx.font=d.icon.length>1?'bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif':'16px serif';
+    ctx.fillStyle=h2r(d.color,.82);
+    ctx.fillText(d.icon,cx,yy+19);
+    ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+    ctx.fillStyle='rgba(232,232,240,.84)';
+    ctx.fillText(d.name,cx,yy+36);
+    ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+    ctx.fillStyle='rgba(232,232,240,.50)';
+    ctx.fillText(`Lv.${lv}  ${basicGainText(z.id,lv)}`,cx,yy+hh-10);
   }
   ctx.restore();
 }
@@ -1098,10 +1335,10 @@ function drawSkillTree(){
   ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
 
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font='42px "Bebas Neue",cursive';
-  ctx.shadowColor='#00f0ff';ctx.shadowBlur=26;ctx.fillStyle='#e8e8f0';
+  ctx.font='42px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.shadowColor='#00f0ff';ctx.shadowBlur=8;ctx.fillStyle='#e8e8f0';
   ctx.fillText('SKILL TREE',W/2,38);ctx.shadowBlur=0;
-  ctx.font='bold 10px "Space Mono",monospace';
+  ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.fillStyle=skillPoints>0?'#ffe040':'rgba(232,232,240,.55)';
   ctx.fillText(`WAVE ${wave}   SP ${skillPoints}`,W/2,64);
 
@@ -1131,13 +1368,13 @@ function drawSkillTree(){
     ctx.strokeStyle=can?d.color:(lv>0?h2r(d.color,.65):'rgba(170,170,190,.28)');
     ctx.stroke();ctx.shadowBlur=0;
 
-    ctx.font=d.icon.length>1?'bold 13px "Space Mono",monospace':'18px serif';
+    ctx.font=d.icon.length>1?'bold 13px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif':'18px serif';
     ctx.fillStyle='#fff';ctx.fillText(d.icon,n.x,n.y-7);
-    ctx.font='bold 9px "Space Mono",monospace';
+    ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
     ctx.fillStyle=d.color;ctx.fillText(`Lv.${lv}`,n.x,n.y+12);
-    ctx.font='bold 8px "Space Mono",monospace';
+    ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
     ctx.fillStyle='#e8e8f0';ctx.fillText(d.name,n.x,n.y+39);
-    ctx.font='8px "Space Mono",monospace';
+    ctx.font='8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
     ctx.fillStyle='rgba(232,232,240,.62)';
     ctx.fillText(basicSkillValue(n.id),n.x,n.y+51);
     if(!unlocked){
@@ -1156,21 +1393,30 @@ function drawSkillTree(){
   ctx.fill();
   ctx.strokeStyle=skillPoints>0?'#ffe040':'#00f0ff';
   ctx.lineWidth=1.5;rr(bx,by,bw,bh,5);ctx.stroke();
-  ctx.font='22px "Bebas Neue",cursive';
+  ctx.font='22px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.fillStyle=skillPoints>0?'#ffe040':'#00f0ff';
   ctx.fillText(skillPoints>0?'DEPLOY':'CONTINUE',W/2,by+bh/2+1);
   ctx.restore();
 }
 
 // ─────────────────────────────────────
-//  特殊強化
+//  Unique Ability
 // ─────────────────────────────────────
-const SC={w:88, h:216, gap:5, y:78};
-const RR={w:128,h:30,y:318};
-const STOP_BTN={x:8,y:6,w:24,h:18};
+const SC={w:112, h:196, gap:8, y:352};
+const RR={w:128,h:30,y:574};
+const PAUSE_BTN={x:8,y:6,w:88,h:30};
+const PAUSE_MENU={
+  panelX:28,panelY:176,panelW:W-56,panelH:308,
+  buttons:[
+    {id:'resume',label:'CONTINUE',sub:'resume current run',color:'#00f0ff'},
+    {id:'home',label:'RETURN HOME',sub:'bank tokens and exit',color:'#ff2d78'},
+    {id:'settings',label:'CONTROLS',sub:'touch mode settings',color:'#00dd77'},
+  ]
+};
 const SKILL_BTN={x:136,y:H-30,w:118,h:22};
 const SKILL_CLOSE_BTN={x:W/2-72,y:H-72,w:144,h:34};
 const TOUCH_PAD={y:H-204,w:104,h:70,edge:12};
+const TOUCH_STICK={idleX:W/2,y:H-166,baseR:37,knobR:15,max:34,dead:.16};
 const hasTouchInput = (navigator.maxTouchPoints || 0) > 0 || (window.matchMedia?.('(pointer: coarse)').matches ?? false);
 function specialCandidatePool(){
   const owned=ownedSpecialCount();
@@ -1211,55 +1457,83 @@ function drawSpecialScreen(){
   ctx.save();
   ctx.fillStyle='rgba(6,6,14,.94)'; ctx.fillRect(0,0,W,H);
   const hg=ctx.createLinearGradient(0,0,0,82);
-  hg.addColorStop(0,'rgba(204,0,255,.24)');hg.addColorStop(1,'rgba(204,0,255,0)');
+  hg.addColorStop(0,'rgba(204,0,255,.10)');hg.addColorStop(1,'rgba(204,0,255,0)');
   ctx.fillStyle=hg; ctx.fillRect(0,0,W,82);
-  ctx.fillStyle='#cc00ff'; ctx.fillRect(0,0,W,2);
+  ctx.fillStyle='rgba(204,0,255,.58)'; ctx.fillRect(0,0,W,1);
 
-  ctx.font='42px "Bebas Neue",cursive';
+  ctx.font='42px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.shadowColor='#cc00ff'; ctx.shadowBlur=28; ctx.fillStyle='#e8e8f0';
-  ctx.fillText('特殊強化',W/2,32); ctx.shadowBlur=0;
-  ctx.font='10px "Space Mono",monospace'; ctx.fillStyle='#7777aa';
+  ctx.shadowColor='#cc00ff'; ctx.shadowBlur=6; ctx.fillStyle='#e8e8f0';
+  ctx.fillText('UNIQUE ABILITY',W/2,32); ctx.shadowBlur=0;
+  ctx.font='10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif'; ctx.fillStyle='#7777aa';
   ctx.fillText('3つの候補から選択 / 新規は5系統まで',W/2,60);
-  ctx.font='bold 9px "Space Mono",monospace';
+  ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.fillStyle='#ffe040';
-  ctx.fillText(`SPECIAL ${ownedSpecialCount()}/${MAX_SPECIAL_TYPES}   COIN ${coins}`,W/2,76);
+  ctx.fillText(`UNIQUE ${ownedSpecialCount()}/${MAX_SPECIAL_TYPES}   COIN ${coins}`,W/2,76);
+
+  const ownedUnique=SPECIAL_DEFS.filter(d=>specialLevels[d.id]>0);
+  const slotW=60, slotH=28, slotGap=7;
+  const slotsX=(W-(slotW*MAX_SPECIAL_TYPES+slotGap*(MAX_SPECIAL_TYPES-1)))/2;
+  const slotsY=92;
+  for(let i=0;i<MAX_SPECIAL_TYPES;i++){
+    const d=ownedUnique[i];
+    const x=slotsX+i*(slotW+slotGap);
+    const color=d?.color || '#e8e8f0';
+    rr(x,slotsY,slotW,slotH,4);
+    ctx.fillStyle=d?h2r(color,.11):'rgba(232,232,240,.035)';ctx.fill();
+    ctx.strokeStyle=d?h2r(color,.44):'rgba(232,232,240,.14)';ctx.lineWidth=1;rr(x,slotsY,slotW,slotH,4);ctx.stroke();
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    if(d){
+      ctx.font=d.icon.length>1?'bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif':'13px serif';
+      ctx.fillStyle=h2r(color,.90);ctx.fillText(d.icon,x+slotW/2,slotsY+9);
+      ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.72)';
+      ctx.fillText(`Lv.${specialLevels[d.id]}`,x+slotW/2,slotsY+21);
+    }else{
+      ctx.font='bold 11px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.22)';
+      ctx.fillText('EMPTY',x+slotW/2,slotsY+slotH/2);
+    }
+  }
 
   const n=pendingSpecials.length;
   const{w:cw,h:ch,gap,y:cardY}=SC;
   const sx=(W-(cw*n+gap*(n-1)))/2;
+  const panel=ctx.createLinearGradient(0,cardY-44,0,H);
+  panel.addColorStop(0,'rgba(6,6,14,0)');
+  panel.addColorStop(.22,'rgba(6,6,14,.50)');
+  panel.addColorStop(1,'rgba(6,6,14,.92)');
+  ctx.fillStyle=panel;ctx.fillRect(0,cardY-44,W,H-cardY+44);
   for(let i=0;i<n;i++){
     const d=pendingSpecials[i];
     const cx=sx+i*(cw+gap);
     const lv=specialLevels[d.id];
     const hov=mouseX>=cx&&mouseX<=cx+cw&&mouseY>=cardY&&mouseY<=cardY+ch;
     ctx.save();
-    ctx.shadowColor=d.color; ctx.shadowBlur=hov?32:12;
-    rr(cx,cardY,cw,ch,6); ctx.fillStyle=h2r(d.color,hov?.13:.07); ctx.fill();
-    ctx.strokeStyle=d.color; ctx.lineWidth=hov?2.5:1.5;
+    ctx.shadowColor=d.color; ctx.shadowBlur=hov?10:0;
+    rr(cx,cardY,cw,ch,6); ctx.fillStyle=h2r(d.color,hov?.10:.055); ctx.fill();
+    ctx.strokeStyle=h2r(d.color,hov?.70:.32); ctx.lineWidth=hov?1.8:1;
     rr(cx,cardY,cw,ch,6); ctx.stroke(); ctx.shadowBlur=0;
-    rrTop(cx,cardY,cw,56,6); ctx.fillStyle=h2r(d.color,hov?.30:.18); ctx.fill();
+    rrTop(cx,cardY,cw,56,6); ctx.fillStyle=h2r(d.color,hov?.20:.11); ctx.fill();
     ctx.font='28px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle='#fff';
     ctx.fillText(d.icon,cx+cw/2,cardY+30);
-    ctx.font='bold 8px "Space Mono",monospace';
-    ctx.shadowColor=d.color; ctx.shadowBlur=hov?10:4; ctx.fillStyle=d.color;
+    ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+    ctx.shadowColor=d.color; ctx.shadowBlur=hov?4:0; ctx.fillStyle=d.color;
     ctx.fillText(d.name.replace(/\s/g,''),cx+cw/2,cardY+70); ctx.shadowBlur=0;
     ctx.strokeStyle=h2r(d.color,.22); ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(cx+8,cardY+82);ctx.lineTo(cx+cw-8,cardY+82);ctx.stroke();
     const bw=64,bh=16,bxc=cx+cw/2-32,byc=cardY+88;
     rr(bxc,byc,bw,bh,3); ctx.fillStyle=h2r(d.color,.18); ctx.fill();
     rr(bxc,byc,bw,bh,3); ctx.strokeStyle=d.color; ctx.lineWidth=1; ctx.stroke();
-    ctx.font='bold 8px "Space Mono",monospace'; ctx.fillStyle=d.color; ctx.textBaseline='middle';
+    ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif'; ctx.fillStyle=d.color; ctx.textBaseline='middle';
     ctx.fillText(lv===0?'NEW!':`Lv.${lv} → ${lv+1}`,cx+cw/2,byc+bh/2);
-    ctx.font='8px "Space Mono",monospace'; ctx.fillStyle='#aaaacc';
+    ctx.font='9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif'; ctx.fillStyle='#aaaacc';
     ctx.fillText(d.desc(lv+1),cx+cw/2,cardY+126);
-    if(lv>=9){ctx.font='bold 8px "Space Mono",monospace';ctx.fillStyle='#ffe040';ctx.fillText('次でMAX!',cx+cw/2,cardY+144);}
+    if(lv>=9){ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='#ffe040';ctx.fillText('次でMAX!',cx+cw/2,cardY+144);}
     const ctaY=cardY+ch-16;
     if(hov){
       rr(cx+6,ctaY-9,cw-12,18,3); ctx.fillStyle=h2r(d.color,.18); ctx.fill();
-      ctx.font='bold 8px "Space Mono",monospace'; ctx.fillStyle=d.color;
+      ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif'; ctx.fillStyle=d.color;
     } else {
-      ctx.font='8px "Space Mono",monospace'; ctx.fillStyle='#2a2a3a';
+      ctx.font='9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif'; ctx.fillStyle='rgba(232,232,240,.42)';
     }
     ctx.textBaseline='middle'; ctx.fillText(hov?'▶  選  択  ◀':'タップで選択',cx+cw/2,ctaY);
     ctx.restore();
@@ -1273,10 +1547,10 @@ function drawSpecialScreen(){
   ctx.fill();
   ctx.strokeStyle=canReroll?'#ffe040':'rgba(160,160,180,.28)';
   ctx.lineWidth=1.4; rr(rx,ry,RR.w,RR.h,4); ctx.stroke();
-  ctx.font='bold 12px "Bebas Neue",cursive';
+  ctx.font='bold 12px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle=canReroll?'#ffe040':'rgba(180,180,200,.45)';
-  ctx.shadowColor='#ffe040';ctx.shadowBlur=canReroll?10:0;
+  ctx.shadowColor='#ffe040';ctx.shadowBlur=canReroll?3:0;
   ctx.fillText(`REROLL  ${REROLL_COST} COIN`,W/2,ry+RR.h/2);
   ctx.restore();
   ctx.restore();
@@ -1315,23 +1589,34 @@ function addXp(amount){
   addFloat(player.x,player.y-20,`+${gained} XP`,'#00dd77',10);
   if(xp>=xpThresh()) triggerSpecial();
 }
+function addDamageXp(amount){
+  if(amount<=0) return;
+  hitXpBank+=amount*xpMult()*DAMAGE_XP_RATE;
+  const gained=Math.floor(hitXpBank);
+  if(gained<=0) return;
+  hitXpBank-=gained;
+  xp+=gained;
+  if(xp>=xpThresh()) triggerSpecial();
+}
 
 function killEnemy(e){
   const idx=enemies.indexOf(e);
   if(idx<0) return;
-  const pts=Math.floor(e.maxHp*.5)+wave*5;
+  const pts=e.scoreValue ?? (Math.floor(e.maxHp*.5)+wave*5);
   const coinGain=1+Math.floor(wave/8);
   score+=pts;
   coins+=coinGain;
-  addXp(Math.floor(10+wave*3+Math.sqrt(e.maxHp)*2.2));
+  addXp(e.xpValue ?? Math.floor(10+wave*3+Math.sqrt(e.maxHp)*2.2));
   addFloat(e.x,e.y-10,`+${pts}  +${coinGain}C`,'#e8e8f0',11);
   burst(e.x,e.y,`rgb(${e.r},${e.g},${e.b})`,14);
-  spawnEpOrbs(e.x,e.y,3+Math.floor(e.maxHp/22));
+  spawnEpOrbs(e.x,e.y,e.orbValue ?? (3+Math.floor(e.maxHp/22)));
   enemies.splice(idx,1);
 }
 function damageEnemy(e,amount,color,label=null){
-  if(!e||!enemies.includes(e)) return false;
+  if(!e||enemies.indexOf(e)<0) return false;
+  const actual=Math.max(0,Math.min(e.hp,amount));
   e.hp-=amount; e.flash=6;
+  addDamageXp(actual);
   if(label) addFloat(e.x,e.y-18,label,color,10);
   burst(e.x,e.y,color,5);
   if(e.hp<=0){killEnemy(e);return true;}
@@ -1343,7 +1628,8 @@ function applyOnHitEffects(source,x,y,baseDmg){
     const r2=r*r;
     const dmg=baseDmg*(.32+specialLevels.explosive*.04);
     burst(x,y,'#ff7040',12+specialLevels.explosive*2);
-    for(const e of [...enemies]){
+    for(let i=enemies.length-1;i>=0;i--){
+      const e=enemies[i];
       if(e!==source&&distSq(e.x,e.y,x,y)<r2) damageEnemy(e,dmg,'#ff7040');
     }
   }
@@ -1372,21 +1658,25 @@ function applyOnHitEffects(source,x,y,baseDmg){
 // ─────────────────────────────────────
 function checkCollisions(){
   const dmg=damage(), pc=pierce(), critD=critDamage();
-  for(let ai=arrows.length-1;ai>=0;ai--){
+  if(arrows.length>0&&enemies.length>0) for(let ai=arrows.length-1;ai>=0;ai--){
     const a=arrows[ai]; let rem=false;
+    const ar=a.hitRadius??4;
     for(let ei=enemies.length-1;ei>=0;ei--){
       if(rem) break;
       const e=enemies[ei];
-      const hitR=e.size+4;
+      const hitR=e.size+ar;
+      if(Math.abs(a.x-e.x)>hitR||Math.abs(a.y-e.y)>hitR) continue;
       if(distSq(a.x,a.y,e.x,e.y)<hitR*hitR){
         const critTier=rollCritTier();
         const hitDmg=dmg*a.damageScale*Math.pow(critD,critTier);
         const hitColor=critTier?'#ffb000':(a.pw?'#ff6020':'#00f0ff');
+        const actualDmg=Math.max(0,Math.min(e.hp,hitDmg));
         e.hp-=hitDmg; e.flash=6;
-        burst(a.x,a.y,critTier?'#ffb000':(a.pw?'#ff6020':'#00f0ff'),critTier?9+critTier*4:5);
+        addDamageXp(actualDmg);
+        const hitBurst=a.kind==='split' ? 3 : 5;
+        burst(a.x,a.y,critTier?'#ffb000':(a.pw?'#ff6020':'#00f0ff'),critTier?9+critTier*4:hitBurst);
         if(critTier) addFloat(e.x,e.y-18,critTier>1?'DOUBLE CRIT':'CRIT',critTier>1?'#ff7040':'#ffb000',10);
         applyOnHitEffects(e,a.x,a.y,hitDmg);
-        if(specialLevels.splitter>0&&!a.split){splitArrow(a);a.split=true;}
         if(e.hp<=0) killEnemy(e);
         const bounced=specialLevels.ricochet>0&&a.ricocheted<specialLevels.ricochet&&redirectArrowToEnemy(a,e);
         if(bounced){rem=true;break;}
@@ -1401,7 +1691,7 @@ function checkCollisions(){
       const hitR=e.size+12;
       if(distSq(player.x,player.y,e.x,e.y)<hitR*hitR){
         if(blockWithShield()) break;
-        hp-=incomingDamage(26); invincible=80;
+        hp-=incomingDamage(e.contactDamage ?? 26); invincible=80;
         shake(8); burst(player.x,player.y,'#ff2d78',12);
         if(hp<=0){hp=0; endGame(); return;}
         break;
@@ -1427,118 +1717,109 @@ function checkCollisions(){
 function drawHUD(){
   ctx.save();
 
-  // ── 上部グラデーションオーバーレイ ──
-  const tg=ctx.createLinearGradient(0,0,0,HUD_T+18);
-  tg.addColorStop(0,'rgba(6,6,14,0.97)');
-  tg.addColorStop(0.8,'rgba(6,6,14,0.82)');
-  tg.addColorStop(1,'rgba(6,6,14,0)');
-  ctx.fillStyle=tg; ctx.fillRect(0,0,W,HUD_T+18);
+  // ── 上部HUD ──
+  ctx.fillStyle=hudTopGradient; ctx.fillRect(0,0,W,HUD_T+16);
 
   const bx=10, bw=W-20;
+  const topY=7, topH=22;
 
-  // 停止ボタン
-  rr(STOP_BTN.x,STOP_BTN.y,STOP_BTN.w,STOP_BTN.h,4);
-  ctx.fillStyle='rgba(255,45,120,.14)';ctx.fill();
-  ctx.strokeStyle='rgba(255,45,120,.75)';ctx.lineWidth=1.2;rr(STOP_BTN.x,STOP_BTN.y,STOP_BTN.w,STOP_BTN.h,4);ctx.stroke();
-  ctx.fillStyle='#ff2d78';ctx.shadowColor='#ff2d78';ctx.shadowBlur=6;
-  ctx.fillRect(STOP_BTN.x+7,STOP_BTN.y+5,3,8);
-  ctx.fillRect(STOP_BTN.x+14,STOP_BTN.y+5,3,8);
+  // ホームボタン
+  rr(PAUSE_BTN.x,PAUSE_BTN.y,PAUSE_BTN.w,PAUSE_BTN.h,4);
+  ctx.fillStyle=pauseButtonGradient;ctx.fill();
+  ctx.strokeStyle='rgba(232,232,240,.22)';ctx.lineWidth=1;rr(PAUSE_BTN.x,PAUSE_BTN.y,PAUSE_BTN.w,PAUSE_BTN.h,4);ctx.stroke();
+  ctx.fillStyle='rgba(0,240,255,.84)';
+  ctx.shadowColor='#00f0ff';ctx.shadowBlur=3;
+  ctx.fillRect(PAUSE_BTN.x+12,PAUSE_BTN.y+9,3,12);
+  ctx.fillRect(PAUSE_BTN.x+20,PAUSE_BTN.y+9,3,12);
+  ctx.fillStyle='rgba(0,240,255,.34)';
+  ctx.fillRect(PAUSE_BTN.x,PAUSE_BTN.y,3,PAUSE_BTN.h);
+  ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(232,232,240,.82)';
+  ctx.fillText('MENU',PAUSE_BTN.x+34,PAUSE_BTN.y+PAUSE_BTN.h/2+1);
   ctx.shadowBlur=0;
 
-  // タイトル
-  ctx.font='20px "Bebas Neue",cursive';
-  ctx.textAlign='left'; ctx.textBaseline='middle';
-  ctx.shadowColor='#00f0ff'; ctx.shadowBlur=10; ctx.fillStyle='#00f0ff';
-  ctx.fillText('BARRAGE',bx+30,13); ctx.shadowBlur=0;
-
   // WAVE
-  ctx.font='16px "Bebas Neue",cursive';
-  ctx.textAlign='center'; ctx.fillStyle='#ff2d78';
-  ctx.shadowColor='#ff2d78'; ctx.shadowBlur=8;
-  ctx.fillText(`WAVE ${wave}`,W/2,13); ctx.shadowBlur=0;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  rr(W/2-44,topY,88,topH,4);
+  ctx.fillStyle='rgba(255,45,120,.075)';ctx.fill();
+  ctx.strokeStyle='rgba(255,45,120,.32)';ctx.lineWidth=1;rr(W/2-44,topY,88,topH,4);ctx.stroke();
+  ctx.font='16px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.fillStyle='rgba(255,80,140,.92)';
+  ctx.fillText(`WAVE ${wave}`,W/2,topY+topH/2+1);
 
   // スコア
-  ctx.font='11px "Space Mono",monospace';
-  ctx.textAlign='right'; ctx.fillStyle='#e8e8f0';
-  ctx.fillText(`${score.toLocaleString()}  C ${coins}`,W-bx,13);
-
-  // HPバー
-  const hpY=28, hpH=7;
-  ctx.fillStyle='rgba(255,45,120,0.15)'; ctx.fillRect(bx,hpY,bw,hpH);
-  const hpG=ctx.createLinearGradient(bx,0,bx+bw,0);
-  hpG.addColorStop(0,'#c01850'); hpG.addColorStop(1,'#ff4080');
-  ctx.fillStyle=hpG;
-  ctx.shadowColor='#ff2d78'; ctx.shadowBlur=6;
-  ctx.fillRect(bx,hpY,bw*Math.max(0,hp/maxHp),hpH); ctx.shadowBlur=0;
-  ctx.font='7px "Space Mono",monospace';
-  ctx.textAlign='left'; ctx.fillStyle='rgba(255,45,120,0.6)';
-  ctx.fillText('HP',bx,hpY-4);
-  ctx.textAlign='right'; ctx.fillStyle='rgba(255,45,120,0.5)';
-  ctx.fillText(`${hp}/${maxHp}`,bx+bw,hpY-4);
-
-  // XPバー
-  const xpY=42, xpH=5;
-  ctx.fillStyle='rgba(0,221,119,0.15)'; ctx.fillRect(bx,xpY,bw,xpH);
-  const xpG=ctx.createLinearGradient(bx,0,bx+bw,0);
-  xpG.addColorStop(0,'#00aa55'); xpG.addColorStop(1,'#44ffaa');
-  ctx.fillStyle=xpG;
-  ctx.shadowColor='#00dd77'; ctx.shadowBlur=5;
-  ctx.fillRect(bx,xpY,bw*Math.min(1,xp/xpThresh()),xpH); ctx.shadowBlur=0;
-  ctx.font='7px "Space Mono",monospace';
-  ctx.textAlign='left'; ctx.fillStyle='rgba(0,221,119,0.6)';
-  ctx.fillText('XP',bx,xpY-4);
-  ctx.textAlign='right'; ctx.fillStyle='rgba(0,221,119,0.5)';
-  ctx.fillText(`SPECIAL  Lv.${xpLevel}`,bx+bw,xpY-4);
+  ctx.textAlign='right';
+  ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.fillStyle='rgba(232,232,240,.46)';
+  ctx.fillText('SCORE',W-bx,topY+5);
+  ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.fillStyle='rgba(232,232,240,.86)';
+  ctx.fillText(`${score.toLocaleString()}  C ${coins}`,W-bx,topY+17);
 
   // ── 下部グラデーションオーバーレイ ──
-  const bg=ctx.createLinearGradient(0,H-HUD_B-18,0,H);
-  bg.addColorStop(0,'rgba(6,6,14,0)');
-  bg.addColorStop(0.4,'rgba(6,6,14,0.82)');
-  bg.addColorStop(1,'rgba(6,6,14,0.97)');
-  ctx.fillStyle=bg; ctx.fillRect(0,H-HUD_B-18,W,HUD_B+18);
+  ctx.fillStyle=hudBottomGradient; ctx.fillRect(0,H-HUD_B-18,W,HUD_B+18);
 
   // 現在ステータス
   ctx.textBaseline='middle';
   ctx.textAlign='left';
-  ctx.font='bold 7px "Space Mono",monospace';
+  const barX=bx, barW=bw, hpY=H-124, hpH=13, xpY=H-104, xpH=10;
+  function drawMeter(y,h,label,valueText,ratio,colorA,colorB){
+    rr(barX,y,barW,h,4);ctx.fillStyle='rgba(232,232,240,.055)';ctx.fill();
+    const mw=barW*Math.max(0,Math.min(1,ratio));
+    if(mw>0){
+      const mg=ctx.createLinearGradient(barX,0,barX+barW,0);
+      mg.addColorStop(0,colorA);mg.addColorStop(1,colorB);
+      rr(barX,y,mw,h,4);ctx.fillStyle=mg;ctx.fill();
+    }
+    ctx.strokeStyle='rgba(232,232,240,.14)';ctx.lineWidth=1;rr(barX,y,barW,h,4);ctx.stroke();
+    ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='left';ctx.fillStyle='rgba(232,232,240,.78)';
+    ctx.fillText(label,barX+6,y+h/2);
+    ctx.textAlign='right';ctx.fillStyle='rgba(232,232,240,.58)';
+    ctx.fillText(valueText,barX+barW-6,y+h/2);
+  }
+  drawMeter(hpY,hpH,'HP',`${hp}/${maxHp}`,hp/maxHp,'#c01850','#ff4080');
+  drawMeter(xpY,xpH,'XP',`UNIQUE Lv.${xpLevel}`,Math.min(1,xp/xpThresh()),'#00aa55','#44ffaa');
+
+  ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.fillStyle='rgba(232,232,240,.48)';
-  ctx.fillText('CURRENT STATS',bx,H-98);
+  ctx.textAlign='left';
+  ctx.fillText('BASE UPGRADES',bx,H-88);
 
   const stats=basicStatReadouts();
   const cols=5, cardGap=4;
   const cardW=(bw-cardGap*(cols-1))/cols, cardH=17;
-  const statY=H-86;
+  const statY=H-77;
   for(let i=0;i<stats.length;i++){
     const s=stats[i];
     const col=i%cols, row=Math.floor(i/cols);
     const x=bx+col*(cardW+cardGap), y=statY+row*(cardH+4);
     rr(x,y,cardW,cardH,3);
-    ctx.fillStyle=h2r(s.color,.11); ctx.fill();
-    ctx.strokeStyle=h2r(s.color,.35); ctx.lineWidth=1; rr(x,y,cardW,cardH,3); ctx.stroke();
+    ctx.fillStyle='rgba(232,232,240,.045)'; ctx.fill();
+    ctx.strokeStyle=h2r(s.color,.22); ctx.lineWidth=1; rr(x,y,cardW,cardH,3); ctx.stroke();
 
-    ctx.font='bold 7px "Space Mono",monospace';
-    ctx.fillStyle=s.color; ctx.shadowColor=s.color; ctx.shadowBlur=4;
+    ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+    ctx.fillStyle=h2r(s.color,.78); ctx.shadowBlur=0;
     ctx.fillText(s.label,x+4,y+cardH/2);
-    ctx.shadowBlur=0;
 
-    ctx.font='bold 7px "Space Mono",monospace';
+    ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
     ctx.textAlign='right';
-    ctx.fillStyle='#e8e8f0';
+    ctx.fillStyle='rgba(232,232,240,.80)';
     ctx.fillText(String(s.value).replace('通常 ',''),x+cardW-4,y+cardH/2);
     ctx.textAlign='left';
   }
 
   // Upgrade zone status
   rr(SKILL_BTN.x,SKILL_BTN.y,SKILL_BTN.w,SKILL_BTN.h,5);
-  ctx.fillStyle=upgradeZones.length>0?'rgba(255,224,64,.16)':'rgba(0,240,255,.10)';
+  ctx.fillStyle=upgradeZones.length>0?'rgba(232,232,240,.07)':'rgba(0,240,255,.10)';
   ctx.fill();
-  ctx.strokeStyle=upgradeZones.length>0?'#ffe040':'rgba(0,240,255,.55)';
+  ctx.strokeStyle=upgradeZones.length>0?'rgba(232,232,240,.32)':'rgba(0,240,255,.55)';
   ctx.lineWidth=1.1;rr(SKILL_BTN.x,SKILL_BTN.y,SKILL_BTN.w,SKILL_BTN.h,5);ctx.stroke();
-  ctx.font='bold 11px "Space Mono",monospace';
+  ctx.font='bold 11px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=upgradeZones.length>0?'#ffe040':'#00f0ff';
-  ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=upgradeZones.length>0?10:4;
-  ctx.fillText(upgradeZones.length>0?'CATCH UPGRADE':'NEXT WAVE',SKILL_BTN.x+SKILL_BTN.w/2,SKILL_BTN.y+SKILL_BTN.h/2);
+  ctx.fillStyle=upgradeZones.length>0?'rgba(232,232,240,.72)':'#00f0ff';
+  ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=upgradeZones.length>0?0:4;
+  ctx.fillText(upgradeZones.length>0?'BASE UPGRADE':'NEXT WAVE',SKILL_BTN.x+SKILL_BTN.w/2,SKILL_BTN.y+SKILL_BTN.h/2);
   ctx.shadowBlur=0;
 
   ctx.restore();
@@ -1550,6 +1831,24 @@ function drawHUD(){
 function drawTouchControls(){
   if(!hasTouchInput || state!=='play') return;
   ctx.save();
+  if(touchControlMode()==='stick'){
+    const baseX=stickState.active?stickState.baseX:TOUCH_STICK.idleX;
+    const baseY=stickState.active?stickState.baseY:TOUCH_STICK.y;
+    const knobX=stickState.active?stickState.knobX:baseX;
+    const knobY=stickState.active?stickState.knobY:baseY;
+    ctx.strokeStyle=stickState.active?'rgba(0,240,255,.72)':'rgba(232,232,240,.22)';
+    ctx.fillStyle=stickState.active?'rgba(0,240,255,.11)':'rgba(232,232,240,.045)';
+    ctx.lineWidth=stickState.active?2:1.2;
+    ctx.shadowColor='#00f0ff';
+    ctx.shadowBlur=stickState.active?14:4;
+    ctx.beginPath();ctx.arc(baseX,baseY,TOUCH_STICK.baseR,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.beginPath();ctx.moveTo(baseX-22,baseY);ctx.lineTo(baseX+22,baseY);ctx.stroke();
+    ctx.fillStyle=stickState.active?'#00f0ff':'rgba(232,232,240,.46)';
+    ctx.beginPath();ctx.arc(knobX,knobY,TOUCH_STICK.knobR,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.restore();
+    return;
+  }
   const pads=[
     {x:TOUCH_PAD.edge,y:TOUCH_PAD.y,w:TOUCH_PAD.w,h:TOUCH_PAD.h,dir:-1},
     {x:W-TOUCH_PAD.edge-TOUCH_PAD.w,y:TOUCH_PAD.y,w:TOUCH_PAD.w,h:TOUCH_PAD.h,dir:1}
@@ -1583,15 +1882,132 @@ function drawTouchControls(){
   }
   ctx.restore();
 }
+function pauseButtonRect(i){
+  const w=PAUSE_MENU.panelW-44, h=50, gap=12;
+  return {x:PAUSE_MENU.panelX+22,y:PAUSE_MENU.panelY+104+i*(h+gap),w,h};
+}
+function drawPauseRow(b,label,sub,color,meta='',active=false){
+  rr(b.x,b.y,b.w,b.h,5);
+  const bg=ctx.createLinearGradient(b.x,b.y,b.x+b.w,b.y+b.h);
+  bg.addColorStop(0,active?h2r(color,.18):'rgba(232,232,240,.065)');
+  bg.addColorStop(.58,'rgba(12,16,28,.72)');
+  bg.addColorStop(1,'rgba(6,6,14,.86)');
+  ctx.fillStyle=bg;ctx.fill();
+  ctx.strokeStyle=active?h2r(color,.72):'rgba(232,232,240,.16)';
+  ctx.lineWidth=active?1.4:1;rr(b.x,b.y,b.w,b.h,5);ctx.stroke();
+  ctx.fillStyle=h2r(color,active?.75:.44);
+  ctx.fillRect(b.x,b.y,4,b.h);
+  ctx.fillStyle=h2r(color,active?.28:.16);
+  ctx.fillRect(b.x+12,b.y+10,24,30);
+  ctx.fillStyle=active?color:h2r(color,.72);
+  ctx.font='bold 13px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(label,b.x+48,b.y+18);
+  ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.fillStyle='rgba(232,232,240,.46)';
+  ctx.fillText(sub,b.x+48,b.y+34);
+  if(meta){
+    ctx.textAlign='right';
+    ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+    ctx.fillStyle=active?h2r(color,.92):'rgba(232,232,240,.42)';
+    ctx.fillText(meta,b.x+b.w-16,b.y+b.h/2);
+  }
+}
+function drawPauseMenu(){
+  ctx.save();
+  ctx.fillStyle='rgba(6,6,14,.72)';
+  ctx.fillRect(0,0,W,H);
+  const p=PAUSE_MENU;
+  const halo=ctx.createRadialGradient(W/2,p.panelY+44,10,W/2,p.panelY+44,p.panelW*.8);
+  halo.addColorStop(0,'rgba(0,240,255,.14)');
+  halo.addColorStop(.48,'rgba(136,170,255,.05)');
+  halo.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=halo;
+  ctx.fillRect(0,p.panelY-80,W,p.panelH+160);
+  rr(p.panelX,p.panelY,p.panelW,p.panelH,8);
+  const g=ctx.createLinearGradient(p.panelX,p.panelY,p.panelX,p.panelY+p.panelH);
+  g.addColorStop(0,'rgba(20,24,38,.96)');
+  g.addColorStop(.42,'rgba(10,14,26,.96)');
+  g.addColorStop(1,'rgba(6,6,14,.98)');
+  ctx.fillStyle=g;ctx.fill();
+  ctx.strokeStyle='rgba(232,232,240,.18)';
+  ctx.lineWidth=1;rr(p.panelX,p.panelY,p.panelW,p.panelH,8);ctx.stroke();
+  ctx.fillStyle='rgba(0,240,255,.46)';
+  ctx.fillRect(p.panelX,p.panelY,3,p.panelH);
+  ctx.fillStyle='rgba(232,232,240,.06)';
+  ctx.fillRect(p.panelX+12,p.panelY+76,p.panelW-24,1);
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='36px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.fillStyle='#e8e8f0';ctx.shadowColor='#00f0ff';ctx.shadowBlur=5;
+  ctx.fillText(pauseView==='settings'?'CONTROL SETTINGS':'GAME PAUSED',W/2,p.panelY+34);ctx.shadowBlur=0;
+  ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.fillStyle='rgba(232,232,240,.52)';
+  ctx.fillText(`WAVE ${wave} / SCORE ${score.toLocaleString()}`,W/2,p.panelY+61);
+  if(pauseView==='settings'){
+    const modes=[
+      {id:'buttons',label:'BUTTON',sub:'tap lane movement',color:'#00f0ff'},
+      {id:'stick',label:'STICK',sub:'drag analog control',color:'#00dd77'},
+    ];
+    for(let i=0;i<modes.length;i++){
+      const b=pauseButtonRect(i), m=modes[i], active=touchControlMode()===m.id;
+      drawPauseRow(b,m.label,m.sub,m.color,active?'ACTIVE':'TAP',active);
+    }
+    const back=pauseButtonRect(2);
+    drawPauseRow(back,'BACK','return to pause menu','#88aaff','',false);
+    ctx.restore();
+    return;
+  }
+  for(let i=0;i<p.buttons.length;i++){
+    const b=pauseButtonRect(i), item=p.buttons[i];
+    drawPauseRow(b,item.label,item.sub,item.color,i===0?'':'>',i===0);
+  }
+  ctx.restore();
+}
+function pauseGame(){
+  if(state!=='play') return;
+  state='pause';
+  pauseView='menu';
+  stopTouchMove();
+  activePointerId=null;
+}
+function resumeGame(){
+  if(state!=='pause') return;
+  state='play';
+  pauseView='menu';
+}
+function handlePauseClick(cx,cy){
+  if(pauseView==='settings'){
+    for(let i=0;i<2;i++){
+      const b=pauseButtonRect(i);
+      if(cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h){
+        setTouchControlMode(i===0?'buttons':'stick');
+        return true;
+      }
+    }
+    const back=pauseButtonRect(2);
+    if(cx>=back.x&&cx<=back.x+back.w&&cy>=back.y&&cy<=back.y+back.h){pauseView='menu';return true;}
+    return true;
+  }
+  for(let i=0;i<PAUSE_MENU.buttons.length;i++){
+    const b=pauseButtonRect(i), id=PAUSE_MENU.buttons[i].id;
+    if(cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h){
+      if(id==='resume') resumeGame();
+      else if(id==='home') returnHome();
+      else if(id==='settings') pauseView='settings';
+      return true;
+    }
+  }
+  return true;
+}
 function drawWaveBanner(){
   if(waveBanner<=0) return;
   waveBanner--;
   const a=Math.min(1,waveBanner/30)*Math.min(1,(waveBanner>90?1:(waveBanner/30)));
   ctx.save();
   ctx.globalAlpha=a;
-  ctx.font='72px "Bebas Neue",cursive';
+  ctx.font='72px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.shadowColor='#ff2d78'; ctx.shadowBlur=40; ctx.fillStyle='#ff2d78';
+  ctx.shadowColor='#ff2d78'; ctx.shadowBlur=12; ctx.fillStyle='#ff2d78';
   ctx.fillText(`WAVE  ${wave}`,W/2,H/2);
   ctx.restore();
 }
@@ -1601,14 +2017,104 @@ function drawWaveBanner(){
 // ─────────────────────────────────────
 function drawBtn(bx,by,bw,bh,label,color){
   ctx.save();
-  ctx.shadowColor=color; ctx.shadowBlur=18;
-  rr(bx,by,bw,bh,5); ctx.fillStyle=h2r(color,.15); ctx.fill();
-  ctx.strokeStyle=color; ctx.lineWidth=1.5; rr(bx,by,bw,bh,5); ctx.stroke();
+  ctx.shadowColor=color; ctx.shadowBlur=8;
+  rr(bx,by,bw,bh,5); ctx.fillStyle=h2r(color,.10); ctx.fill();
+  ctx.strokeStyle=h2r(color,.72); ctx.lineWidth=1.2; rr(bx,by,bw,bh,5); ctx.stroke();
   ctx.shadowBlur=0;
-  ctx.font='24px "Bebas Neue",cursive';
+  ctx.font='24px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillStyle=color;
   ctx.fillText(label,bx+bw/2,by+bh/2);
+  ctx.restore();
+}
+function drawTokenIcon(cx,cy,r=8){
+  ctx.save();
+  const hex=(rad,rot=0)=>{
+    ctx.beginPath();
+    for(let i=0;i<6;i++){
+      const a=rot+Math.PI/6+i*Math.PI/3;
+      const x=cx+Math.cos(a)*rad, y=cy+Math.sin(a)*rad;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+  };
+  hex(r,0);
+  const outer=ctx.createLinearGradient(cx-r,cy-r,cx+r,cy+r);
+  outer.addColorStop(0,'#7fb6ce');
+  outer.addColorStop(.28,'#2f85b8');
+  outer.addColorStop(.62,'#1b5d92');
+  outer.addColorStop(1,'#123052');
+  ctx.fillStyle=outer;ctx.fill();
+  ctx.lineWidth=Math.max(1,r*.16);
+  ctx.strokeStyle='rgba(184,218,232,.58)';
+  ctx.stroke();
+
+  hex(r*.76,0);
+  const inner=ctx.createLinearGradient(cx-r*.65,cy-r*.65,cx+r*.65,cy+r*.65);
+  inner.addColorStop(0,'rgba(130,184,210,.34)');
+  inner.addColorStop(.48,'rgba(38,111,164,.42)');
+  inner.addColorStop(1,'rgba(12,42,78,.52)');
+  ctx.fillStyle=inner;ctx.fill();
+  ctx.strokeStyle='rgba(118,174,206,.38)';
+  ctx.lineWidth=Math.max(1,r*.10);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(cx,cy-r*.52);
+  ctx.lineTo(cx+r*.42,cy);
+  ctx.lineTo(cx,cy+r*.52);
+  ctx.lineTo(cx-r*.42,cy);
+  ctx.closePath();
+  const gem=ctx.createLinearGradient(cx-r*.35,cy-r*.48,cx+r*.35,cy+r*.48);
+  gem.addColorStop(0,'#9bc7d8');
+  gem.addColorStop(.46,'#2b8ac0');
+  gem.addColorStop(1,'#174f8a');
+  ctx.fillStyle=gem;ctx.fill();
+  ctx.strokeStyle='rgba(176,211,226,.48)';
+  ctx.lineWidth=Math.max(.8,r*.08);
+  ctx.stroke();
+
+  ctx.strokeStyle='rgba(210,232,238,.24)';
+  ctx.lineWidth=Math.max(.7,r*.07);
+  ctx.beginPath();
+  ctx.moveTo(cx-r*.38,cy-r*.30);
+  ctx.lineTo(cx+r*.02,cy-r*.50);
+  ctx.stroke();
+  ctx.strokeStyle='rgba(6,20,42,.28)';
+  ctx.beginPath();
+  ctx.moveTo(cx-r*.42,cy+r*.42);
+  ctx.lineTo(cx+r*.42,cy-r*.42);
+  ctx.stroke();
+  ctx.restore();
+}
+function drawTokenAmount(x,y,value,align='right',size=10){
+  ctx.save();
+  ctx.font=`bold ${size}px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif`;
+  ctx.textBaseline='middle';
+  const text=String(value);
+  const tw=ctx.measureText(text).width;
+  const r=Math.max(6,size*.78);
+  const gap=r*.45;
+  let ix=x, tx=x;
+  if(align==='right'){
+    tx=x;
+    ix=x-tw-gap-r;
+    ctx.textAlign='right';
+  }else if(align==='center'){
+    const left=x-(r*2+gap+tw)/2;
+    ix=left+r;
+    tx=left+r*2+gap;
+    ctx.textAlign='left';
+  }else{
+    ix=x+r;
+    tx=x+r*2+gap;
+    ctx.textAlign='left';
+  }
+  drawTokenIcon(ix,y,r);
+  ctx.fillStyle='#8fefff';
+  ctx.shadowColor='#00aaff';
+  ctx.shadowBlur=3;
+  ctx.fillText(text,tx,y);
   ctx.restore();
 }
 
@@ -1616,7 +2122,10 @@ function drawBtn(bx,by,bw,bh,label,color){
 //  スタート・ゲームオーバー画面
 // ─────────────────────────────────────
 const BTN_W=200, BTN_H=50;
+const GAME_OVER_RETRY_Y=H/2+76;
+const GAME_OVER_HOME_Y=H/2+134;
 const INSTALL_BTN={x:W/2-80,y:H-72,w:160,h:34};
+const HOME_START_Y=366;
 const HOME_TABS=[
   { id:'store', label:'ストア' },
   { id:'warehouse', label:'倉庫' },
@@ -1624,24 +2133,40 @@ const HOME_TABS=[
 ];
 const HOME_TAB={x:10,y:234,w:118,h:32,gap:6};
 const HOME_GRID={x:12,y:274,w:175,h:56,gapX:14,gapY:8};
+const HOME_NAV_BTNS=[
+  {id:'store',label:'ストア',color:'#00f0ff'},
+  {id:'warehouse',label:'倉庫',color:'#ffe040'},
+  {id:'upgrade',label:'強化',color:'#cc00ff'},
+  {id:'codex',label:'図鑑',color:'#88aaff'},
+  {id:'settings',label:'設定',color:'#00dd77'},
+];
+const HOME_NAV={x:24,y:432,w:162,h:54,gapX:18,gapY:10};
+const HOME_NAV_VIEW=[
+  {id:'store',label:'ストア',sub:'パーツ / コア',color:'#00f0ff'},
+  {id:'warehouse',label:'格納庫',sub:'装備変更',color:'#ffe040'},
+  {id:'upgrade',label:'強化',sub:'基礎ステータス',color:'#cc00ff'},
+  {id:'codex',label:'図鑑',sub:'能力データ',color:'#88aaff'},
+  {id:'settings',label:'設定',sub:'操作設定',color:'#00dd77'},
+];
+const CODEX={startY:102,rowH:58,pageSize:7,pagerY:624,btnW:88,btnH:30};
 function drawHomeGridCard(i,color,title,value,metaText,owned=false,selected=false){
   const col=i%2,row=Math.floor(i/2);
   const x=HOME_GRID.x+col*(HOME_GRID.w+HOME_GRID.gapX), y=HOME_GRID.y+row*(HOME_GRID.h+HOME_GRID.gapY);
   rr(x,y,HOME_GRID.w,HOME_GRID.h,5);
   const g=ctx.createLinearGradient(x,y,x+HOME_GRID.w,y+HOME_GRID.h);
-  g.addColorStop(0,h2r(color,selected?.24:(owned?.16:.09)));
+  g.addColorStop(0,h2r(color,selected?.16:(owned?.10:.055)));
   g.addColorStop(1,'rgba(6,6,14,.72)');
   ctx.fillStyle=g;ctx.fill();
-  ctx.strokeStyle=selected?'#e8e8f0':h2r(color,owned?.62:.32);
-  ctx.lineWidth=selected?2:1.1;rr(x,y,HOME_GRID.w,HOME_GRID.h,5);ctx.stroke();
+  ctx.strokeStyle=selected?'rgba(232,232,240,.70)':h2r(color,owned?.42:.22);
+  ctx.lineWidth=selected?1.4:1;rr(x,y,HOME_GRID.w,HOME_GRID.h,5);ctx.stroke();
   ctx.fillStyle=h2r(color,.75);
   ctx.fillRect(x,y,3,HOME_GRID.h);
   ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font='bold 9px "Space Mono",monospace';ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=selected?8:3;
+  ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=h2r(color,.90);ctx.shadowBlur=0;
   ctx.fillText(title,x+10,y+14);ctx.shadowBlur=0;
-  ctx.font='8px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.58)';
+  ctx.font='8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.58)';
   ctx.fillText(value,x+10,y+31);
-  ctx.textAlign='right';ctx.font='bold 8px "Space Mono",monospace';ctx.fillStyle=owned?'#00dd77':'#ffe040';
+  ctx.textAlign='right';ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=owned?'#00dd77':'#ffe040';
   ctx.fillText(metaText,x+HOME_GRID.w-8,y+46);
 }
 function drawHomeTabs(){
@@ -1651,7 +2176,7 @@ function drawHomeTabs(){
     ctx.fillStyle=active?'rgba(0,240,255,.16)':'rgba(232,232,240,.045)';ctx.fill();
     ctx.strokeStyle=active?'#00f0ff':'rgba(232,232,240,.16)';
     ctx.lineWidth=active?1.6:1;rr(x,HOME_TAB.y,HOME_TAB.w,HOME_TAB.h,5);ctx.stroke();
-    ctx.font='bold 11px "Space Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold 11px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle=active?'#00f0ff':'rgba(232,232,240,.62)';
     ctx.fillText(t.label,x+HOME_TAB.w/2,HOME_TAB.y+HOME_TAB.h/2);
   }
@@ -1707,21 +2232,20 @@ function itemMeta(item){
 // ── サブ画面共通ヘルパー ──
 const BACK_BTN={x:8,y:10,w:58,h:30};
 function drawSubHeader(title,tokenVisible=true){
-  ctx.fillStyle='rgba(0,240,255,.07)'; ctx.fillRect(0,0,W,52);
-  ctx.strokeStyle='rgba(0,240,255,.20)'; ctx.lineWidth=1;
+  ctx.fillStyle='rgba(12,16,28,.72)'; ctx.fillRect(0,0,W,52);
+  ctx.strokeStyle='rgba(232,232,240,.12)'; ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(0,52);ctx.lineTo(W,52);ctx.stroke();
   rr(BACK_BTN.x,BACK_BTN.y,BACK_BTN.w,BACK_BTN.h,5);
-  ctx.fillStyle='rgba(0,240,255,.12)';ctx.fill();
-  ctx.strokeStyle='rgba(0,240,255,.55)';ctx.lineWidth=1;rr(BACK_BTN.x,BACK_BTN.y,BACK_BTN.w,BACK_BTN.h,5);ctx.stroke();
-  ctx.font='bold 9px "Space Mono",monospace';
+  ctx.fillStyle='rgba(232,232,240,.055)';ctx.fill();
+  ctx.strokeStyle='rgba(0,240,255,.38)';ctx.lineWidth=1;rr(BACK_BTN.x,BACK_BTN.y,BACK_BTN.w,BACK_BTN.h,5);ctx.stroke();
+  ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#00f0ff';
   ctx.fillText('← 戻る',BACK_BTN.x+BACK_BTN.w/2,BACK_BTN.y+BACK_BTN.h/2);
-  ctx.font='28px "Bebas Neue",cursive';
-  ctx.textAlign='center';ctx.shadowColor='#00f0ff';ctx.shadowBlur=14;ctx.fillStyle='#e8e8f0';
+  ctx.font='28px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.textAlign='center';ctx.shadowColor='#00f0ff';ctx.shadowBlur=4;ctx.fillStyle='#e8e8f0';
   ctx.fillText(title,W/2,27);ctx.shadowBlur=0;
   if(tokenVisible){
-    ctx.font='bold 10px "Space Mono",monospace';ctx.textAlign='right';ctx.fillStyle='#ffe040';
-    ctx.shadowColor='#ffe040';ctx.shadowBlur=6;ctx.fillText(`TOKEN  ${meta.tokens}`,W-10,27);ctx.shadowBlur=0;
+    drawTokenAmount(W-10,27,meta.tokens,'right',10);
   }
 }
 function drawTabRow(tabs,labels,current,y,h=28){
@@ -1732,7 +2256,7 @@ function drawTabRow(tabs,labels,current,y,h=28){
     ctx.fillStyle=active?'rgba(0,240,255,.18)':'rgba(232,232,240,.045)';ctx.fill();
     ctx.strokeStyle=active?'#00f0ff':'rgba(232,232,240,.18)';ctx.lineWidth=active?1.5:1;
     rr(tx,y,tabW-4,h,4);ctx.stroke();
-    ctx.font='bold 10px "Space Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle=active?'#00f0ff':'rgba(232,232,240,.55)';
     ctx.fillText(labels[tabs[i]],tx+(tabW-4)/2,y+h/2);
   }
@@ -1760,13 +2284,13 @@ function drawLoadoutPanel(x,y,w,h,ship=selectedShipDef()){
   ctx.fillStyle='rgba(232,232,240,.045)';ctx.fill();
   ctx.strokeStyle='rgba(232,232,240,.16)';ctx.lineWidth=1;rr(x,y,w,h,6);ctx.stroke();
   ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font='bold 8px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.50)';
+  ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.50)';
   ctx.fillText('ACTIVE LOADOUT',x+10,y+12);
-  ctx.font='bold 9px "Space Mono",monospace';ctx.fillStyle=ship.color;
+  ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=ship.color;
   ctx.fillText(`${ship.name} + ${core.name} Lv.${selectedCoreLevel()}`,x+10,y+29);
-  ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.55)';
+  ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.55)';
   ctx.fillText(slotText(ship),x+10,y+45);
-  ctx.font='bold 8px "Space Mono",monospace';ctx.fillStyle='#ffe040';
+  ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='#ffe040';
   ctx.fillText(loadoutText(ship.id),x+10,y+61);
 }
 function drawStoreShipCard(i,ship,startY){
@@ -1774,47 +2298,47 @@ function drawStoreShipCard(i,ship,startY){
   const owned=meta.ownedShips[ship.id],sel=meta.selectedShip===ship.id;
   rr(cx,cy,cw,ch,6);
   const g=ctx.createLinearGradient(cx,cy,cx+cw,cy+ch);
-  g.addColorStop(0,h2r(ship.color,sel?.22:(owned?.14:.07)));
+  g.addColorStop(0,h2r(ship.color,sel?.15:(owned?.09:.05)));
   g.addColorStop(1,'rgba(6,6,14,.7)');
   ctx.fillStyle=g;ctx.fill();
-  ctx.strokeStyle=sel?'#e8e8f0':h2r(ship.color,owned?.65:.35);
-  ctx.lineWidth=sel?2:1.2;rr(cx,cy,cw,ch,6);ctx.stroke();
+  ctx.strokeStyle=sel?'rgba(232,232,240,.70)':h2r(ship.color,owned?.42:.22);
+  ctx.lineWidth=sel?1.4:1;rr(cx,cy,cw,ch,6);ctx.stroke();
   drawCraftInCard(cx,cy,74,ch,ship.id,'basic');
   ctx.strokeStyle=h2r(ship.color,.25);ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(cx+76,cy+6);ctx.lineTo(cx+76,cy+ch-6);ctx.stroke();
   ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font='bold 10px "Space Mono",monospace';ctx.fillStyle=ship.color;
-  ctx.shadowColor=ship.color;ctx.shadowBlur=4;ctx.fillText(`${ship.icon} ${ship.name}`,cx+84,cy+15);ctx.shadowBlur=0;
-  ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.50)';
+  ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=ship.color;
+  ctx.fillText(`${ship.icon} ${ship.name}`,cx+84,cy+15);
+  ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.50)';
   ctx.fillText(ship.role,cx+84,cy+29);
   ctx.fillText(slotText(ship),cx+84,cy+42);
   ctx.fillStyle=h2r(ship.color,.72);ctx.fillText(multText(ship.mult,true),cx+84,cy+55);
-  ctx.textAlign='right';ctx.font='bold 8px "Space Mono",monospace';
+  ctx.textAlign='right';ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   if(sel){ctx.fillStyle='#00f0ff';ctx.fillText('SELECTED',cx+cw-8,cy+ch-12);}
   else if(owned){ctx.fillStyle='#00dd77';ctx.fillText('SELECT →',cx+cw-8,cy+ch-12);}
-  else{ctx.fillStyle='#ffe040';ctx.fillText(`TOKEN ${ship.cost}`,cx+cw-8,cy+ch-12);}
+  else{drawTokenAmount(cx+cw-8,cy+ch-12,ship.cost,'right',8);}
 }
 function drawStoreCoreCard(i,core,startY){
   const cw=(W-36)/2,ch=82,col=i%2,row=Math.floor(i/2);
   const cx=14+col*(cw+8),cy=startY+row*(ch+6);
   const owned=meta.ownedCores[core.id],sel=meta.selectedCore===core.id;
   rr(cx,cy,cw,ch,5);
-  ctx.fillStyle=h2r(core.color,sel?.22:(owned?.13:.07));ctx.fill();
-  ctx.strokeStyle=sel?'#e8e8f0':h2r(core.color,owned?.65:.35);
-  ctx.lineWidth=sel?2:1.1;rr(cx,cy,cw,ch,5);ctx.stroke();
+  ctx.fillStyle=h2r(core.color,sel?.15:(owned?.09:.05));ctx.fill();
+  ctx.strokeStyle=sel?'rgba(232,232,240,.70)':h2r(core.color,owned?.42:.22);
+  ctx.lineWidth=sel?1.4:1;rr(cx,cy,cw,ch,5);ctx.stroke();
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font='22px serif';ctx.fillStyle=core.color;ctx.shadowColor=core.color;ctx.shadowBlur=8;
+  ctx.font='22px serif';ctx.fillStyle=h2r(core.color,.88);ctx.shadowBlur=0;
   ctx.fillText(core.icon,cx+cw/2,cy+22);ctx.shadowBlur=0;
-  ctx.font='bold 9px "Space Mono",monospace';ctx.fillStyle='#e8e8f0';
+  ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='#e8e8f0';
   ctx.fillText(core.name,cx+cw/2,cy+40);
-  ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.50)';
+  ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.50)';
   ctx.fillText(core.role,cx+cw/2,cy+52);
   ctx.fillStyle=h2r(core.color,.72);
   ctx.fillText(multText(core.mult,true),cx+cw/2,cy+61);
-  ctx.font='bold 8px "Space Mono",monospace';
+  ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   if(sel){ctx.fillStyle='#00f0ff';ctx.fillText('MOUNTED',cx+cw/2,cy+ch-7);}
   else if(owned){ctx.fillStyle='#00dd77';ctx.fillText('MOUNT',cx+cw/2,cy+ch-7);}
-  else{ctx.fillStyle='#ffe040';ctx.fillText(`T.${core.cost}`,cx+cw/2,cy+ch-7);}
+  else{drawTokenAmount(cx+cw/2,cy+ch-7,core.cost,'center',8);}
 }
 function drawStorePartCard(i,part,startY){
   const cw=(W-36)/2,ch=70,col=i%2,row=Math.floor(i/2);
@@ -1823,22 +2347,22 @@ function drawStorePartCard(i,part,startY){
   const mounted=partMountedShip(part.id)===meta.selectedShip;
   const info=partInfo(part);
   rr(cx,cy,cw,ch,5);
-  ctx.fillStyle=h2r(part.color,mounted?.20:(owned?.13:.07));ctx.fill();
-  ctx.strokeStyle=mounted?'#e8e8f0':h2r(part.color,owned?.65:.35);ctx.lineWidth=mounted?1.8:1.1;rr(cx,cy,cw,ch,5);ctx.stroke();
+  ctx.fillStyle=h2r(part.color,mounted?.14:(owned?.09:.05));ctx.fill();
+  ctx.strokeStyle=mounted?'rgba(232,232,240,.70)':h2r(part.color,owned?.42:.22);ctx.lineWidth=mounted?1.4:1;rr(cx,cy,cw,ch,5);ctx.stroke();
   ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.font='14px serif';ctx.fillStyle=part.color;ctx.fillText(part.icon,cx+8,cy+14);
-  ctx.font='bold 7px "Space Mono",monospace';ctx.fillStyle=h2r(part.color,.88);
+  ctx.font='bold 7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=h2r(part.color,.88);
   ctx.fillText(`${info.tier} / ${partTypeName(part.type)}`,cx+28,cy+14);
-  ctx.font='bold 8px "Space Mono",monospace';ctx.fillStyle='#e8e8f0';
+  ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='#e8e8f0';
   ctx.fillText(part.name.slice(0,15),cx+8,cy+30);
-  ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.45)';
+  ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.45)';
   ctx.fillText(info.desc.slice(0,26),cx+8,cy+45);
   ctx.fillStyle=part.color;ctx.fillText(multText(part.mult,true),cx+8,cy+59);
-  ctx.textAlign='right';ctx.font='bold 8px "Space Mono",monospace';
+  ctx.textAlign='right';ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   if(mounted){ctx.fillStyle='#00f0ff';ctx.fillText('MOUNTED',cx+cw-8,cy+16);}
   else if(owned){ctx.fillStyle='#00dd77';ctx.fillText(partSlotStatus(part),cx+cw-8,cy+16);}
-  else{ctx.fillStyle='#ffe040';ctx.fillText(`T.${part.cost}`,cx+cw-8,cy+16);}
-  ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.45)';
+  else{drawTokenAmount(cx+cw-8,cy+16,part.cost,'right',8);}
+  ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.45)';
   ctx.fillText(owned?'TAP IN WAREHOUSE':partSlotStatus(part),cx+cw-8,cy+34);
 }
 function drawStoreScreen(){
@@ -1854,12 +2378,11 @@ function drawStoreScreen(){
     rr(14,cy,W-28,40,5);ctx.fillStyle=h2r(core.color,.10);ctx.fill();
     ctx.strokeStyle=can?core.color:h2r(core.color,.38);ctx.lineWidth=1.2;rr(14,cy,W-28,40,5);ctx.stroke();
     ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.font='bold 9px "Space Mono",monospace';ctx.fillStyle=core.color;
+    ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=core.color;
     ctx.fillText(`${core.icon} ${core.name}  Lv.${lv} → ${lv+1}  コアアップグレード`,24,cy+14);
-    ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.50)';
-    ctx.fillText(can?`TOKEN ${uc} 消費`:'トークン不足',24,cy+28);
-    ctx.textAlign='right';ctx.font='bold 9px "Space Mono",monospace';
-    ctx.fillStyle=can?'#ffe040':'rgba(180,180,200,.40)';ctx.fillText(`TOKEN ${uc}`,W-22,cy+20);
+    ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.50)';
+    ctx.fillText(can?'COST':'NOT ENOUGH',24,cy+28);
+    drawTokenAmount(W-22,cy+20,uc,'right',9);
     for(let i=0;i<CORE_DEFS.length;i++) drawStoreCoreCard(i,CORE_DEFS[i],cy+48);
   }else{
     drawLoadoutPanel(14,cy,W-28,70);
@@ -1904,7 +2427,7 @@ function drawWarehouseScreen(){
   rr(14,58,W-28,34,5);ctx.fillStyle=h2r(core.color,.09);ctx.fill();
   ctx.strokeStyle=h2r(core.color,.38);ctx.lineWidth=1;rr(14,58,W-28,34,5);ctx.stroke();
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font='bold 9px "Space Mono",monospace';ctx.fillStyle=core.color;
+  ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=core.color;
   ctx.fillText(`CORE: ${core.icon} ${core.name}  Lv.${lv}  [固定 / コア変更はストアへ]`,W/2,75);
   drawTabRow(['ship','part'],{ship:'機体',part:'パーツ'},warehouseTab,98);
   const startY=134;
@@ -1921,9 +2444,9 @@ function drawWarehouseScreen(){
       if(sel){ctx.fillStyle=h2r(ship.color,.7);ctx.fillRect(x,y,3,ch);}
       drawCraftInCard(x,y,cw,56,ship.id,meta.selectedCore);
       ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.font='bold 8px "Space Mono",monospace';ctx.fillStyle=sel?'#e8e8f0':ship.color;
+      ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=sel?'#e8e8f0':ship.color;
       ctx.fillText(ship.name,x+cw/2,y+65);
-      ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.45)';
+      ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.45)';
       ctx.fillText(sel?'● 選択中':'タップで選択',x+cw/2,y+76);
     }
   }else{
@@ -1931,7 +2454,7 @@ function drawWarehouseScreen(){
     drawLoadoutPanel(14,startY-8,W-28,70,ship);
     const owned=PART_DEFS.filter(p=>meta.ownedParts[p.id]);
     if(owned.length===0){
-      ctx.fillStyle='rgba(232,232,240,.32)';ctx.font='bold 11px "Space Mono",monospace';
+      ctx.fillStyle='rgba(232,232,240,.32)';ctx.font='bold 11px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
       ctx.fillText('パーツ未所持 / ストアで購入',W/2,startY+60);
     }
     const listY=startY+72;
@@ -1940,7 +2463,7 @@ function drawWarehouseScreen(){
       ctx.fillRect(24,startY+48,W-48,22);
       ctx.fillRect(24,listY+4,W-48,30);
       ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.font='bold 11px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.55)';
+      ctx.font='bold 11px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.55)';
       ctx.fillText('NO PARTS / BUY IN STORE',W/2,listY+19);
     }
     const cw=(W-36)/2,ch=70;
@@ -1956,10 +2479,10 @@ function drawWarehouseScreen(){
       ctx.strokeStyle=mounted?part.color:h2r(part.color,.40);ctx.lineWidth=mounted?1.8:1;rr(x,y,cw,ch,5);ctx.stroke();
       ctx.textAlign='left';ctx.textBaseline='middle';
       ctx.font='13px serif';ctx.fillStyle=part.color;ctx.fillText(part.icon,x+7,y+18);
-      ctx.font='bold 8px "Space Mono",monospace';ctx.fillStyle='#e8e8f0';ctx.fillText(part.name.slice(0,11),x+7,y+34);
-      ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.45)';ctx.fillText(partTypeName(part.type),x+7,y+47);
+      ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='#e8e8f0';ctx.fillText(part.name.slice(0,11),x+7,y+34);
+      ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.45)';ctx.fillText(partTypeName(part.type),x+7,y+47);
       ctx.fillStyle=part.color;ctx.fillText(multText(part.mult,true),x+7,y+60);
-      ctx.textAlign='right';ctx.font='bold 7px "Space Mono",monospace';
+      ctx.textAlign='right';ctx.font='bold 7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
       if(mounted){ctx.fillStyle='#00f0ff';ctx.fillText('MOUNTED',x+cw-7,y+14);}
       else if(onOther){ctx.fillStyle='#ffe040';ctx.fillText('他機搭載',x+cw-7,y+14);}
       else{ctx.fillStyle=cur<limit?'#00dd77':'rgba(180,180,200,.45)';ctx.fillText(cur<limit?'装備可':'スロット満',x+cw-7,y+14);}
@@ -1998,7 +2521,7 @@ function drawUpgradeScreen(){
   ctx.fillStyle='rgba(6,6,14,.82)';ctx.fillRect(0,0,W,H);
   drawSubHeader('UPGRADE');
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.40)';
+  ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.40)';
   ctx.fillText('恒久強化 / ゲーム内スタッツと別 / コスト青天井',W/2,60);
   const startY=70,cw=(W-36)/2,ch=58;
   for(let i=0;i<BASIC_STAT_DEFS.length;i++){
@@ -2011,12 +2534,12 @@ function drawUpgradeScreen(){
     ctx.textAlign='left';ctx.textBaseline='middle';
     ctx.font='15px serif';ctx.fillStyle=d.color;ctx.shadowColor=d.color;ctx.shadowBlur=lv>0?5:0;
     ctx.fillText(d.icon,x+7,y+15);ctx.shadowBlur=0;
-    ctx.font='bold 9px "Space Mono",monospace';ctx.fillStyle='#e8e8f0';ctx.fillText(d.name,x+26,y+15);
-    ctx.font='8px "Space Mono",monospace';ctx.fillStyle=d.color;ctx.fillText(`Lv.${lv}`,x+7,y+33);
-    ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.50)';ctx.fillText(homeStatBonus(d.id),x+7,y+47);
-    ctx.textAlign='right';ctx.font='bold 8px "Space Mono",monospace';
-    ctx.fillStyle=can?'#ffe040':'rgba(160,160,180,.35)';ctx.fillText(`T.${cost}`,x+cw-7,y+29);
-    ctx.font='7px "Space Mono",monospace';ctx.fillStyle=can?'#00f0ff':'rgba(130,130,160,.35)';
+    ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='#e8e8f0';ctx.fillText(d.name,x+26,y+15);
+    ctx.font='8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=d.color;ctx.fillText(`Lv.${lv}`,x+7,y+33);
+    ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.50)';ctx.fillText(homeStatBonus(d.id),x+7,y+47);
+    ctx.textAlign='right';ctx.font='bold 8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+    drawTokenAmount(x+cw-7,y+29,cost,'right',8);
+    ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=can?'#00f0ff':'rgba(130,130,160,.35)';
     ctx.fillText(can?'▲ UP':'---',x+cw-7,y+43);
   }
   ctx.restore();
@@ -2031,54 +2554,298 @@ function handleUpgradeClick(cx,cy){
   }
 }
 
+// ── 図鑑画面 ──
+function codexItems(){
+  if(codexTab==='basic'){
+    return BASIC_STAT_DEFS.map(d=>({
+      id:d.id,
+      name:d.name,
+      icon:d.icon,
+      color:d.color,
+      meta:basicGainText(d.id,0),
+      desc:homeStatBonus(d.id)==='未強化' ? 'ゲーム中/恒久強化で伸びる基礎性能' : homeStatBonus(d.id)
+    }));
+  }
+  return SPECIAL_DEFS.map(d=>({
+    id:d.id,
+    name:d.name,
+    icon:d.icon,
+    color:d.color,
+    meta:'Lv.1',
+    desc:d.desc(1)
+  }));
+}
+function codexPageCount(){
+  return Math.max(1,Math.ceil(codexItems().length/CODEX.pageSize));
+}
+function drawCodexRow(item,x,y,w,h){
+  rr(x,y,w,h,6);
+  ctx.fillStyle='rgba(232,232,240,.045)';ctx.fill();
+  ctx.strokeStyle=h2r(item.color,.28);ctx.lineWidth=1;rr(x,y,w,h,6);ctx.stroke();
+  ctx.fillStyle=h2r(item.color,.48);ctx.fillRect(x,y,3,h);
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.font=item.icon.length>1?'bold 11px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif':'15px serif';
+  ctx.fillStyle=h2r(item.color,.86);ctx.fillText(item.icon,x+12,y+18);
+  ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='#e8e8f0';
+  ctx.fillText(item.name,x+42,y+18);
+  ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=h2r(item.color,.74);
+  ctx.textAlign='right';ctx.fillText(item.meta,x+w-12,y+18);
+  ctx.textAlign='left';ctx.font='8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.58)';
+  ctx.fillText(item.desc,x+12,y+41);
+}
+function drawCodexScreen(){
+  drawBg();ctx.save();
+  ctx.fillStyle='rgba(6,6,14,.84)';ctx.fillRect(0,0,W,H);
+  drawSubHeader('CODEX');
+  drawTabRow(['special','basic'],{special:'Unique Ability',basic:'Base Upgrade'},codexTab,58);
+  const items=codexItems();
+  const pages=codexPageCount();
+  codexPage=Math.max(0,Math.min(pages-1,codexPage));
+  const start=codexPage*CODEX.pageSize;
+  const pageItems=items.slice(start,start+CODEX.pageSize);
+  for(let i=0;i<pageItems.length;i++){
+    drawCodexRow(pageItems[i],14,CODEX.startY+i*(CODEX.rowH+6),W-28,CODEX.rowH);
+  }
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.42)';
+  ctx.fillText(codexTab==='special'?'Unique Ability は経験値レベルアップで出現します':'Base Upgrade はゲーム中とホーム強化の両方で伸びます',W/2,590);
+  const py=CODEX.pagerY, leftX=W/2-CODEX.btnW-14, rightX=W/2+14;
+  const canPrev=codexPage>0, canNext=codexPage<pages-1;
+  for(const b of [
+    {x:leftX,label:'PREV',on:canPrev},
+    {x:rightX,label:'NEXT',on:canNext},
+  ]){
+    rr(b.x,py,CODEX.btnW,CODEX.btnH,5);
+    ctx.fillStyle=b.on?'rgba(136,170,255,.10)':'rgba(232,232,240,.035)';ctx.fill();
+    ctx.strokeStyle=b.on?'rgba(136,170,255,.45)':'rgba(232,232,240,.14)';ctx.lineWidth=1;rr(b.x,py,CODEX.btnW,CODEX.btnH,5);ctx.stroke();
+    ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=b.on?'#88aaff':'rgba(232,232,240,.28)';
+    ctx.fillText(b.label,b.x+CODEX.btnW/2,py+CODEX.btnH/2);
+  }
+  ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.52)';
+  ctx.fillText(`${codexPage+1} / ${pages}`,W/2,py+CODEX.btnH+18);
+  ctx.restore();
+}
+function handleCodexClick(cx,cy){
+  if(hitBackBtn(cx,cy)){homeState='home';return;}
+  const tab=hitTabRow(cx,cy,['special','basic'],58);
+  if(tab){codexTab=tab;codexPage=0;return;}
+  const py=CODEX.pagerY,leftX=W/2-CODEX.btnW-14,rightX=W/2+14,pages=codexPageCount();
+  if(cy>=py&&cy<=py+CODEX.btnH){
+    if(cx>=leftX&&cx<=leftX+CODEX.btnW&&codexPage>0){codexPage--;return;}
+    if(cx>=rightX&&cx<=rightX+CODEX.btnW&&codexPage<pages-1){codexPage++;return;}
+  }
+}
+
+// ── 設定画面 ──
+function drawSettingsScreen(){
+  drawBg();ctx.save();
+  ctx.fillStyle='rgba(6,6,14,.82)';ctx.fillRect(0,0,W,H);
+  drawSubHeader('SETTINGS');
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.font='bold 11px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.62)';
+  ctx.fillText('TOUCH CONTROL',24,88);
+  const modes=[
+    {id:'buttons',label:'ボタン',desc:'タップ位置へ移動',color:'#00f0ff'},
+    {id:'stick',label:'スティック',desc:'ドラッグ量で移動',color:'#00dd77'},
+  ];
+  const bx=24, by=110, bw=W-48, bh=70, gap=12;
+  for(let i=0;i<modes.length;i++){
+    const m=modes[i], y=by+i*(bh+gap), active=touchControlMode()===m.id;
+    rr(bx,y,bw,bh,6);
+    const g=ctx.createLinearGradient(bx,y,bx+bw,y+bh);
+    g.addColorStop(0,h2r(m.color,active?.22:.08));
+    g.addColorStop(1,'rgba(6,6,14,.70)');
+    ctx.fillStyle=g;ctx.fill();
+    ctx.strokeStyle=active?m.color:h2r(m.color,.30);ctx.lineWidth=active?2:1.1;rr(bx,y,bw,bh,6);ctx.stroke();
+    ctx.fillStyle=h2r(m.color,active?.85:.35);ctx.fillRect(bx,y,4,bh);
+    ctx.font='bold 15px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=active?m.color:'#e8e8f0';
+    ctx.shadowColor=m.color;ctx.shadowBlur=active?8:0;
+    ctx.fillText(m.label,bx+18,y+24);ctx.shadowBlur=0;
+    ctx.font='9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.50)';
+    ctx.fillText(m.desc,bx+18,y+47);
+    ctx.textAlign='right';ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+    ctx.fillStyle=active?'#ffe040':'rgba(232,232,240,.28)';
+    ctx.fillText(active?'ACTIVE':'TAP',bx+bw-18,y+35);
+    ctx.textAlign='left';
+  }
+  ctx.font='8px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.38)';
+  ctx.textAlign='center';
+  ctx.fillText('スマホプレイ中の表示と入力方式を切り替えます',W/2,294);
+  ctx.restore();
+}
+function handleSettingsClick(cx,cy){
+  if(hitBackBtn(cx,cy)){homeState='home';return;}
+  const bx=24, by=110, bw=W-48, bh=70, gap=12;
+  const modes=['buttons','stick'];
+  for(let i=0;i<modes.length;i++){
+    const y=by+i*(bh+gap);
+    if(cx>=bx&&cx<=bx+bw&&cy>=y&&cy<=y+bh){setTouchControlMode(modes[i]);return;}
+  }
+}
+
 // ── ホーム画面 ──
 function drawHomeScreen(){
   drawBg();ctx.save();
   ctx.fillStyle='rgba(6,6,14,.72)';ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='rgba(0,240,255,.07)';ctx.fillRect(0,0,W,52);
-  ctx.strokeStyle='rgba(0,240,255,.20)';ctx.lineWidth=1;
+  ctx.fillStyle='rgba(12,16,28,.72)';ctx.fillRect(0,0,W,52);
+  ctx.strokeStyle='rgba(232,232,240,.12)';ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(0,52);ctx.lineTo(W,52);ctx.stroke();
-  ctx.font='34px "Bebas Neue",cursive';ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.shadowColor='#00f0ff';ctx.shadowBlur=22;ctx.fillStyle='#00f0ff';
+  ctx.font='34px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.shadowColor='#00f0ff';ctx.shadowBlur=8;ctx.fillStyle='#00f0ff';
   ctx.fillText('BARRAGE',16,27);ctx.shadowBlur=0;
-  ctx.font='bold 10px "Space Mono",monospace';ctx.textAlign='right';ctx.fillStyle='#ffe040';
-  ctx.shadowColor='#ffe040';ctx.shadowBlur=8;ctx.fillText(`TOKEN  ${meta.tokens}`,W-16,27);ctx.shadowBlur=0;
+  drawTokenAmount(W-16,27,meta.tokens,'right',10);
   const ship=selectedShipDef();
   rr(14,60,W-28,110,8);
   const cg=ctx.createLinearGradient(14,60,W-14,170);
   cg.addColorStop(0,h2r(ship.color,.16));cg.addColorStop(1,'rgba(6,6,14,.5)');
   ctx.fillStyle=cg;ctx.fill();
-  ctx.strokeStyle=h2r(ship.color,.50);ctx.lineWidth=1.3;rr(14,60,W-28,110,8);ctx.stroke();
-  ctx.fillStyle=h2r(ship.color,.85);ctx.fillRect(14,60,3,110);
+  ctx.strokeStyle=h2r(ship.color,.30);ctx.lineWidth=1;rr(14,60,W-28,110,8);ctx.stroke();
+  ctx.fillStyle=h2r(ship.color,.52);ctx.fillRect(14,60,3,110);
   drawCraft(W/2,108,1.0);
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font='bold 12px "Space Mono",monospace';ctx.fillStyle='#e8e8f0';ctx.fillText(ship.name,W/2,152);
-  ctx.font='7px "Space Mono",monospace';ctx.fillStyle='rgba(232,232,240,.48)';
+  ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='#e8e8f0';ctx.fillText(ship.name,W/2,152);
+  ctx.font='7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.48)';
   ctx.fillText(`CORE: ${selectedCoreDef().name}  Lv.${selectedCoreLevel()}  │  ${ship.role}`,W/2,164);
-  drawBtn(W/2-BTN_W/2,178,BTN_W,BTN_H,'スタート','#ff2d78');
-  const navBtns=[
-    {id:'store',label:'ストア',color:'#00f0ff'},
-    {id:'warehouse',label:'倉庫',color:'#ffe040'},
-    {id:'upgrade',label:'強化',color:'#cc00ff'},
-  ];
-  const nbW=108,nbH=44,nbGap=7,nbTotal=nbW*3+nbGap*2,nbX=(W-nbTotal)/2,nbY=240;
-  for(let i=0;i<navBtns.length;i++){
-    const b=navBtns[i],bx=nbX+i*(nbW+nbGap);
-    rr(bx,nbY,nbW,nbH,6);ctx.fillStyle=h2r(b.color,.10);ctx.fill();
-    ctx.shadowColor=b.color;ctx.shadowBlur=12;ctx.strokeStyle=b.color;ctx.lineWidth=1.4;
-    rr(bx,nbY,nbW,nbH,6);ctx.stroke();ctx.shadowBlur=0;
-    ctx.font='bold 12px "Space Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=b.color;ctx.shadowColor=b.color;ctx.shadowBlur=5;
-    ctx.fillText(b.label,bx+nbW/2,nbY+nbH/2);ctx.shadowBlur=0;
+
+  const actionBg=ctx.createLinearGradient(0,330,0,H);
+  actionBg.addColorStop(0,'rgba(6,6,14,0)');
+  actionBg.addColorStop(.34,'rgba(12,16,28,.62)');
+  actionBg.addColorStop(1,'rgba(6,6,14,.92)');
+  ctx.fillStyle=actionBg;
+  ctx.fillRect(0,330,W,H-330);
+  ctx.strokeStyle='rgba(232,232,240,.08)';
+  ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(18,356);ctx.lineTo(W-18,356);ctx.stroke();
+
+  drawBtn(W/2-BTN_W/2,HOME_START_Y,BTN_W,BTN_H,'スタート','#ff2d78');
+  for(let i=0;i<HOME_NAV_BTNS.length;i++){
+    const b=HOME_NAV_BTNS[i],col=i%2,row=Math.floor(i/2);
+    const bx=HOME_NAV.x+col*(HOME_NAV.w+HOME_NAV.gapX),by=HOME_NAV.y+row*(HOME_NAV.h+HOME_NAV.gapY);
+    rr(bx,by,HOME_NAV.w,HOME_NAV.h,6);ctx.fillStyle='rgba(232,232,240,.045)';ctx.fill();
+    ctx.shadowColor=b.color;ctx.shadowBlur=3;ctx.strokeStyle=h2r(b.color,.42);ctx.lineWidth=1;
+    rr(bx,by,HOME_NAV.w,HOME_NAV.h,6);ctx.stroke();ctx.shadowBlur=0;
+    ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=h2r(b.color,.88);ctx.shadowColor=b.color;ctx.shadowBlur=0;
+    ctx.fillText(b.label,bx+HOME_NAV.w/2,by+HOME_NAV.h/2);ctx.shadowBlur=0;
   }
   if(canShowInstallAction()){
     rr(INSTALL_BTN.x,INSTALL_BTN.y,INSTALL_BTN.w,INSTALL_BTN.h,5);
     ctx.fillStyle='rgba(0,221,119,.12)';ctx.fill();
     ctx.strokeStyle='#00dd77';ctx.lineWidth=1.4;rr(INSTALL_BTN.x,INSTALL_BTN.y,INSTALL_BTN.w,INSTALL_BTN.h,5);ctx.stroke();
-    ctx.font='bold 12px "Space Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle='#00dd77';ctx.shadowColor='#00dd77';ctx.shadowBlur=8;
     ctx.fillText(installPromptEvent?'INSTALL APP':'ADD TO HOME',W/2,INSTALL_BTN.y+INSTALL_BTN.h/2);
     ctx.shadowBlur=0;
+  }
+  ctx.restore();
+}
+function drawHomeScreenV2(){
+  drawBg();ctx.save();
+  ctx.fillStyle='rgba(4,5,12,.58)';ctx.fillRect(0,0,W,H);
+
+  const top=ctx.createLinearGradient(0,0,0,96);
+  top.addColorStop(0,'rgba(6,6,14,.96)');
+  top.addColorStop(.66,'rgba(10,14,26,.70)');
+  top.addColorStop(1,'rgba(6,6,14,0)');
+  ctx.fillStyle=top;ctx.fillRect(0,0,W,96);
+  ctx.fillStyle='rgba(0,240,255,.42)';ctx.fillRect(14,16,3,30);
+  ctx.font='42px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.shadowColor='#00f0ff';ctx.shadowBlur=9;ctx.fillStyle='#e8fbff';
+  ctx.fillText('BARRAGE',24,32);ctx.shadowBlur=0;
+  ctx.font='bold 7px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+  ctx.fillStyle='rgba(232,232,240,.42)';
+  ctx.fillText('ネオン迎撃プラットフォーム',25,52);
+  drawTokenAmount(W-16,31,meta.tokens,'right',10);
+
+  const ship=selectedShipDef(), core=selectedCoreDef();
+  const hx=16, hy=74, hw=W-32, hh=254;
+  rr(hx,hy,hw,hh,8);
+  const hg=ctx.createLinearGradient(hx,hy,hx+hw,hy+hh);
+  hg.addColorStop(0,h2r(ship.color,.20));
+  hg.addColorStop(.42,'rgba(14,18,32,.82)');
+  hg.addColorStop(1,'rgba(5,6,13,.94)');
+  ctx.fillStyle=hg;ctx.fill();
+  ctx.strokeStyle='rgba(232,232,240,.16)';ctx.lineWidth=1;rr(hx,hy,hw,hh,8);ctx.stroke();
+  ctx.fillStyle=h2r(ship.color,.42);ctx.fillRect(hx,hy,4,hh);
+  ctx.fillStyle='rgba(232,232,240,.055)';
+  ctx.fillRect(hx+14,hy+42,hw-28,1);
+  ctx.fillRect(hx+14,hy+196,hw-28,1);
+  ctx.save();
+  ctx.beginPath();ctx.rect(hx,hy,hw,hh);ctx.clip();
+  ctx.strokeStyle='rgba(0,240,255,.08)';ctx.lineWidth=1;
+  for(let i=-4;i<9;i++){
+    const y=hy+138+i*18;
+    ctx.beginPath();ctx.moveTo(hx+18,y);ctx.lineTo(hx+hw-18,y+34);ctx.stroke();
+  }
+  ctx.strokeStyle=h2r(ship.color,.22);ctx.lineWidth=1.1;
+  ctx.beginPath();ctx.ellipse(W/2,hy+142,118,44,0,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();ctx.ellipse(W/2,hy+142,76,26,0,0,Math.PI*2);ctx.stroke();
+  ctx.restore();
+
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.48)';
+  ctx.fillText('選択中の機体',hx+18,hy+20);
+  ctx.font='bold 13px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=h2r(ship.color,.92);
+  ctx.fillText(ship.name,hx+18,hy+39);
+  ctx.textAlign='right';ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.58)';
+  ctx.fillText(`コア ${core.name} / Lv.${selectedCoreLevel()}`,hx+hw-18,hy+39);
+
+  ctx.save();
+  ctx.shadowColor=ship.color;ctx.shadowBlur=24;
+  drawCraft(W/2,hy+132,1.28);
+  ctx.restore();
+
+  ctx.textAlign='center';
+  ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.54)';
+  ctx.fillText(slotText(ship).slice(0,54),W/2,hy+214);
+  ctx.fillStyle=h2r(ship.color,.76);
+  ctx.fillText(loadoutText(ship.id).slice(0,58),W/2,hy+232);
+
+  const actionBg=ctx.createLinearGradient(0,330,0,H);
+  actionBg.addColorStop(0,'rgba(6,6,14,0)');
+  actionBg.addColorStop(.30,'rgba(8,10,20,.76)');
+  actionBg.addColorStop(1,'rgba(4,5,12,.96)');
+  ctx.fillStyle=actionBg;ctx.fillRect(0,330,W,H-330);
+
+  const sx=W/2-BTN_W/2, sy=HOME_START_Y;
+  rr(sx,sy,BTN_W,BTN_H,6);
+  const sg=ctx.createLinearGradient(sx,sy,sx+BTN_W,sy+BTN_H);
+  sg.addColorStop(0,'rgba(255,45,120,.34)');
+  sg.addColorStop(.50,'rgba(255,64,128,.18)');
+  sg.addColorStop(1,'rgba(6,6,14,.88)');
+  ctx.fillStyle=sg;ctx.fill();
+  ctx.strokeStyle='rgba(255,96,150,.72)';ctx.lineWidth=1.4;rr(sx,sy,BTN_W,BTN_H,6);ctx.stroke();
+  ctx.fillStyle='rgba(255,45,120,.45)';ctx.fillRect(sx,sy,5,BTN_H);
+  ctx.font='32px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.shadowColor='#ff2d78';ctx.shadowBlur=8;ctx.fillStyle='#fff2f7';
+  ctx.fillText('スタート',W/2,sy+BTN_H/2+2);ctx.shadowBlur=0;
+
+  for(let i=0;i<HOME_NAV_VIEW.length;i++){
+    const b=HOME_NAV_VIEW[i],col=i%2,row=Math.floor(i/2);
+    const bx=HOME_NAV.x+col*(HOME_NAV.w+HOME_NAV.gapX),by=HOME_NAV.y+row*(HOME_NAV.h+HOME_NAV.gapY);
+    rr(bx,by,HOME_NAV.w,HOME_NAV.h,5);
+    const ng=ctx.createLinearGradient(bx,by,bx+HOME_NAV.w,by+HOME_NAV.h);
+    ng.addColorStop(0,h2r(b.color,.13));
+    ng.addColorStop(1,'rgba(8,10,20,.82)');
+    ctx.fillStyle=ng;ctx.fill();
+    ctx.strokeStyle='rgba(232,232,240,.14)';ctx.lineWidth=1;rr(bx,by,HOME_NAV.w,HOME_NAV.h,5);ctx.stroke();
+    ctx.fillStyle=h2r(b.color,.56);ctx.fillRect(bx,by,3,HOME_NAV.h);
+    ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.font='bold 15px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=h2r(b.color,.94);
+    ctx.fillText(b.label,bx+14,by+21);
+    ctx.font='9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.48)';
+    ctx.fillText(b.sub,bx+14,by+39);
+    ctx.textAlign='right';ctx.font='bold 14px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
+    ctx.fillStyle='rgba(232,232,240,.26)';
+    ctx.fillText('>',bx+HOME_NAV.w-12,by+HOME_NAV.h/2);
+  }
+  if(canShowInstallAction()){
+    rr(INSTALL_BTN.x,INSTALL_BTN.y,INSTALL_BTN.w,INSTALL_BTN.h,5);
+    ctx.fillStyle='rgba(0,221,119,.10)';ctx.fill();
+    ctx.strokeStyle='rgba(0,221,119,.54)';ctx.lineWidth=1;rr(INSTALL_BTN.x,INSTALL_BTN.y,INSTALL_BTN.w,INSTALL_BTN.h,5);ctx.stroke();
+    ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='#00dd77';
+    ctx.fillText(installPromptEvent?'アプリを追加':'ホームに追加',W/2,INSTALL_BTN.y+INSTALL_BTN.h/2);
   }
   ctx.restore();
 }
@@ -2086,21 +2853,25 @@ function drawStartScreen(){
   if(homeState==='store'){drawStoreScreen();return;}
   if(homeState==='warehouse'){drawWarehouseScreen();return;}
   if(homeState==='upgrade'){drawUpgradeScreen();return;}
-  drawHomeScreen();
+  if(homeState==='codex'){drawCodexScreen();return;}
+  if(homeState==='settings'){drawSettingsScreen();return;}
+  drawHomeScreenV2();
 }
 function drawGameOver(){
   ctx.save();
   ctx.fillStyle='rgba(6,6,14,.82)'; ctx.fillRect(0,0,W,H);
-  ctx.font='66px "Bebas Neue",cursive';
+  ctx.font='66px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.shadowColor='#ff2d78'; ctx.shadowBlur=34; ctx.fillStyle='#ff2d78';
+  ctx.shadowColor='#ff2d78'; ctx.shadowBlur=12; ctx.fillStyle='#ff2d78';
   ctx.fillText('GAME OVER',W/2,H/2-74); ctx.shadowBlur=0;
-  ctx.font='14px "Space Mono",monospace'; ctx.fillStyle='#c8c8e0';
+  ctx.font='14px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif'; ctx.fillStyle='#c8c8e0';
   ctx.fillText(`SCORE   ${score.toLocaleString()}`,W/2,H/2+6);
   ctx.fillText(`WAVE    ${wave}`,W/2,H/2+30);
-  ctx.fillStyle=tokensEarned>0?'#ffe040':'#606080';
-  ctx.fillText(`TOKEN   +${tokensEarned}`,W/2,H/2+54);
-  drawBtn(W/2-BTN_W/2,H/2+78,BTN_W,BTN_H,'リトライ','#00f0ff');
+  ctx.globalAlpha=tokensEarned>0?1:.45;
+  drawTokenAmount(W/2,H/2+54,`+${tokensEarned}`,'center',14);
+  ctx.globalAlpha=1;
+  drawBtn(W/2-BTN_W/2,GAME_OVER_RETRY_Y,BTN_W,BTN_H,'RETRY','#00f0ff');
+  drawBtn(W/2-BTN_W/2,GAME_OVER_HOME_Y,BTN_W,BTN_H,'HOME','#88aaff');
   ctx.restore();
 }
 
@@ -2110,16 +2881,25 @@ function drawGameOver(){
 function startGame(){
   state='play'; score=0; coins=0; wave=1; frame=0; hp=100; maxHp=100;
   maxHp=Math.ceil(100*bodyMult('hp')); hp=maxHp;
-  xp=0; xpLevel=0; tokensEarned=0; invincible=0; skillPoints=0; fireTimer=0; regenBank=0; shield=0; shieldCooldown=0; droneTimer=0; bitTimer=0; waveBanner=0;
-  arrows=[];enemies=[];particles=[];epOrbs=[];floatTexts=[];pendingSpecials=[];upgradeZones=[];playerTrail=[];
+  xp=0; xpLevel=0; hitXpBank=0; tokensEarned=0; invincible=0; skillPoints=0; fireTimer=0; regenBank=0; shield=0; shieldCooldown=0; droneTimer=0; bitTimer=0; waveBanner=0;
+  arrows=[];enemies=[];particles=[];epOrbs=[];floatTexts=[];pendingSpecials=[];upgradeZones=[];
   statLevels   ={fireRate:0,bulletSpeed:0,damage:0,range:0,hp:0,xpMult:0,speed:0,critChance:0,critDamage:0,regen:0};
   specialLevels=makeSpecialLevels();
-  player.x=W/2; player.y=H-75;
+  player.x=W/2; player.y=PLAYER_Y; player.prevX=player.x; player.prevY=player.y;
   spawnUpgradeZones();
 }
 function endGame(){
   if(state!=='dead') awardTokens();
   state='dead';
+}
+function returnHome(){
+  if(state==='play'||state==='pause') awardTokens();
+  state='start';
+  homeState='home';
+  pauseView='menu';
+  stopTouchMove();
+  activePointerId=null;
+  arrows=[];enemies=[];epOrbs=[];upgradeZones=[];pendingSpecials=[];
 }
 function canShowInstallAction(){
   return !appInstalled && (installPromptEvent || hasTouchInput);
@@ -2156,6 +2936,10 @@ if('serviceWorker' in navigator){
 window.addEventListener('keydown',e=>{
   keys[e.key]=true;
   if(e.key==='Enter'||e.key===' '){if(state==='start'||state==='dead') startGame();}
+  if(e.key==='Escape'){
+    if(state==='play') pauseGame();
+    else if(state==='pause') resumeGame();
+  }
 });
 window.addEventListener('keyup',e=>{keys[e.key]=false;});
 function canvasPoint(e){
@@ -2169,38 +2953,79 @@ function canvasPoint(e){
 function startTouchMove(cx){
   touchTargetX=Math.max(player.size,Math.min(W-player.size,cx));
   touchDir=touchTargetX<player.x-6?-1:(touchTargetX>player.x+6?1:0);
+  touchAxis=touchDir;
+}
+function startStickMove(cx,cy){
+  const minY=HUD_T+50, maxY=H-HUD_B-34;
+  stickState.active=true;
+  stickState.baseX=Math.max(TOUCH_STICK.baseR+10,Math.min(W-TOUCH_STICK.baseR-10,cx));
+  stickState.baseY=Math.max(minY,Math.min(maxY,cy));
+  updateStickMove(cx,cy);
+}
+function updateStickMove(cx,cy){
+  if(!stickState.active) return;
+  const dx=Math.max(-TOUCH_STICK.max,Math.min(TOUCH_STICK.max,cx-stickState.baseX));
+  const dy=Math.max(-TOUCH_STICK.max,Math.min(TOUCH_STICK.max,cy-stickState.baseY));
+  const axis=dx/TOUCH_STICK.max;
+  touchAxis=Math.abs(axis)<TOUCH_STICK.dead ? 0 : axis;
+  touchDir=touchAxis<-TOUCH_STICK.dead ? -1 : (touchAxis>TOUCH_STICK.dead ? 1 : 0);
+  stickState.knobX=stickState.baseX+dx;
+  stickState.knobY=stickState.baseY+dy;
+}
+function startTouchControl(cx,cy){
+  if(touchControlMode()==='stick') startStickMove(cx,cy);
+  else startTouchMove(cx);
+}
+function updateTouchControl(cx,cy){
+  if(touchControlMode()==='stick') updateStickMove(cx,cy);
+  else startTouchMove(cx);
 }
 function stopTouchMove(){
   touchDir=0;
+  touchAxis=0;
   touchTargetX=null;
+  stickState.active=false;
+  stickState.baseX=TOUCH_STICK.idleX;
+  stickState.baseY=TOUCH_STICK.y;
+  stickState.knobX=TOUCH_STICK.idleX;
+  stickState.knobY=TOUCH_STICK.y;
 }
 function handleCanvasAction(cx,cy){
   if(state==='specialUpgrade'){handleSpecialAt(cx,cy);return true;}
-  if(state==='play'&&hitStop(cx,cy)){endGame();stopTouchMove();return true;}
+  if(state==='pause'){handlePauseClick(cx,cy);return true;}
+  if(state==='play'&&hitPause(cx,cy)){pauseGame();return true;}
   if(state==='start'){
     if(homeState==='store'){handleStoreClick(cx,cy);return true;}
     if(homeState==='warehouse'){handleWarehouseClick(cx,cy);return true;}
     if(homeState==='upgrade'){handleUpgradeClick(cx,cy);return true;}
+    if(homeState==='codex'){handleCodexClick(cx,cy);return true;}
+    if(homeState==='settings'){handleSettingsClick(cx,cy);return true;}
     if(handleHomeClick(cx,cy)) return true;
   }
-  if(state==='dead'&&hitRetry(cx,cy)){startGame();return true;}
+  if(state==='dead'){
+    if(hitRetry(cx,cy)){startGame();return true;}
+    if(hitGameOverHome(cx,cy)){returnHome();return true;}
+  }
   return false;
 }
 canvas.addEventListener('mousemove',e=>{
   canvasPoint(e);
 });
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('selectstart',e=>e.preventDefault());
+canvas.addEventListener('dragstart',e=>e.preventDefault());
 // ホームボタン判定
-const BTN_START_Y=178;
-function hitBtn(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>BTN_START_Y&&cy<BTN_START_Y+BTN_H; }
+function hitBtn(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>HOME_START_Y&&cy<HOME_START_Y+BTN_H; }
 function hitInstall(cx,cy){ return canShowInstallAction()&&cx>=INSTALL_BTN.x&&cx<=INSTALL_BTN.x+INSTALL_BTN.w&&cy>=INSTALL_BTN.y&&cy<=INSTALL_BTN.y+INSTALL_BTN.h; }
-function hitRetry(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>H/2+78&&cy<H/2+78+BTN_H; }
-function hitStop(cx,cy){ return cx>=STOP_BTN.x&&cx<=STOP_BTN.x+STOP_BTN.w&&cy>=STOP_BTN.y&&cy<=STOP_BTN.y+STOP_BTN.h; }
+function hitRetry(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>GAME_OVER_RETRY_Y&&cy<GAME_OVER_RETRY_Y+BTN_H; }
+function hitGameOverHome(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>GAME_OVER_HOME_Y&&cy<GAME_OVER_HOME_Y+BTN_H; }
+function hitPause(cx,cy){ return cx>=PAUSE_BTN.x&&cx<=PAUSE_BTN.x+PAUSE_BTN.w&&cy>=PAUSE_BTN.y&&cy<=PAUSE_BTN.y+PAUSE_BTN.h; }
 function hitNavBtn(cx,cy){
-  const nbW=108,nbH=44,nbGap=7,nbTotal=nbW*3+nbGap*2,nbX=(W-nbTotal)/2,nbY=240;
-  const ids=['store','warehouse','upgrade'];
-  for(let i=0;i<ids.length;i++){
-    const bx=nbX+i*(nbW+nbGap);
-    if(cx>=bx&&cx<=bx+nbW&&cy>=nbY&&cy<=nbY+nbH) return ids[i];
+  for(let i=0;i<HOME_NAV_BTNS.length;i++){
+    const col=i%2,row=Math.floor(i/2);
+    const bx=HOME_NAV.x+col*(HOME_NAV.w+HOME_NAV.gapX);
+    const by=HOME_NAV.y+row*(HOME_NAV.h+HOME_NAV.gapY);
+    if(cx>=bx&&cx<=bx+HOME_NAV.w&&cy>=by&&cy<=by+HOME_NAV.h) return HOME_NAV_BTNS[i].id;
   }
   return null;
 }
@@ -2225,14 +3050,14 @@ if(window.PointerEvent){
     if(state==='play'){
       activePointerId=e.pointerId;
       canvas.setPointerCapture?.(e.pointerId);
-      startTouchMove(cx);
+      startTouchControl(cx,cy);
       e.preventDefault();
     }
   });
   canvas.addEventListener('pointermove',e=>{
-    const {cx}=canvasPoint(e);
+    const {cx,cy}=canvasPoint(e);
     if(state==='play'&&activePointerId===e.pointerId){
-      startTouchMove(cx);
+      updateTouchControl(cx,cy);
       e.preventDefault();
     }
   });
@@ -2252,13 +3077,13 @@ if(window.PointerEvent){
     const t0=e.touches[0];
     const {cx,cy}=canvasPoint(t0);
     if(handleCanvasAction(cx,cy)) return;
-    if(state==='play') startTouchMove(cx);
+    if(state==='play') startTouchControl(cx,cy);
   },{passive:false});
   canvas.addEventListener('touchmove',e=>{
     e.preventDefault();
     if(state!=='play') return;
-    const {cx}=canvasPoint(e.touches[0]);
-    startTouchMove(cx);
+    const {cx,cy}=canvasPoint(e.touches[0]);
+    updateTouchControl(cx,cy);
   },{passive:false});
   canvas.addEventListener('touchend',e=>{e.preventDefault();stopTouchMove();},{passive:false});
   canvas.addEventListener('touchcancel',e=>{e.preventDefault();stopTouchMove();},{passive:false});
@@ -2280,6 +3105,22 @@ function loop(){
     drawEpOrbs();drawStasisAura();drawSupportUnits();drawShield();drawPlayer();drawParticles();drawFloatTexts();
     drawGameOver();return;
   }
+  if(state==='pause'){
+    drawBg();
+    drawArrows();
+    for(const e of enemies)drawEnemy(e);
+    drawEpOrbs();
+    drawStasisAura();
+    drawSupportUnits();
+    drawShield();
+    drawPlayer();
+    drawUpgradeZones();
+    drawParticles();
+    drawFloatTexts();
+    drawHUD();
+    drawPauseMenu();
+    return;
+  }
   if(state==='specialUpgrade'){
     drawBg();updateParticles();updateEpOrbs();updateFloatTexts();
     drawParticles();drawEpOrbs();
@@ -2296,17 +3137,20 @@ function loop(){
   // 移動
   if(touchTargetX!==null){
     touchDir=touchTargetX<player.x-6?-1:(touchTargetX>player.x+6?1:0);
+    touchAxis=touchDir;
   }
-  const gl=keys['ArrowLeft']||keys['a']||keys['A']||touchDir===-1;
-  const gr=keys['ArrowRight']||keys['d']||keys['D']||touchDir===1;
+  let moveAxis=0;
+  if(keys['ArrowLeft']||keys['a']||keys['A']) moveAxis-=1;
+  if(keys['ArrowRight']||keys['d']||keys['D']) moveAxis+=1;
+  if(Math.abs(touchAxis)>0) moveAxis+=touchAxis;
+  moveAxis=Math.max(-1,Math.min(1,moveAxis));
   const spd=moveSpeed();
-  if(gl) player.x-=spd; if(gr) player.x+=spd;
+  player.prevX=player.x;
+  player.prevY=player.y;
+  player.x+=spd*moveAxis;
   player.x=Math.max(player.size, Math.min(W-player.size, player.x));
 
   // トレイル
-  playerTrail.push({x:player.x,y:player.y});
-  if(playerTrail.length>8) playerTrail.shift();
-
   // 発射
   fireTimer++;if(fireTimer>=fireInterval()){fireTimer=0;fireArrows();}
 
@@ -2333,6 +3177,7 @@ function loop(){
     const e=enemies[i];
     const slow=stasisActive&&distSq(player.x,player.y,e.x,e.y)<stasisR2?stasisSlow:1;
     e.x+=e.vx*slow;e.y+=e.vy*slow;
+    e.rot+=e.rotSpd*slow;
     if(e.y>H+e.size*2) enemies.splice(i,1);
   }
   checkCollisions();
