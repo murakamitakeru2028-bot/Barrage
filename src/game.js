@@ -1304,8 +1304,19 @@ function drawBarrageLogo(x,y,scale=1){
   ctx.restore();
 }
 function shake(amp){ shakeT=14; shakeAmp=amp; }
+function removeAtFast(arr,i){
+  const last=arr.length-1;
+  if(i<0||i>last) return;
+  if(i!==last) arr[i]=arr[last];
+  arr.pop();
+}
+const projectileLoad = () => arrows.length + enemyBullets.length;
+function effectLoadScale(){
+  const load=projectileLoad()+particles.length;
+  return load>150?.35:(load>110?.55:(load>80?.75:1));
+}
 function addFloat(x,y,text,color,size=13){
-  if(floatTexts.length>=MAX_FLOAT_TEXTS) floatTexts.shift();
+  if(floatTexts.length>=MAX_FLOAT_TEXTS) removeAtFast(floatTexts,0);
   floatTexts.push({x,y,text,color,size,life:65,maxLife:65,vy:-0.9});
 }
 const waveSecondsLeft = () => {
@@ -1336,10 +1347,13 @@ const distSq = (ax,ay,bx,by) => {
 };
 function nearestEnemy(x,y,exclude=null,range=Infinity){
   let near=null, nd2=range*range;
+  const bounded=Number.isFinite(range);
   for(let i=0;i<enemies.length;i++){
     const e=enemies[i];
     if(e===exclude||e.dead) continue;
-    const dx=e.x-x, dy=e.y-y, d2=dx*dx+dy*dy;
+    const dx=e.x-x, dy=e.y-y;
+    if(bounded&&(dx<-range||dx>range||dy<-range||dy>range)) continue;
+    const d2=dx*dx+dy*dy;
     if(d2<nd2){nd2=d2;near=e;}
   }
   return near;
@@ -1400,6 +1414,7 @@ function initBg(){
 }
 function drawBg(){
   const t=(globalThis.performance?.now?.() ?? Date.now())*.001;
+  const reduced=state==='play'&&projectileLoad()>115;
   ctx.fillStyle=bgBaseGradient; ctx.fillRect(0,0,W,H);
 
   ctx.save();
@@ -1428,27 +1443,33 @@ function drawBg(){
     ctx.stroke();
   }
 
-  ctx.strokeStyle='rgba(101,230,193,0.024)'; ctx.setLineDash([6,20]); ctx.lineWidth=1;
-  for(let i=-5;i<18;i++){
-    const o=i*80+(t*10)%80;
-    ctx.beginPath();ctx.moveTo(o,0);ctx.lineTo(o+H,H);ctx.stroke();
+  if(!reduced){
+    ctx.strokeStyle='rgba(101,230,193,0.024)'; ctx.setLineDash([6,20]); ctx.lineWidth=1;
+    for(let i=-5;i<18;i++){
+      const o=i*80+(t*10)%80;
+      ctx.beginPath();ctx.moveTo(o,0);ctx.lineTo(o+H,H);ctx.stroke();
+    }
+    ctx.setLineDash([]);
   }
-  ctx.setLineDash([]);
 
   ctx.save();
   ctx.globalCompositeOperation='lighter';
-  for(const b of bgBeams){
-    const x=((b.x+t*b.spd*120)%(W+260))-130;
-    ctx.strokeStyle=`rgba(${b.c},${b.a})`;
-    ctx.lineWidth=1.2;
-    ctx.beginPath();
-    ctx.moveTo(x,b.y);
-    ctx.lineTo(x+b.len,b.y+b.len*.35);
-    ctx.stroke();
+  if(!reduced){
+    for(const b of bgBeams){
+      const x=((b.x+t*b.spd*120)%(W+260))-130;
+      ctx.strokeStyle=`rgba(${b.c},${b.a})`;
+      ctx.lineWidth=1.2;
+      ctx.beginPath();
+      ctx.moveTo(x,b.y);
+      ctx.lineTo(x+b.len,b.y+b.len*.35);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 
-  for(const s of bgStars){
+  const starStep=reduced?2:1;
+  for(let i=0;i<bgStars.length;i+=starStep){
+    const s=bgStars[i];
     s.phase+=s.spd;
     const drift=s.layer?((t*9+s.x*.02)%H):0;
     const y=s.layer?(s.y+drift)%H:s.y;
@@ -1458,8 +1479,10 @@ function drawBg(){
     ctx.fillRect(s.x-d*.5,y-d*.5,d,d);
   }
 
-  ctx.fillStyle=bgScanGradient;
-  for(let y=(t*24)%24;y<H;y+=24) ctx.fillRect(0,y,W,1);
+  if(!reduced){
+    ctx.fillStyle=bgScanGradient;
+    for(let y=(t*24)%24;y<H;y+=24) ctx.fillRect(0,y,W,1);
+  }
 
   ctx.strokeStyle='rgba(184,167,255,0.18)'; ctx.lineWidth=1.1;
   const L=22;
@@ -1660,7 +1683,7 @@ function spawnArrow(x,y,angle,opts={}){
   const speed=opts.speed??Math.hypot(vx,vy);
   const life=opts.life??240;
   const sizeScale=opts.sizeScale??1;
-  arrows.push({x,y,prevX:x,prevY:y,vx,vy,speed,pierced:0,pierceBonus:opts.pierceBonus??0,pw,ricocheted:0,split:opts.split??false,dist:0,life,damageScale:opts.damageScale??1,sizeScale,hitRadius:opts.hitRadius??(4*sizeScale),kind:opts.kind??'main'});
+  arrows.push({x,y,prevX:x,prevY:y,vx,vy,speed,pierced:0,pierceBonus:opts.pierceBonus??0,pw,ricocheted:0,split:opts.split??false,dist:0,life,scanPhase:(shotSeq+arrows.length)&3,damageScale:opts.damageScale??1,sizeScale,hitRadius:opts.hitRadius??(4*sizeScale),kind:opts.kind??'main'});
 }
 function fireArrows(){
   shotSeq++;
@@ -1716,12 +1739,20 @@ function redirectArrowToEnemy(a,fromEnemy){
 }
 function updateArrows(){
   const hs=homingStr();
+  const homingMask=arrows.length>85?3:1;
   for(let i=arrows.length-1;i>=0;i--){
     const a=arrows[i];
-    if(hs>0&&enemies.length>0&&a.kind!=='split'&&frame%2===0){
+    if(hs>0&&enemies.length>0&&a.kind!=='split'&&((frame+(a.scanPhase||0))&homingMask)===0){
       let near=null;
       let nd2=240*240;
-      for(const e of enemies){const d2=distSq(e.x,e.y,a.x,a.y);if(d2<nd2){nd2=d2;near=e;}}
+      for(let ei=0;ei<enemies.length;ei++){
+        const e=enemies[ei];
+        if(e.dead) continue;
+        const dx=e.x-a.x, dy=e.y-a.y;
+        if(dx<-240||dx>240||dy<-240||dy>240) continue;
+        const d2=dx*dx+dy*dy;
+        if(d2<nd2){nd2=d2;near=e;}
+      }
       if(near){
         const dx=near.x-a.x,dy=near.y-a.y,len=Math.hypot(dx,dy)||1;
         const spd=a.speed;
@@ -1740,10 +1771,11 @@ function updateArrows(){
       splitArrow(a);
       a.split=true;
     }
-    if(a.life<=0||a.y<-ARROW_DESPAWN_MARGIN||a.y>H+ARROW_DESPAWN_MARGIN||a.x<-ARROW_DESPAWN_MARGIN||a.x>W+ARROW_DESPAWN_MARGIN) arrows.splice(i,1);
+    if(a.life<=0||a.y<-ARROW_DESPAWN_MARGIN||a.y>H+ARROW_DESPAWN_MARGIN||a.x<-ARROW_DESPAWN_MARGIN||a.x>W+ARROW_DESPAWN_MARGIN) removeAtFast(arrows,i);
   }
 }
 function drawArrows(){
+  const simple=projectileLoad()>125;
   for(const a of arrows){
     const palette=a.pw
       ? {core:'#fff1d0',main:'#ff7a24',soft:'255,120,36'}
@@ -1769,6 +1801,13 @@ function drawArrows(){
     const nose=(a.pw?4.2:2.8)*sizeScale;
     const backX=a.x-ux*len, backY=a.y-uy*len;
     const tailX=a.x-ux*tail, tailY=a.y-uy*tail;
+
+    if(simple&&(a.kind==='main'||a.kind==='drone'||a.kind==='bit'||a.kind==='needle')&&!a.pw){
+      ctx.fillStyle=palette.main;
+      const s=Math.max(2.4,3.2*sizeScale);
+      ctx.fillRect(a.x-s*.5,a.y-s*.5,s,s);
+      continue;
+    }
 
     ctx.strokeStyle=`rgba(${palette.soft},${a.pw?.40:.28})`;
     ctx.lineWidth=(a.pw?2.4:1.5)*sizeScale;
@@ -1798,7 +1837,7 @@ function bossArchetypeForWave(w=wave){
   return BOSS_ARCHETYPES[(tier-1)%BOSS_ARCHETYPES.length];
 }
 function spawnEnemyBullet(x,y,angle,speed,damage,size=5,color=HOYO_UI.rose,kind='aimed',extra=null){
-  if(enemyBullets.length>=MAX_ENEMY_BULLETS) enemyBullets.shift();
+  if(enemyBullets.length>=MAX_ENEMY_BULLETS) removeAtFast(enemyBullets,0);
   enemyBullets.push({
     x,y,prevX:x,prevY:y,
     vx:Math.cos(angle)*speed,
@@ -1927,16 +1966,20 @@ function updateEnemyBullets(){
     b.x+=b.vx;
     b.y+=b.vy;
     b.life--;
-    if(b.life<=0||b.x<-30||b.x>W+30||b.y<-40||b.y>H+44) enemyBullets.splice(i,1);
+    if(b.life<=0||b.x<-30||b.x>W+30||b.y<-40||b.y>H+44) removeAtFast(enemyBullets,i);
   }
 }
 function drawEnemyBullets(){
   ctx.save();
   ctx.shadowBlur=0;
+  const simple=enemyBullets.length>64;
   for(const b of enemyBullets){
     const col=b.color||HOYO_UI.rose;
     ctx.fillStyle=col;
-    if(b.kind==='orb'){
+    if(simple){
+      const s=b.size*1.25;
+      ctx.fillRect(b.x-s*.5,b.y-s*.5,s,s);
+    }else if(b.kind==='orb'){
       ctx.beginPath();
       ctx.arc(b.x,b.y,b.size,0,TAU);
       ctx.fill();
@@ -2066,6 +2109,7 @@ function drawEnemy(e){
   if(e.boss){
     const pulse=.62+Math.sin(frame*.075+e.phase)*.38;
     const accent=e.color||HOYO_UI.rose;
+    const reducedBossDetail=state==='play'&&projectileLoad()>115;
     ctx.save();
     ctx.shadowColor=accent;
     ctx.shadowBlur=24;
@@ -2074,16 +2118,18 @@ function drawEnemy(e){
     ctx.beginPath();
     ctx.arc(0,0,size+9+pulse*5,0,TAU);
     ctx.stroke();
-    ctx.rotate(-rot+frame*.013);
-    ctx.strokeStyle=h2r(e.bossType==='helix'?accent:HOYO_UI.gold,.30);
-    ctx.lineWidth=1.4;
-    const sigils=e.bossType==='sniper'?3:(e.bossType==='wall'?4:8);
-    for(let i=0;i<sigils;i++){
-      const a=i*TAU/sigils;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a)*(size+15),Math.sin(a)*(size+15));
-      ctx.lineTo(Math.cos(a+TAU/(sigils*2))*(size+24),Math.sin(a+TAU/(sigils*2))*(size+24));
-      ctx.stroke();
+    if(!reducedBossDetail){
+      ctx.rotate(-rot+frame*.013);
+      ctx.strokeStyle=h2r(e.bossType==='helix'?accent:HOYO_UI.gold,.30);
+      ctx.lineWidth=1.4;
+      const sigils=e.bossType==='sniper'?3:(e.bossType==='wall'?4:8);
+      for(let i=0;i<sigils;i++){
+        const a=i*TAU/sigils;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*(size+15),Math.sin(a)*(size+15));
+        ctx.lineTo(Math.cos(a+TAU/(sigils*2))*(size+24),Math.sin(a+TAU/(sigils*2))*(size+24));
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
@@ -2157,7 +2203,7 @@ function drawEnemy(e){
 //  パーティクル
 // ─────────────────────────────────────
 function burst(x,y,color,n){
-  const cnt=Math.min(Math.ceil(n*.45), MAX_PARTICLES-particles.length);
+  const cnt=Math.min(Math.ceil(n*.45*effectLoadScale()), MAX_PARTICLES-particles.length);
   for(let i=0;i<cnt;i++){
     const angle=Math.random()*Math.PI*2, spd=1+Math.random()*3.5;
     particles.push({x,y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,life:28+Math.random()*22,maxLife:50,color,size:1.5+Math.random()*2});
@@ -2166,7 +2212,7 @@ function burst(x,y,color,n){
 function updateParticles(){
   for(let i=particles.length-1;i>=0;i--){
     const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vx*=.89;p.vy*=.89;p.life--;
-    if(p.life<=0) particles.splice(i,1);
+    if(p.life<=0) removeAtFast(particles,i);
   }
 }
 function drawParticles(){
@@ -2182,7 +2228,7 @@ function drawParticles(){
 //  EPオーブ
 // ─────────────────────────────────────
 function spawnEpOrbs(x,y,n){
-  const cnt=Math.min(n, MAX_EP_ORBS-epOrbs.length);
+  const cnt=Math.min(Math.ceil(n*effectLoadScale()), MAX_EP_ORBS-epOrbs.length);
   for(let i=0;i<cnt;i++){
     const angle=Math.random()*Math.PI*2, spd=1.5+Math.random()*2.5;
     epOrbs.push({x,y,prevX:x,prevY:y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,delay:6+Math.floor(Math.random()*16),size:2.3+Math.random()*1.5});
@@ -2195,7 +2241,7 @@ function updateEpOrbs(){
     o.prevY=o.y;
     const dx=player.x-o.x, dy=player.y-o.y, dist2=dx*dx+dy*dy;
     if(dist2<16*16 || (dist2<28*28 && o.vx*o.vx+o.vy*o.vy>7*7)){
-      epOrbs.splice(i,1);
+      removeAtFast(epOrbs,i);
       continue;
     }
     if(o.delay>0){o.delay--;o.vx*=.86;o.vy*=.86;}
@@ -2206,7 +2252,7 @@ function updateEpOrbs(){
       const s2=o.vx*o.vx+o.vy*o.vy;if(s2>10*10){const s=Math.sqrt(s2);o.vx=o.vx/s*10;o.vy=o.vy/s*10;}
     }
     o.x+=o.vx; o.y+=o.vy;
-    if(distSq(o.x,o.y,player.x,player.y)<20*20) epOrbs.splice(i,1);
+    if(distSq(o.x,o.y,player.x,player.y)<20*20) removeAtFast(epOrbs,i);
   }
 }
 function drawEpOrbs(){
@@ -2225,7 +2271,7 @@ function drawEpOrbs(){
 function updateFloatTexts(){
   for(let i=floatTexts.length-1;i>=0;i--){
     const t=floatTexts[i];t.y+=t.vy;t.life--;
-    if(t.life<=0) floatTexts.splice(i,1);
+    if(t.life<=0) removeAtFast(floatTexts,i);
   }
 }
 function drawFloatTexts(){
@@ -3130,7 +3176,7 @@ function killEnemy(e){
   burst(e.x,e.y,`rgb(${e.r},${e.g},${e.b})`,14);
   playSfx('kill');
   spawnEpOrbs(e.x,e.y,e.orbValue ?? (3+Math.floor(e.maxHp/22)));
-  enemies.splice(idx,1);
+  removeAtFast(enemies,idx);
 }
 function damageEnemy(e,amount,color,label=null){
   if(!e||e.dead) return false;
@@ -3205,7 +3251,7 @@ function checkCollisions(){
         const bounced=ricochetLv>0&&a.ricocheted<ricochetLv&&redirectArrowToEnemy(a,e);
         if(bounced){rem=true;break;}
         const maxPierce=pc+(a.pierceBonus||0);
-        if(maxPierce===0||a.pierced>=maxPierce){arrows.splice(ai,1);rem=true;}
+        if(maxPierce===0||a.pierced>=maxPierce){removeAtFast(arrows,ai);rem=true;}
         else a.pierced++;
       }
     }
@@ -3230,7 +3276,7 @@ function checkCollisions(){
         const b=enemyBullets[i];
         const hitR=playerR+(b.size||5);
         if(distSq(player.x,player.y,b.x,b.y)<hitR*hitR){
-          enemyBullets.splice(i,1);
+          removeAtFast(enemyBullets,i);
           if(blockWithShield()) break;
           hp-=incomingDamage(b.damage ?? BOSS_BULLET_BASE_DAMAGE);
           invincible=76;
@@ -5427,7 +5473,7 @@ function loop(){
     else{
       e.x+=e.vx*slow;e.y+=e.vy*slow;
       e.rot+=e.rotSpd*slow;
-      if(e.y>H+e.size*2) enemies.splice(i,1);
+      if(e.y>H+e.size*2) removeAtFast(enemies,i);
     }
   }
   checkCollisions();
