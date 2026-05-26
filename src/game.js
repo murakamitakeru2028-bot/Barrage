@@ -110,7 +110,11 @@ const UI_COPY = {
     settings:['オプション','操作とサウンド']
   },
   ship:{coreOnly:'NU-00 ネイキッド',standard:'AF-01 アーク',striker:'VX-03 レイザー',guardian:'BG-12 バルワーク',carrier:'DR-07 ハイヴ'},
-  core:{basic:'C-0 シード',assault:'C-A ブレイズ',reactor:'C-R パルス'},
+  core:{
+    basic:'C-0 シード',assault:'C-A ブレイズ',reactor:'C-R パルス',sentinel:'C-S センチネル',
+    nova:'C-N ノヴァ',quantum:'C-Q クオンタム',graviton:'C-G グラビトン',prism:'C-P プリズム',
+    chronos:'C-X クロノス',voidCore:'C-V ヴォイド',lagrange:'C-L ラグランジュ',omegaCore:'C-O オメガ炉'
+  },
   part:{
     cannon:'ランス砲台',barrel:'クイック砲身',plate:'ミラー装甲',frame:'バイタル骨格',
     droneBay:'ドローンベイ',bitLink:'ビットリンク',coreLink:'コアリンク',overclock:'オーバークロック'
@@ -229,6 +233,12 @@ const CORE_DEFS = [
   { id:'sentinel', name:'C-S センチネル', icon:'CS', role:'防衛コア', cost:1200, color:'#82d7ff', mult:{hp:2.8,defense:4.2,attack:1.4,fireRate:1.25} },
   { id:'nova',     name:'C-N ノヴァ', icon:'CN', role:'爆発火力コア', cost:2200, color:'#ff7a3d', mult:{hp:1.4,defense:1.2,attack:8.0,fireRate:1.7} },
   { id:'quantum',  name:'C-Q クオンタム', icon:'CQ', role:'高機動コア', cost:3200, color:'#36f39b', mult:{hp:1.8,defense:1.5,attack:4.5,fireRate:5.5} },
+  { id:'graviton', name:'C-G グラビトン', icon:'CG', role:'重力防衛コア', cost:9000, color:'#b96cff', mult:{hp:5.5,defense:8.0,attack:2.5,fireRate:1.4} },
+  { id:'prism',    name:'C-P プリズム', icon:'CP', role:'複合増幅コア', cost:24000, color:'#eef7ff', mult:{hp:3.5,defense:2.8,attack:18,fireRate:3.2} },
+  { id:'chronos',  name:'C-X クロノス', icon:'CX', role:'超連射コア', cost:85000, color:'#36f39b', mult:{hp:5,defense:4,attack:12,fireRate:20} },
+  { id:'voidCore', name:'C-V ヴォイド', icon:'CV', role:'虚空火力コア', cost:420000, color:'#ff3b62', mult:{hp:8,defense:6,attack:95,fireRate:5.5} },
+  { id:'lagrange', name:'C-L ラグランジュ', icon:'CL', role:'終盤バランスコア', cost:2500000, color:'#1ed6ff', mult:{hp:40,defense:32,attack:260,fireRate:26} },
+  { id:'omegaCore', name:'C-O オメガ炉', icon:'CO', role:'最上位統合コア', cost:60000000, color:'#b8a7ff', mult:{hp:260,defense:190,attack:2500,fireRate:140} },
 ];
 const SHIP_EFFECTS = {
   coreOnly:'開始SP +1 / 当たり判定小',
@@ -4818,7 +4828,7 @@ function drawCraftInCard(x,y,w,h,shipId,coreId){
 // ── ストア画面 ──
 const STORE_TABS=['ship','core','part','drone'];
 const STORE_LABELS={ship:'SHIP',core:'CORE',part:'PART',drone:'DRONE'};
-const STORE_PAGE_SIZE={ship:6,core:4,part:6,drone:6};
+const STORE_PAGE_SIZE={ship:6,core:6,part:6,drone:6};
 const STORE_PAGER={y:522,w:78,h:20,gap:18};
 const STORE_ACTIVE_Y=62;
 const STORE_TAB_Y=128;
