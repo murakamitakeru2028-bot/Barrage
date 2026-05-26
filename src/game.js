@@ -13,6 +13,7 @@ const REROLL_COST  = 20;
 const TOKEN_SCORE_UNIT = 30;
 const DEMO_START_TOKENS = 1000;
 const DEMO_GRANT_KEY = 'demo-start-tokens-1000-v1';
+const SAVE_RESET_VERSION = 'global-reset-2026-05-26-v1';
 const RUN_TOKEN_COIN_MULT = 2;
 const RUN_TOKEN_WAVE_BONUS = 25;
 const RUN_TOKEN_TIME_BONUS = 1;
@@ -384,6 +385,7 @@ function freshMeta(settings={...DEFAULT_SETTINGS}){
     grants:{[DEMO_GRANT_KEY]:true},
     highScore:{score:0,wave:1},
     bestWave:1,
+    saveResetVersion:SAVE_RESET_VERSION,
     settings:{...DEFAULT_SETTINGS,...settings}
   };
 }
@@ -591,33 +593,44 @@ function loadMeta(){
     const raw=localStorage.getItem('barrage-meta');
     if(raw){
       const saved=JSON.parse(raw);
-      const legacyLoad=!('selectedCore' in saved);
-      meta.tokens=Number(saved.tokens)||0;
-      for(const d of BODY_UPGRADE_DEFS) meta.upgrades[d.id]=Number(saved.upgrades?.[d.id])||0;
-      for(const d of BASIC_STAT_DEFS) meta.homeUpgrades[d.id]=Number(saved.homeUpgrades?.[d.id])||0;
-      meta.selectedShip=saved.selectedShip || 'coreOnly';
-      meta.selectedCore=saved.selectedCore || 'basic';
-      meta.ownedShips={coreOnly:true,...(saved.ownedShips||{})};
-      meta.ownedCores={basic:true,...(saved.ownedCores||{})};
-      meta.ownedParts={...(saved.ownedParts||{})};
-      meta.coreLevels={basic:0,...(saved.coreLevels||{})};
-      meta.mountedParts={...(saved.mountedParts||{})};
-      meta.grants={...(saved.grants||{})};
-      meta.highScore={...(saved.highScore||{})};
-      meta.bestWave=Number(saved.bestWave)||Number(saved.highScore?.wave)||1;
-      meta.settings={...DEFAULT_SETTINGS,...(saved.settings||{})};
-      if(!meta.grants[DEMO_GRANT_KEY]){
-        meta.tokens+=DEMO_START_TOKENS;
-        meta.grants[DEMO_GRANT_KEY]=true;
+      if(saved.saveResetVersion!==SAVE_RESET_VERSION){
+        meta=freshMeta();
         shouldSave=true;
+      }else{
+        const legacyLoad=!('selectedCore' in saved);
+        meta.tokens=Number(saved.tokens)||0;
+        for(const d of BODY_UPGRADE_DEFS) meta.upgrades[d.id]=Number(saved.upgrades?.[d.id])||0;
+        for(const d of BASIC_STAT_DEFS) meta.homeUpgrades[d.id]=Number(saved.homeUpgrades?.[d.id])||0;
+        meta.selectedShip=saved.selectedShip || 'coreOnly';
+        meta.selectedCore=saved.selectedCore || 'basic';
+        meta.ownedShips={coreOnly:true,...(saved.ownedShips||{})};
+        meta.ownedCores={basic:true,...(saved.ownedCores||{})};
+        meta.ownedParts={...(saved.ownedParts||{})};
+        meta.coreLevels={basic:0,...(saved.coreLevels||{})};
+        meta.mountedParts={...(saved.mountedParts||{})};
+        meta.grants={...(saved.grants||{})};
+        meta.highScore={...(saved.highScore||{})};
+        meta.bestWave=Number(saved.bestWave)||Number(saved.highScore?.wave)||1;
+        meta.saveResetVersion=SAVE_RESET_VERSION;
+        meta.settings={...DEFAULT_SETTINGS,...(saved.settings||{})};
+        if(!meta.grants[DEMO_GRANT_KEY]){
+          meta.tokens+=DEMO_START_TOKENS;
+          meta.grants[DEMO_GRANT_KEY]=true;
+          shouldSave=true;
+        }
+        normalizeSettings();
+        if(legacyLoad) meta.selectedShip='coreOnly';
+        if(!meta.ownedShips[meta.selectedShip]) meta.selectedShip='coreOnly';
+        if(!meta.ownedCores[meta.selectedCore]) meta.selectedCore='basic';
+        normalizeMounts();
       }
-      normalizeSettings();
-      if(legacyLoad) meta.selectedShip='coreOnly';
-      if(!meta.ownedShips[meta.selectedShip]) meta.selectedShip='coreOnly';
-      if(!meta.ownedCores[meta.selectedCore]) meta.selectedCore='basic';
-      normalizeMounts();
+    }else{
+      shouldSave=true;
     }
-  }catch(e){}
+  }catch(e){
+    meta=freshMeta();
+    shouldSave=true;
+  }
   normalizeSettings();
   normalizeHighScore();
   invalidateLoadoutCache();
