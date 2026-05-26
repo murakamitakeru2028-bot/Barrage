@@ -1648,43 +1648,119 @@ function drawArrows(){
 function bossBulletDamage(tier){
   return Math.ceil((BOSS_BULLET_BASE_DAMAGE+tier*BOSS_BULLET_DAMAGE_STEP)*Math.pow(1.018,wave-1));
 }
-function spawnEnemyBullet(x,y,angle,speed,damage,size=5,color=HOYO_UI.rose,kind='aimed'){
+const BOSS_ARCHETYPES=[
+  {id:'duelist',name:'SCARLET DUELIST',color:HOYO_UI.rose,shape:'hex',rgb:[255,59,98],hp:1.00,size:0,targetY:108,shot:1.00,move:'weave'},
+  {id:'helix',name:'HELIX ORACLE',color:HOYO_UI.gold,shape:'circle',rgb:[184,167,255],hp:1.12,size:-2,targetY:118,shot:.86,move:'orbit'},
+  {id:'sniper',name:'RAIL EXECUTOR',color:HOYO_UI.blue,shape:'tri',rgb:[30,214,255],hp:.92,size:-4,targetY:96,shot:.78,move:'stalker'},
+  {id:'wall',name:'BULWARK GATE',color:HOYO_UI.jade,shape:'rect',rgb:[54,243,155],hp:1.28,size:6,targetY:126,shot:1.08,move:'gate'},
+  {id:'warden',name:'GRAVITY WARDEN',color:'#b96cff',shape:'hex',rgb:[185,108,255],hp:1.45,size:4,targetY:112,shot:1.18,move:'drift'},
+];
+function bossArchetypeForWave(w=wave){
+  const tier=bossTierForWave(w);
+  return BOSS_ARCHETYPES[(tier-1)%BOSS_ARCHETYPES.length];
+}
+function spawnEnemyBullet(x,y,angle,speed,damage,size=5,color=HOYO_UI.rose,kind='aimed',extra=null){
   if(enemyBullets.length>=MAX_ENEMY_BULLETS) enemyBullets.shift();
   enemyBullets.push({
     x,y,prevX:x,prevY:y,
     vx:Math.cos(angle)*speed,
     vy:Math.sin(angle)*speed,
     speed,damage,size,color,kind,
-    life:260
+    life:260,
+    ...(extra||{})
   });
+}
+function fireBossFan(boss,base,count,spread,speed,dmg,size,color,kind='aimed'){
+  for(let i=0;i<count;i++){
+    const off=count===1?0:(i/(count-1)-.5)*spread;
+    spawnEnemyBullet(boss.x,boss.y+boss.size*.55,base+off,speed,dmg,size,color,kind);
+  }
+}
+function fireBossRing(boss,count,rot,speed,dmg,size,color,kind='ring',extra=null){
+  for(let i=0;i<count;i++) spawnEnemyBullet(boss.x,boss.y,rot+i*TAU/count,speed,dmg,size,color,kind,extra);
+}
+function fireBossPatternDuelist(boss,base,tier,dmg){
+  const count=Math.min(13,3+Math.floor(tier/2));
+  const spread=Math.min(.82,.18+tier*.035);
+  fireBossFan(boss,base,count,spread,2.1+tier*.13,dmg,5.2,boss.color,'aimed');
+  if(boss.volley%4===0){
+    fireBossRing(boss,Math.min(28,12+tier*2),frame*.035+boss.phase,1.55+tier*.07,Math.ceil(dmg*.72),4.4,HOYO_UI.gold,'ring');
+    shake(4);
+  }
+}
+function fireBossPatternHelix(boss,base,tier,dmg){
+  const arms=Math.min(6,3+Math.floor(tier/3));
+  const rot=frame*.085+boss.phase+boss.volley*.42;
+  for(let i=0;i<arms;i++){
+    const a=rot+i*TAU/arms;
+    spawnEnemyBullet(boss.x,boss.y,a,1.75+tier*.08,Math.ceil(dmg*.72),4.6,boss.color,'ring');
+    spawnEnemyBullet(boss.x,boss.y,a+Math.PI/(arms||1),1.22+tier*.05,Math.ceil(dmg*.58),3.8,HOYO_UI.gold,'ring');
+  }
+  if(boss.volley%3===0) fireBossFan(boss,base,3,.18,2.45+tier*.09,dmg,4.6,HOYO_UI.rose,'aimed');
+}
+function fireBossPatternSniper(boss,base,tier,dmg){
+  const speed=3.05+tier*.16;
+  const burstCount=3+(tier>=5?1:0);
+  for(let i=0;i<burstCount;i++){
+    const off=(i-(burstCount-1)/2)*.045;
+    spawnEnemyBullet(boss.x,boss.y+boss.size*.38,base+off,speed+i*.18,Math.ceil(dmg*1.25),4.2,boss.color,'needle',{life:190});
+  }
+  if(boss.volley%3===0){
+    const n=Math.min(14,6+tier);
+    for(let i=0;i<n;i++){
+      const x=28+i*(W-56)/Math.max(1,n-1);
+      const a=Math.PI/2+(Math.sin(frame*.04+i)*.10);
+      spawnEnemyBullet(x,42,a,2.15+tier*.08,Math.ceil(dmg*.72),3.8,HOYO_UI.gold,'needle',{life:230});
+    }
+    shake(5);
+  }
+}
+function fireBossPatternWall(boss,base,tier,dmg){
+  const lanes=Math.min(10,5+Math.floor(tier/2));
+  const gap=(W-68)/Math.max(1,lanes-1);
+  const offset=(boss.volley%2)*gap*.5;
+  for(let i=0;i<lanes;i++){
+    const x=34+((i*gap+offset)%(W-68));
+    const sway=(i%2?-.11:.11)+Math.sin(frame*.025+i)*.04;
+    spawnEnemyBullet(x,boss.y+boss.size*.15,Math.PI/2+sway,1.7+tier*.08,Math.ceil(dmg*.78),5.4,boss.color,'ring');
+  }
+  if(boss.volley%2===0) fireBossFan(boss,base,5,.42,2.35+tier*.07,dmg,4.8,HOYO_UI.rose,'aimed');
+}
+function fireBossPatternWarden(boss,base,tier,dmg){
+  const orbCount=Math.min(6,2+Math.floor(tier/2));
+  for(let i=0;i<orbCount;i++){
+    const a=base+(i-(orbCount-1)/2)*.24;
+    spawnEnemyBullet(boss.x,boss.y+boss.size*.4,a,1.55+tier*.045,Math.ceil(dmg*1.05),6.8,boss.color,'orb',{turn:.026,life:300});
+  }
+  if(boss.volley%3===0){
+    fireBossRing(boss,Math.min(22,10+tier*2),-frame*.045+boss.phase,1.18+tier*.05,Math.ceil(dmg*.66),4.7,HOYO_UI.gold,'ring');
+    shake(4);
+  }
 }
 function fireBossPattern(boss){
   const tier=boss.tier || bossTierForWave();
   const dx=player.x-boss.x, dy=player.y-boss.y;
   const base=Math.atan2(dy,dx);
-  const count=Math.min(13,3+Math.floor(tier/2));
-  const spread=Math.min(.82,.18+tier*.035);
-  const speed=2.1+tier*.13;
   const dmg=bossBulletDamage(tier);
-  for(let i=0;i<count;i++){
-    const off=count===1?0:(i/(count-1)-.5)*spread;
-    spawnEnemyBullet(boss.x,boss.y+boss.size*.55,base+off,speed,dmg,5.2,HOYO_UI.rose,'aimed');
-  }
   boss.volley=(boss.volley||0)+1;
-  if(boss.volley%4===0){
-    const n=Math.min(28,12+tier*2);
-    const rot=frame*.035+boss.phase;
-    for(let i=0;i<n;i++){
-      const a=rot+i*TAU/n;
-      spawnEnemyBullet(boss.x,boss.y,a,1.55+tier*.07,Math.ceil(dmg*.72),4.4,HOYO_UI.gold,'ring');
-    }
-    shake(4);
-  }
+  if(boss.bossType==='helix') fireBossPatternHelix(boss,base,tier,dmg);
+  else if(boss.bossType==='sniper') fireBossPatternSniper(boss,base,tier,dmg);
+  else if(boss.bossType==='wall') fireBossPatternWall(boss,base,tier,dmg);
+  else if(boss.bossType==='warden') fireBossPatternWarden(boss,base,tier,dmg);
+  else fireBossPatternDuelist(boss,base,tier,dmg);
   playSfx('shot');
 }
 function updateBoss(boss,slow=1){
-  const homeX=W/2+Math.sin(frame*.018+boss.phase)*Math.min(94,54+boss.tier*7);
-  boss.x+=(homeX-boss.x)*.022*slow;
+  const amp=Math.min(116,54+boss.tier*7);
+  let homeX=W/2+Math.sin(frame*.018+boss.phase)*amp;
+  if(boss.moveType==='orbit') homeX=W/2+Math.sin(frame*.026+boss.phase)*Math.min(130,74+boss.tier*8);
+  else if(boss.moveType==='stalker') homeX=Math.max(54,Math.min(W-54,player.x+Math.sin(frame*.035+boss.phase)*34));
+  else if(boss.moveType==='gate'){
+    boss.drift=(boss.drift||1);
+    homeX=boss.x+boss.drift*(1.2+boss.tier*.08);
+    if(homeX<54||homeX>W-54){boss.drift*=-1;homeX=Math.max(54,Math.min(W-54,homeX));}
+  }else if(boss.moveType==='drift') homeX=W/2+Math.sin(frame*.012+boss.phase)*Math.min(92,48+boss.tier*6)+Math.sin(frame*.037)*22;
+  boss.x+=(homeX-boss.x)*(boss.moveType==='gate'?.18:.022)*slow;
   if(boss.y<boss.targetY) boss.y+=boss.vy*slow;
   else boss.y+=Math.sin(frame*.045+boss.phase)*.18*slow;
   boss.rot+=boss.rotSpd*slow;
@@ -1692,7 +1768,7 @@ function updateBoss(boss,slow=1){
   boss.shotTimer=(boss.shotTimer??60)-slow;
   if(boss.shotTimer<=0){
     fireBossPattern(boss);
-    boss.shotTimer=Math.max(22,68-boss.tier*4);
+    boss.shotTimer=Math.max(18,(68-boss.tier*4)*(boss.shotRate||1));
   }
 }
 function updateEnemyBullets(){
@@ -1700,6 +1776,16 @@ function updateEnemyBullets(){
     const b=enemyBullets[i];
     b.prevX=b.x;
     b.prevY=b.y;
+    if(b.turn){
+      const desired=Math.atan2(player.y-b.y,player.x-b.x);
+      const current=Math.atan2(b.vy,b.vx);
+      let diff=((desired-current+Math.PI*3)%TAU)-Math.PI;
+      diff=Math.max(-b.turn,Math.min(b.turn,diff));
+      const next=current+diff;
+      const speed=Math.hypot(b.vx,b.vy)||b.speed||1;
+      b.vx=Math.cos(next)*speed;
+      b.vy=Math.sin(next)*speed;
+    }
     b.x+=b.vx;
     b.y+=b.vy;
     b.life--;
@@ -1719,10 +1805,24 @@ function drawEnemyBullets(){
     ctx.lineTo(b.x,b.y);
     ctx.stroke();
     ctx.fillStyle=col;
-    if(b.kind==='ring'){
+    if(b.kind==='ring'||b.kind==='orb'){
       ctx.beginPath();
       ctx.arc(b.x,b.y,b.size,0,TAU);
       ctx.fill();
+      if(b.kind==='orb'){
+        ctx.strokeStyle=h2r(col,.55);
+        ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.arc(b.x,b.y,b.size*1.55,frame*.03,Math.PI*1.35+frame*.03);
+        ctx.stroke();
+      }
+    }else if(b.kind==='needle'){
+      const a=Math.atan2(b.vy,b.vx);
+      ctx.save();
+      ctx.translate(b.x,b.y);
+      ctx.rotate(a);
+      ctx.fillRect(-b.size*1.8,-b.size*.32,b.size*3.6,b.size*.64);
+      ctx.restore();
     }else{
       ctx.save();
       ctx.translate(b.x,b.y);
@@ -1756,22 +1856,25 @@ function bossTierForWave(w=wave){
 }
 function spawnBoss(){
   const wB=wave-1, tier=bossTierForWave();
-  const size=Math.min(66,42+tier*3);
+  const type=bossArchetypeForWave(wave);
+  const size=Math.min(72,42+tier*3+(type.size||0));
   const hpCurve=enemyHpCurve(wB);
-  const baseHp=Math.floor(hpCurve*(BOSS_HP_MULT+tier*2.5));
+  const baseHp=Math.floor(hpCurve*(BOSS_HP_MULT+tier*2.5)*(type.hp||1));
   const x=W/2, y=-size*2;
   const scoreValue=Math.max(5000,Math.floor(baseHp*1.65+wave*900));
   const xpValue=Math.max(120,Math.floor(80+wave*18+Math.sqrt(baseHp)*2.8));
   const orbValue=Math.max(18,Math.floor(14+tier*4+Math.sqrt(baseHp)/80));
   const contactDamage=Math.ceil((88+tier*22)*Math.pow(ENEMY_CONTACT_EXP,wB)*BOSS_CONTACT_MULT);
+  const [r,g,b]=type.rgb;
   enemies.push({
     x,y,vx:0,vy:.82,hp:baseHp,maxHp:baseHp,xpValue,scoreValue,orbValue,contactDamage,
-    hasCore:true,shape:'hex',size,r:255,g:59,b:98,flash:0,rot:0,rotSpd:.014,dead:false,
-    boss:true,bossWave:wave,tier,targetY:108,phase:Math.random()*TAU,shotTimer:80,volley:0
+    hasCore:true,shape:type.shape,size,r,g,b,flash:0,rot:0,rotSpd:.014,dead:false,
+    boss:true,bossWave:wave,tier,bossType:type.id,bossName:type.name,color:type.color,moveType:type.move,
+    targetY:type.targetY,phase:Math.random()*TAU,shotTimer:80,shotRate:type.shot,volley:0,drift:Math.random()<.5?-1:1
   });
   waveBanner=150;
   shake(9);
-  addFloat(W/2,112,`BOSS WAVE ${wave}`,HOYO_UI.rose,16);
+  addFloat(W/2,112,`${type.name}  WAVE ${wave}`,type.color,16);
   playSfx('dead');
 }
 function spawnEnemy(){
@@ -1801,25 +1904,26 @@ function spawnEnemy(){
 function drawBossHpBar(e){
   const pct=Math.max(0,Math.min(1,e.hp/e.maxHp));
   const x=28,y=58,w=W-56,h=10;
+  const accent=e.color||HOYO_UI.rose;
   ctx.save();
   ctx.fillStyle='rgba(5,6,7,.82)';
   ctx.fillRect(x,y,w,h);
   const g=ctx.createLinearGradient(x,y,x+w,y);
-  g.addColorStop(0,HOYO_UI.rose);
+  g.addColorStop(0,accent);
   g.addColorStop(.55,HOYO_UI.gold);
   g.addColorStop(1,'#eef7ff');
   ctx.fillStyle=g;
   ctx.fillRect(x,y,w*pct,h);
-  ctx.strokeStyle=h2r(HOYO_UI.rose,.74);
+  ctx.strokeStyle=h2r(accent,.74);
   ctx.lineWidth=1.2;
   ctx.strokeRect(x-.5,y-.5,w+1,h+1);
   ctx.font=`900 10px ${UI_FONT}`;
   ctx.textAlign='center';
   ctx.textBaseline='bottom';
   ctx.fillStyle=HOYO_UI.text;
-  ctx.shadowColor=HOYO_UI.rose;
+  ctx.shadowColor=accent;
   ctx.shadowBlur=5;
-  ctx.fillText(`BOSS  WAVE ${e.bossWave}`,W/2,y-4);
+  ctx.fillText(`${e.bossName||'BOSS'}  WAVE ${e.bossWave}`,W/2,y-4);
   ctx.restore();
 }
 function drawEnemy(e){
@@ -1842,22 +1946,24 @@ function drawEnemy(e){
 
   if(e.boss){
     const pulse=.62+Math.sin(frame*.075+e.phase)*.38;
+    const accent=e.color||HOYO_UI.rose;
     ctx.save();
-    ctx.shadowColor=HOYO_UI.rose;
+    ctx.shadowColor=accent;
     ctx.shadowBlur=24;
-    ctx.strokeStyle=h2r(HOYO_UI.rose,.32+pulse*.28);
+    ctx.strokeStyle=h2r(accent,.32+pulse*.28);
     ctx.lineWidth=2.4;
     ctx.beginPath();
     ctx.arc(0,0,size+9+pulse*5,0,TAU);
     ctx.stroke();
     ctx.rotate(-rot+frame*.013);
-    ctx.strokeStyle=h2r(HOYO_UI.gold,.30);
+    ctx.strokeStyle=h2r(e.bossType==='helix'?accent:HOYO_UI.gold,.30);
     ctx.lineWidth=1.4;
-    for(let i=0;i<8;i++){
-      const a=i*TAU/8;
+    const sigils=e.bossType==='sniper'?3:(e.bossType==='wall'?4:8);
+    for(let i=0;i<sigils;i++){
+      const a=i*TAU/sigils;
       ctx.beginPath();
       ctx.moveTo(Math.cos(a)*(size+15),Math.sin(a)*(size+15));
-      ctx.lineTo(Math.cos(a+TAU/16)*(size+24),Math.sin(a+TAU/16)*(size+24));
+      ctx.lineTo(Math.cos(a+TAU/(sigils*2))*(size+24),Math.sin(a+TAU/(sigils*2))*(size+24));
       ctx.stroke();
     }
     ctx.restore();
