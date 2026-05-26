@@ -55,6 +55,9 @@ const SPLIT_DAMAGE_BASE = 0.62;
 const SPLIT_PARENT_RETENTION = 0.68;
 const UPGRADE_ZONE={w:110,h:96,vy:.92,missY:H+44};
 const BASE_ARROW_RANGE = 255;
+const MIN_RENDERED_FIRE_INTERVAL = 4;
+const MIN_RAW_FIRE_INTERVAL = 0.25;
+const MAX_FIRE_COMPRESSION_DAMAGE = 16;
 const DISTANCE_DAMAGE_FULL = 95;
 const DISTANCE_DAMAGE_MIN = 0.35;
 const ARROW_DESPAWN_MARGIN = 58;
@@ -496,7 +499,14 @@ const gatlingBulletScale = (lv=specialLevels.gatling) => Math.max(.65, 1 - lv * 
 const homingStr = () => specialLevels.homing * 0.13;
 const pierce    = () => specialLevels.piercing;
 const multiShotFireDelay = () => 1 + specialLevels.multiShot * MULTISHOT_FIRE_DELAY_STEP;
-const fireInterval = () => Math.max(1, fireRate() * multiShotFireDelay() / ((1+adrenalinePower()) * gatlingFireMult()));
+const rawFireInterval = () => Math.max(MIN_RAW_FIRE_INTERVAL, fireRate() * multiShotFireDelay() / ((1+adrenalinePower()) * gatlingFireMult()));
+const fireInterval = () => Math.max(MIN_RENDERED_FIRE_INTERVAL, rawFireInterval());
+const fireCompressionBoost = () => Math.min(MAX_FIRE_COMPRESSION_DAMAGE, fireInterval()/rawFireInterval());
+function fireRateReadout(){
+  const shots=(60/fireInterval()).toFixed(1);
+  const boost=fireCompressionBoost();
+  return boost>1.01 ? `${shots}/s x${boost.toFixed(boost>=10?0:1)}` : `${shots}/s`;
+}
 const passiveShieldBonus = () => (activeShipDef().id==='guardian'?3:0) + (hasMountedPart('plate')?2:0) + (hasMountedPart('aegis')?3:0);
 const supportDroneCount = () => Math.min(10, specialLevels.supportDrone + (activeShipDef().id==='carrier'?3:0) + (hasMountedPart('droneBay')?2:0) + (hasMountedPart('swarmLink')?3:0));
 const interceptorCount = () => Math.min(10, specialLevels.interceptor + (hasMountedPart('bitLink')?2:0));
@@ -541,7 +551,7 @@ function rollCritTier(chance=critChance(), doubleChance=doubleCritChance()){
 const ownedSpecialCount = () => SPECIAL_DEFS.reduce((n,d)=>n+(specialLevels[d.id]>0?1:0),0);
 function basicStatReadouts(){
   return [
-    { id:'fireRate',    icon:'FR', label:'連射', value:`${(60/fireInterval()).toFixed(1)}/s`, color:'#00f0ff' },
+    { id:'fireRate',    icon:'FR', label:'連射', value:fireRateReadout(), color:'#00f0ff' },
     { id:'bulletSpeed', icon:'▶▶', label:'弾速', value:fmtMult(statMult('bulletSpeed')),      color:'#b8a7ff' },
     { id:'damage',      icon:'✦',  label:'威力', value:fmtMult(statMult('damage')),           color:'#ff6020' },
     { id:'range',       icon:'RG', label:'距離補正', value:`${Math.round(damageFalloffRange())}`, color:'#88aaff' },
@@ -1552,7 +1562,7 @@ function fireArrows(){
   const cx=player.x, cy=player.y-player.size;
   const shipId=activeShipDef().id;
   const sizeScale=gatlingBulletScale();
-  const scale=multiShotDamageScale(n)*gatlingDamageScale();
+  const scale=multiShotDamageScale(n)*gatlingDamageScale()*fireCompressionBoost();
   for(let i=0;i<n;i++){
     const off=n===1?0:(i/(n-1)-.5)*sp;
     spawnArrow(cx,cy,off,{damageScale:scale,sizeScale,hitRadius:4*sizeScale});
@@ -2141,7 +2151,7 @@ function basicSkillUnlocked(n){
   return !!n;
 }
 function basicSkillValue(id){
-  if(id==='fireRate') return `${(60/fireInterval()).toFixed(1)}/s`;
+  if(id==='fireRate') return fireRateReadout();
   if(id==='regen') return `${regenPerSec().toFixed(1)}HP/s`;
   if(id==='critChance') return critReadout();
   if(id==='critDamage') return fmtMult(critDamage());
@@ -5249,7 +5259,9 @@ function loop(){
 
   // トレイル
   // 発射
-  fireTimer++;if(fireTimer>=fireInterval()){fireTimer=0;fireArrows();}
+  fireTimer++;
+  const shotInterval=fireInterval();
+  if(fireTimer>=shotInterval){fireTimer-=shotInterval;fireArrows();}
 
   // 敵スポーン
   if(frame>GRACE_FRAMES&&waveFrame>0){
