@@ -27,6 +27,7 @@ const MAX_PARTICLES = 72;
 const MAX_EP_ORBS   = 28;
 const MAX_ARROWS    = 110;
 const MAX_FLOAT_TEXTS = 22;
+const MAX_ACTIVE_ENEMIES = 58;
 const GRACE_FRAMES  = 120;
 const FPS           = 60;
 const WAVE_DURATION_FRAMES = FPS * 10;
@@ -2112,6 +2113,17 @@ function spawnEnemy(){
   const rot=Math.random()*Math.PI*2;
   const rotSpd=(Math.random()<.5?-1:1)*(.006+Math.random()*.012);
   enemies.push({x,y:-size*2,vx:(Math.random()-.5)*.6,vy:spd,hp:baseHp,maxHp:baseHp,xpValue,scoreValue,orbValue,contactDamage,hasCore,shape,size,r:p.r,g:p.g,b:p.b,flash:0,rot,rotSpd,dead:false});
+}
+function enemySpawnInterval(){
+  return Math.max(42,132-wave*7);
+}
+function enemySpawnPackSize(){
+  return Math.min(9,1+Math.floor(wave/4)+Math.floor(wave/18));
+}
+function spawnEnemyPack(){
+  const room=Math.max(0,MAX_ACTIVE_ENEMIES-enemies.length);
+  const count=Math.min(enemySpawnPackSize(),room);
+  for(let i=0;i<count;i++) spawnEnemy();
 }
 function drawBossHpBar(e){
   const pct=Math.max(0,Math.min(1,e.hp/e.maxHp));
@@ -5613,8 +5625,8 @@ function loop(){
 
   // 敵スポーン
   if(frame>GRACE_FRAMES&&waveFrame>0){
-    const sr=Math.max(65,175-wave*11);
-    if(waveFrame%sr===0){const n=1+Math.floor(wave/6);for(let i=0;i<n;i++)spawnEnemy();}
+    const sr=enemySpawnInterval();
+    if(waveFrame%sr===0) spawnEnemyPack();
   }
 
   // ゲートタイマー
