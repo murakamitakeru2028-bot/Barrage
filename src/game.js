@@ -14,6 +14,10 @@ const TOKEN_SCORE_UNIT = 120;
 const DEMO_START_TOKENS = 1000;
 const DEMO_GRANT_KEY = 'demo-start-tokens-1000-v1';
 const SAVE_RESET_VERSION = 'global-reset-2026-05-26-v1';
+const SAVE_KEY = 'barrage-meta';
+const GOOGLE_PROFILE_KEY = 'barrage-google-profile';
+const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
+const GOOGLE_CLIENT_ID = String(globalThis.BARRAGE_GOOGLE_CLIENT_ID || '').trim();
 const RUN_TOKEN_COIN_MULT = 1;
 const RUN_TOKEN_WAVE_BONUS = 8;
 const RUN_TOKEN_TIME_BONUS = 0.2;
@@ -416,6 +420,8 @@ let pauseView = 'menu';
 let resetConfirmFrames = 0;
 let pendingStorePurchase = null;
 let uiViewOpenedAt = 0, uiStoreTabAt = 0, uiWarehouseTabAt = 0, uiConfirmAt = 0;
+let accountState = { profile:null, ready:false, loading:false, message:'' };
+let googleIdentityReady = false, googleIdentityLoading = false, googleIdentityPromise = null, googleIdentityInitPromise = null;
 
 // ─────────────────────────────────────
 //  ステータス計算
@@ -539,7 +545,12 @@ const stasisRadius = () => 72 + specialLevels.stasisAura*10;
 const stasisMult = () => Math.max(.35, 1-specialLevels.stasisAura*.07);
 const incomingDamage = amount => Math.max(1, Math.ceil(amount / bodyMult('defense')));
 const playerHitRadius = () => activeShipDef().id==='coreOnly' ? 9 : (activeShipDef().id==='mirage' ? 10 : 12);
-const fmtMult   = v => `x${v>=10 ? v.toFixed(1) : v.toFixed(2)}`;
+const fmtMult = value => {
+  const v=Number(value)||1;
+  if(v>=1000) return `x${formatCompactNumber(v)}`;
+  if(v>=100) return `x${Math.round(v)}`;
+  return `x${v>=10 ? v.toFixed(1) : v.toFixed(2)}`;
+};
 function formatCompactNumber(value){
   const raw=String(value).trim();
   const sign=raw.startsWith('+')?'+':(raw.startsWith('-')?'-':'');
@@ -559,6 +570,9 @@ function formatCompactNumber(value){
   const scaled=abs/unit.v;
   const digits=scaled>=100?0:(scaled>=10?1:2);
   return `${sign}${scaled.toFixed(digits).replace(/\.0+$|(\.\d*[1-9])0+$/,'$1')}${unit.s}`;
+}
+function fmtCompactMult(value){
+  return fmtMult(value);
 }
 const hpText = () => `${formatCompactNumber(hp)}/${formatCompactNumber(maxHp)}`;
 const basicGainText = (id, lv=statLevels[id]) => {
@@ -630,10 +644,164 @@ function recordRunHighScore(){
   if(changed) saveMeta();
   return changed;
 }
+const hasGoogleClientId = () => !!(GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.includes('YOUR_'));
+const googleAccountSaveKey = sub => `${SAVE_KEY}:google:${sub}`;
+const activeSaveKey = () => accountState.profile?.sub ? googleAccountSaveKey(accountState.profile.sub) : SAVE_KEY;
+function loadAccountSession(){
+  try{
+    const raw=localStorage.getItem(GOOGLE_PROFILE_KEY);
+    if(!raw) return;
+    const profile=JSON.parse(raw);
+    if(profile?.sub) accountState.profile=profile;
+  }catch(e){
+    try{localStorage.removeItem(GOOGLE_PROFILE_KEY);}catch(_){}
+  }
+}
+function persistAccountSession(){
+  try{
+    if(accountState.profile) localStorage.setItem(GOOGLE_PROFILE_KEY,JSON.stringify(accountState.profile));
+    else localStorage.removeItem(GOOGLE_PROFILE_KEY);
+  }catch(e){}
+}
+function decodeGoogleJwtPayload(token){
+  const part=String(token||'').split('.')[1];
+  if(!part) return null;
+  const base64=part.replace(/-/g,'+').replace(/_/g,'/');
+  const padded=base64.padEnd(Math.ceil(base64.length/4)*4,'=');
+  const binary=atob(padded);
+  const json=decodeURIComponent(Array.from(binary,c=>`%${c.charCodeAt(0).toString(16).padStart(2,'0')}`).join(''));
+  return JSON.parse(json);
+}
+function normalizeGoogleProfile(payload){
+  if(!payload?.sub) return null;
+  if(payload.aud && String(payload.aud)!==GOOGLE_CLIENT_ID) return null;
+  if(payload.iss && !['accounts.google.com','https://accounts.google.com'].includes(String(payload.iss))) return null;
+  if(payload.exp && Number(payload.exp)*1000<Date.now()) return null;
+  return {
+    sub:String(payload.sub),
+    email:String(payload.email||''),
+    name:String(payload.name||payload.email||'Google User'),
+    picture:String(payload.picture||''),
+    linkedAt:Date.now()
+  };
+}
+function loadGoogleIdentityScript(){
+  if(globalThis.google?.accounts?.id) return Promise.resolve(true);
+  if(googleIdentityPromise) return googleIdentityPromise;
+  googleIdentityPromise=new Promise((resolve,reject)=>{
+    const existing=document.querySelector(`script[src="${GOOGLE_SCRIPT_SRC}"]`);
+    if(existing){
+      existing.addEventListener('load',()=>resolve(true),{once:true});
+      existing.addEventListener('error',reject,{once:true});
+      return;
+    }
+    const script=document.createElement('script');
+    script.src=GOOGLE_SCRIPT_SRC;
+    script.async=true;
+    script.defer=true;
+    script.onload=()=>resolve(true);
+    script.onerror=()=>reject(new Error('google identity script failed'));
+    document.head.appendChild(script);
+  });
+  return googleIdentityPromise;
+}
+async function initGoogleIdentity(){
+  if(!hasGoogleClientId()) return false;
+  if(googleIdentityReady) return true;
+  if(googleIdentityInitPromise) return googleIdentityInitPromise;
+  googleIdentityLoading=true;
+  accountState.loading=true;
+  googleIdentityInitPromise=(async()=>{
+    try{
+      await loadGoogleIdentityScript();
+      globalThis.google.accounts.id.initialize({
+        client_id:GOOGLE_CLIENT_ID,
+        callback:handleGoogleCredential,
+        auto_select:false,
+        cancel_on_tap_outside:true
+      });
+      googleIdentityReady=true;
+      accountState.ready=true;
+      accountState.message='READY';
+      return true;
+    }catch(e){
+      accountState.message='LOGIN ERROR';
+      return false;
+    }finally{
+      googleIdentityLoading=false;
+      accountState.loading=false;
+    }
+  })();
+  return googleIdentityInitPromise;
+}
+async function startGoogleSignIn(){
+  if(accountState.profile){signOutGoogle();return;}
+  if(!hasGoogleClientId()){
+    accountState.message='CLIENT ID 未設定';
+    addFloat(W/2,286,'Google Client ID 未設定',HOYO_UI.rose,11);
+    shake(3);
+    return;
+  }
+  if(!navigator.onLine){
+    accountState.message='OFFLINE';
+    addFloat(W/2,286,'オンライン時にログインできます',HOYO_UI.rose,11);
+    shake(3);
+    return;
+  }
+  accountState.message='LOADING';
+  accountState.loading=true;
+  const ready=await initGoogleIdentity();
+  if(!ready){
+    accountState.loading=false;
+    addFloat(W/2,286,'Googleログインを読み込めません',HOYO_UI.rose,11);
+    shake(3);
+    return;
+  }
+  globalThis.google.accounts.id.prompt(notification=>{
+    accountState.loading=false;
+    if(notification?.isNotDisplayed?.() || notification?.isSkippedMoment?.()){
+      accountState.message='ログイン画面を表示できません';
+      addFloat(W/2,286,'Googleログイン画面を表示できません',HOYO_UI.rose,10);
+    }
+  });
+}
+function handleGoogleCredential(response){
+  try{
+    const payload=decodeGoogleJwtPayload(response?.credential);
+    const profile=normalizeGoogleProfile(payload);
+    if(!profile) throw new Error('invalid profile');
+    const previousMeta=meta;
+    saveMeta();
+    const key=googleAccountSaveKey(profile.sub);
+    const hasAccountSave=!!localStorage.getItem(key);
+    accountState.profile=profile;
+    accountState.message='LINKED';
+    persistAccountSession();
+    if(!hasAccountSave) localStorage.setItem(key,JSON.stringify(previousMeta));
+    loadMeta();
+    addFloat(W/2,286,`${profile.name} とリンク`,HOYO_UI.jade,11);
+    playSfx('upgrade');
+  }catch(e){
+    accountState.message='LOGIN FAILED';
+    addFloat(W/2,286,'Googleログイン失敗',HOYO_UI.rose,11);
+    shake(3);
+  }
+}
+function signOutGoogle(){
+  saveMeta();
+  const name=accountState.profile?.name || 'Google';
+  accountState.profile=null;
+  accountState.message='SIGNED OUT';
+  persistAccountSession();
+  try{globalThis.google?.accounts?.id?.disableAutoSelect?.();}catch(e){}
+  loadMeta();
+  addFloat(W/2,286,`${name} からログアウト`,HOYO_UI.gold,11);
+  playSfx('select');
+}
 function loadMeta(){
   let shouldSave=false;
   try{
-    const raw=localStorage.getItem('barrage-meta');
+    const raw=localStorage.getItem(activeSaveKey());
     if(raw){
       const saved=JSON.parse(raw);
       if(saved.saveResetVersion!==SAVE_RESET_VERSION){
@@ -683,7 +851,7 @@ function loadMeta(){
 }
 function saveMeta(){
   invalidateLoadoutCache();
-  try{localStorage.setItem('barrage-meta',JSON.stringify(meta));}catch(e){}
+  try{localStorage.setItem(activeSaveKey(),JSON.stringify(meta));}catch(e){}
 }
 function resetSaveData(){
   const keepSettings={...DEFAULT_SETTINGS,...(meta.settings||{})};
@@ -4260,6 +4428,62 @@ function fitText(text,maxWidth){
 function fillFitText(text,x,y,maxWidth){
   ctx.fillText(fitText(text,maxWidth),x,y);
 }
+function loadoutTotalMult(ship=selectedShipDef(),core=selectedCoreDef()){
+  const parts=loadoutMult(ship.id);
+  const totals={hp:1,defense:1,attack:1,fireRate:1};
+  for(const id of LOADOUT_STAT_IDS) totals[id]=(ship.mult?.[id]||1)*(core.mult?.[id]||1)*(parts[id]||1);
+  return totals;
+}
+function totalSlotCount(ship=selectedShipDef()){
+  return SLOT_ORDER.reduce((sum,type)=>sum+(ship.slots[type]||0),0);
+}
+function drawMetricPill(x,y,w,label,value,color=HOYO_UI.gold,active=false){
+  ctx.save();
+  cutPanel(x,y,w,17,5);
+  ctx.fillStyle=active?alphaColor(color,.18):'rgba(238,247,255,.055)';
+  ctx.fill();
+  ctx.strokeStyle=active?alphaColor(color,.45):'rgba(238,247,255,.13)';
+  ctx.lineWidth=1;
+  cutPanel(x,y,w,17,5);
+  ctx.stroke();
+  ctx.textBaseline='middle';
+  ctx.textAlign='left';
+  ctx.font=`900 8px ${UI_FONT}`;
+  ctx.fillStyle=alphaColor(color,.92);
+  ctx.fillText(label,x+6,y+9);
+  ctx.textAlign='right';
+  ctx.font=`900 9px ${UI_FONT}`;
+  ctx.fillStyle=active?HOYO_UI.text:HOYO_UI.muted;
+  ctx.fillText(fitText(value,w-24),x+w-6,y+9);
+  ctx.restore();
+}
+function drawItemCardChrome(x,y,w,h,color,active=false,mark=''){
+  ctx.save();
+  cutPanel(x,y,w,h,active?15:10);
+  ctx.clip();
+  const g=ctx.createLinearGradient(x,y,x+w,y+h);
+  g.addColorStop(0,alphaColor(color,active?.18:.08));
+  g.addColorStop(.58,'rgba(238,247,255,.018)');
+  g.addColorStop(1,'rgba(0,0,0,.18)');
+  ctx.fillStyle=g;
+  ctx.fillRect(x,y,w,h);
+  ctx.fillStyle=alphaColor(color,active?.72:.34);
+  ctx.fillRect(x,y,3,h);
+  ctx.fillStyle='rgba(238,247,255,.050)';
+  ctx.fillRect(x+8,y+4,Math.min(56,w-24),1);
+  ctx.fillRect(x+14,y+h-5,Math.min(72,w-30),1);
+  if(mark){
+    ctx.globalAlpha=.11;
+    ctx.font=`900 ${Math.max(26,Math.min(40,h*.42))}px ${DISPLAY_FONT}`;
+    ctx.textAlign='right';
+    ctx.textBaseline='middle';
+    ctx.fillStyle=HOYO_UI.text;
+    ctx.fillText(mark,x+w-8,y+h*.50);
+    ctx.globalAlpha=1;
+  }
+  if(active) drawUiSweep(x,y,w,h,color,.42,x+y);
+  ctx.restore();
+}
 function drawSubBackdrop(alpha=.74){
   ctx.fillStyle=`rgba(5,6,7,${alpha})`;
   ctx.fillRect(0,0,W,H);
@@ -4375,6 +4599,7 @@ function handleStorePager(cx,cy,tab=storeTab){
 function drawLoadoutPanel(x,y,w,h,ship=selectedShipDef()){
   const core=selectedCoreDef();
   drawCutPanel(x,y,w,h,ship.color,false);
+  drawItemCardChrome(x,y,w,h,ship.color,false,ship.icon);
   ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.gold;
   ctx.fillText('ロードアウト',x+14,y+14);
@@ -4387,7 +4612,9 @@ function drawLoadoutPanel(x,y,w,h,ship=selectedShipDef()){
 }
 function drawActiveShipPanel(x,y,w,h,label='使用中'){
   const ship=selectedShipDef(), core=selectedCoreDef();
+  const totals=loadoutTotalMult(ship,core);
   drawCutPanel(x,y,w,h,ship.color,true);
+  drawItemCardChrome(x,y,w,h,ship.color,true,ship.icon);
   drawUiSweep(x,y,w,h,ship.color,.55,24);
   ctx.save();
   ctx.beginPath();
@@ -4409,18 +4636,19 @@ function drawActiveShipPanel(x,y,w,h,label='使用中'){
   ctx.textBaseline='middle';
   drawStatusTag(x+12,y+9,52,20,label,ship.color,true);
   ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(displayName('ship',ship),x+74,y+20,w-164);
-  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(`${core.icon} ${displayName('core',core)} Lv.${selectedCoreLevel()} / ${slotText(ship)}`,x+14,y+40,w-104);
-  ctx.fillStyle=ship.color;
-  ctx.font=`900 10px ${UI_FONT}`;
-  fillFitText(loadoutText(ship.id),x+14,y+h-9,w-104);
+  fillFitText(`${displayName('ship',ship)} / ${core.icon} Lv.${selectedCoreLevel()}`,x+74,y+20,w-164);
+  const chipY=y+h-20;
+  drawMetricPill(x+14,chipY,50,'HP',fmtCompactMult(totals.hp),HOYO_UI.rose,true);
+  drawMetricPill(x+69,chipY,50,'AT',fmtCompactMult(totals.attack),HOYO_UI.gold,true);
+  drawMetricPill(x+124,chipY,50,'FR',fmtCompactMult(totals.fireRate),HOYO_UI.blue,true);
+  drawMetricPill(x+179,chipY,48,'SL',`${mountedPartIds(ship.id).length}/${totalSlotCount(ship)}`,HOYO_UI.jade,true);
 }
 function drawStoreShipCard(i,ship,startY){
   const cw=(W-36)/2,ch=92,gap=8,col=i%2,row=Math.floor(i/2);
   const cx=14+col*(cw+8),cy=startY+row*(ch+gap);
   const owned=meta.ownedShips[ship.id],sel=meta.selectedShip===ship.id;
   drawCutPanel(cx,cy,cw,ch,ship.color,sel);
+  drawItemCardChrome(cx,cy,cw,ch,ship.color,sel,ship.icon);
   drawCraftInCard(cx+2,cy+2,cw-4,48,ship.id,'basic');
   ctx.fillStyle=h2r(ship.color,.75);
   ctx.fillRect(cx,cy,3,ch);
@@ -4457,6 +4685,7 @@ function drawStorePurchaseConfirmPanel(){
   ctx.globalAlpha*=.35+.65*appear;
   ctx.translate(0,(1-appear)*18);
   drawCutPanel(p.x,p.y,p.w,p.h,action.color,true);
+  drawItemCardChrome(p.x,p.y,p.w,p.h,action.color,true,action.icon);
   drawUiSweep(p.x,p.y,p.w,p.h,action.color,.75,70);
   ctx.textAlign='left';ctx.textBaseline='middle';
   drawStatusTag(p.x+14,p.y+14,48,28,action.icon,action.color,true);
@@ -4465,6 +4694,10 @@ function drawStorePurchaseConfirmPanel(){
   ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
   ctx.fillText(action.desc,p.x+74,p.y+40);
   drawTokenAmount(p.x+p.w-16,p.y+28,action.cost,'right',9);
+  ctx.font=`900 10px ${UI_FONT}`;
+  ctx.fillStyle=meta.tokens>=action.cost?HOYO_UI.gold:HOYO_UI.rose;
+  ctx.textAlign='right';
+  ctx.fillText(meta.tokens>=action.cost?'残高OK':'トークン不足',p.x+p.w-16,p.y+48);
 
   const cancel=storePurchaseConfirmButtonRect('cancel');
   const buy=storePurchaseConfirmButtonRect('buy');
@@ -4482,6 +4715,7 @@ function drawStoreCoreCard(i,core,startY){
   const cx=14+col*(cw+8),cy=startY+row*(ch+gap);
   const owned=meta.ownedCores[core.id],sel=meta.selectedCore===core.id;
   drawCutPanel(cx,cy,cw,ch,core.color,sel);
+  drawItemCardChrome(cx,cy,cw,ch,core.color,sel,core.icon);
   ctx.textAlign='center';ctx.textBaseline='middle';
   drawStatusTag(cx+9,cy+8,36,22,core.icon,core.color,sel);
   ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
@@ -4503,6 +4737,7 @@ function drawStorePartCard(i,part,startY){
   const mounted=partMountedShip(part.id)===meta.selectedShip;
   const info=partInfo(part);
   drawCutPanel(cx,cy,cw,ch,part.color,mounted);
+  drawItemCardChrome(cx,cy,cw,ch,part.color,mounted,part.icon);
   ctx.textAlign='left';ctx.textBaseline='middle';
   drawStatusTag(cx+8,cy+8,30,20,part.icon,part.color,mounted);
   ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=h2r(part.color,.88);
@@ -4525,6 +4760,7 @@ function drawStoreDroneCard(i,drone,startY){
   const cx=14+col*(cw+8),cy=startY+row*(ch+gap);
   const owned=!!meta.ownedDrones[drone.id], lv=droneLevel(drone.id), cost=owned?droneUpgradeCost(drone.id):drone.cost;
   drawCutPanel(cx,cy,cw,ch,drone.color,owned);
+  drawItemCardChrome(cx,cy,cw,ch,drone.color,owned,drone.icon);
   ctx.textAlign='left';ctx.textBaseline='middle';
   drawStatusTag(cx+8,cy+8,32,22,drone.icon,drone.color,owned);
   ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=h2r(drone.color,.9);
@@ -4553,6 +4789,7 @@ function drawStoreScreen(){
   }else if(storeTab==='core'){
     const core=selectedCoreDef(),lv=selectedCoreLevel(),uc=coreUpgradeCost(),can=meta.tokens>=uc;
     drawCutPanel(14,cy,W-28,46,can?HOYO_UI.gold:core.color,can);
+    drawItemCardChrome(14,cy,W-28,46,can?HOYO_UI.gold:core.color,can,core.icon);
     ctx.textAlign='left';ctx.textBaseline='middle';
     ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=core.color;
     fillFitText(`${core.icon} ${displayName('core',core)}  Lv.${lv} > ${lv+1}`,26,cy+17,W-128);
@@ -4565,6 +4802,7 @@ function drawStoreScreen(){
     if(storeTab==='drone'){
       const ownedCount=purchasedDroneCount(), power=purchasedDroneDamageMult();
       drawCutPanel(14,cy,W-28,56,HOYO_UI.blue,ownedCount>0);
+      drawItemCardChrome(14,cy,W-28,56,HOYO_UI.blue,ownedCount>0,'DR');
       ctx.textAlign='left';ctx.textBaseline='middle';
       ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.blue;
       ctx.fillText(`支援ドローン ${ownedCount}機 / 火力 ${fmtMult(power)}`,26,cy+18);
@@ -4641,6 +4879,7 @@ function handleStoreClick(cx,cy){
 function drawWarehouseCorePanel(x,y,w,h){
   const core=selectedCoreDef(),lv=selectedCoreLevel();
   drawCutPanel(x,y,w,h,core.color,true);
+  drawItemCardChrome(x,y,w,h,core.color,true,core.icon);
   ctx.textAlign='left';ctx.textBaseline='middle';
   drawStatusTag(x+12,y+12,42,28,core.icon,core.color,true);
   ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.gold;
@@ -4658,6 +4897,7 @@ function drawWarehouseShipCard(i,ship,startY){
   const x=14+col*(cw+8),y=startY+row*(ch+gap);
   const sel=meta.selectedShip===ship.id;
   drawCutPanel(x,y,cw,ch,ship.color,sel);
+  drawItemCardChrome(x,y,cw,ch,ship.color,sel,ship.icon);
   drawCraftInCard(x,y,cw,50,ship.id,meta.selectedCore);
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=sel?HOYO_UI.text:ship.color;
@@ -4677,6 +4917,7 @@ function drawWarehousePartCard(i,part,startY,ship){
   const info=partInfo(part);
   const canMount=limit>0&&(mounted||cur<limit);
   drawCutPanel(x,y,cw,ch,part.color,mounted);
+  drawItemCardChrome(x,y,cw,ch,part.color,mounted,part.icon);
   ctx.textAlign='left';ctx.textBaseline='middle';
   drawStatusTag(x+8,y+8,32,20,part.icon,part.color,mounted||canMount);
   ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=h2r(part.color,.9);
@@ -4702,6 +4943,7 @@ function drawWarehouseCustomCard(i,type,startY,ship){
   const limit=ship.slots[type]||0;
   const names=ids.map(id=>displayName('part',PART_BY_ID[id])).join(' / ');
   drawCutPanel(x,y,w,h,color,ids.length>0);
+  drawItemCardChrome(x,y,w,h,color,ids.length>0,WAREHOUSE_TAB_LABELS[type]);
   ctx.textAlign='left';ctx.textBaseline='middle';
   drawStatusTag(x+10,y+10,58,22,WAREHOUSE_TAB_LABELS[type],color,ids.length>0);
   ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
@@ -4716,6 +4958,7 @@ function drawWarehouseCustomCard(i,type,startY,ship){
 function drawWarehouseCustomView(startY){
   const ship=selectedShipDef();
   drawCutPanel(14,startY-10,W-28,42,ship.color,false);
+  drawItemCardChrome(14,startY-10,W-28,42,ship.color,false,ship.icon);
   ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=ship.color;
   fillFitText(`${displayName('ship',ship)}  カスタム`,26,startY+6,W-112);
@@ -4744,6 +4987,7 @@ function drawWarehouseScreen(){
     const limit=ship.slots[type]||0;
     const cur=(mountedForShip(ship.id)[type]||[]).length;
     drawCutPanel(14,startY-10,W-28,48,ship.color,false);
+    drawItemCardChrome(14,startY-10,W-28,48,ship.color,false,ship.icon);
     ctx.textAlign='left';ctx.textBaseline='middle';
     ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=ship.color;
     fillFitText(`${displayName('ship',ship)} / ${WAREHOUSE_TAB_LABELS[type]}`,26,startY+6,W-112);
@@ -4909,6 +5153,40 @@ function handleCodexClick(cx,cy){
 }
 
 // ── 設定画面 ──
+const ACCOUNT_SECTION_Y = 284;
+const AUDIO_SECTION_Y = 374;
+function accountLinkRect(){
+  return {x:24,y:ACCOUNT_SECTION_Y,w:W-48,h:62};
+}
+function drawAccountLinkCard(){
+  const r=accountLinkRect();
+  const profile=accountState.profile;
+  const ready=hasGoogleClientId();
+  const color=profile?HOYO_UI.jade:(ready?HOYO_UI.gold:HOYO_UI.rose);
+  const title=profile?profile.name:(accountState.loading?'ログイン準備中':(ready?'Googleでログイン':'Google Client ID 未設定'));
+  drawSectionLabel('アカウント連携',24,r.y-20,color);
+  drawCutPanel(r.x,r.y,r.w,r.h,color,!!profile);
+  drawStatusTag(r.x+12,r.y+14,58,26,profile?'LINK':'GOOGLE',color,!!profile);
+  ctx.textAlign='left';
+  ctx.textBaseline='middle';
+  ctx.font=`900 14px ${UI_FONT}`;
+  ctx.fillStyle=profile?HOYO_UI.text:color;
+  fillFitText(title,r.x+82,r.y+18,r.w-150);
+  ctx.font=`bold 11px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.muted;
+  const desc=profile
+    ? `${profile.email || 'Googleアカウント'} / タップでログアウト`
+    : (ready?'この端末のセーブをGoogleアカウントに紐づけます':'index.html の BARRAGE_GOOGLE_CLIENT_ID を設定してください');
+  fillFitText(desc,r.x+82,r.y+39,r.w-104);
+  ctx.textAlign='right';
+  ctx.font=`900 10px ${UI_FONT}`;
+  ctx.fillStyle=color;
+  ctx.fillText(profile?'ACCOUNT SAVE':(accountState.loading?'LOADING':(ready?'SIGN IN':'SETUP')),r.x+r.w-16,r.y+18);
+}
+function hitAccountLink(cx,cy){
+  const r=accountLinkRect();
+  return cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h;
+}
 function audioSettingsRows(startY=318){
   return [
     {key:'sound',label:'マスター音量',desc:'すべての音を切り替えます。',color:HOYO_UI.blue,y:startY},
@@ -4953,7 +5231,7 @@ function handleAudioSettingsClick(cx,cy,startY=318){
   return false;
 }
 function resetDataButtonRect(){
-  return {x:24,y:552,w:W-48,h:54};
+  return {x:24,y:616,w:W-48,h:54};
 }
 function drawResetDataButton(){
   const b=resetDataButtonRect();
@@ -5008,11 +5286,12 @@ function drawSettingsScreen(){
     drawStatusTag(bx+bw-92,y+24,72,21,active?'使用中':'変更',active?HOYO_UI.gold:m.color,active);
     ctx.textAlign='left';
   }
-  drawAudioSettingsRows();
+  drawAccountLinkCard();
+  drawAudioSettingsRows(AUDIO_SECTION_Y);
   drawResetDataButton();
   ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
   ctx.textAlign='center';
-  ctx.fillText('BGMファイルは public/audio に配置できます。',W/2,516);
+  ctx.fillText('Google連携はオンライン時のみ利用できます。',W/2,580);
   ctx.restore();
 }
 function handleSettingsClick(cx,cy){
@@ -5020,11 +5299,12 @@ function handleSettingsClick(cx,cy){
   const bx=24, by=110, bw=W-48, bh=70, gap=12;
   const modes=['buttons','stick'];
   if(hitResetDataButton(cx,cy)){handleResetDataClick();return;}
+  if(hitAccountLink(cx,cy)){resetConfirmFrames=0;startGoogleSignIn();return;}
   for(let i=0;i<modes.length;i++){
     const y=by+i*(bh+gap);
     if(cx>=bx&&cx<=bx+bw&&cy>=y&&cy<=y+bh){resetConfirmFrames=0;setTouchControlMode(modes[i]);return;}
   }
-  if(handleAudioSettingsClick(cx,cy)){resetConfirmFrames=0;return;}
+  if(handleAudioSettingsClick(cx,cy,AUDIO_SECTION_Y)){resetConfirmFrames=0;return;}
   resetConfirmFrames=0;
 }
 
@@ -5673,7 +5953,9 @@ function loop(){
 // ─────────────────────────────────────
 //  初期化
 // ─────────────────────────────────────
+loadAccountSession();
 loadMeta();
+initGoogleIdentity();
 resizeCanvas();
 initBg();
 loop();
