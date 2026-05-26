@@ -1849,6 +1849,168 @@ function poly(points){
   }
   ctx.closePath();
 }
+const SHIP_BODY_POINTS={
+  standard:[[0,-28],[18,-8],[24,10],[13,23],[4,16],[0,28],[-4,16],[-13,23],[-24,10],[-18,-8]],
+  striker:[[0,-40],[10,-13],[30,16],[8,9],[0,30],[-8,9],[-30,16],[-10,-13]],
+  sniper:[[0,-46],[8,-18],[15,-5],[32,13],[9,10],[3,34],[-3,34],[-9,10],[-32,13],[-15,-5],[-8,-18]],
+  guardian:[[0,-24],[25,-14],[33,5],[22,28],[7,22],[0,34],[-7,22],[-22,28],[-33,5],[-25,-14]],
+  mirage:[[0,-34],[17,-12],[35,15],[12,7],[5,30],[0,20],[-5,30],[-12,7],[-35,15],[-17,-12]],
+  carrier:[[0,-27],[34,-2],[28,20],[11,16],[0,34],[-11,16],[-28,20],[-34,-2]],
+  vanguard:[[0,-31],[21,-15],[30,8],[18,27],[6,20],[0,31],[-6,20],[-18,27],[-30,8],[-21,-15]],
+  oracle:[[0,-30],[16,-18],[29,2],[20,25],[7,20],[0,30],[-7,20],[-20,25],[-29,2],[-16,-18]],
+  eclipse:[[0,-38],[26,-7],[38,19],[10,12],[0,32],[-10,12],[-38,19],[-26,-7]],
+  titan:[[0,-28],[28,-18],[38,4],[30,31],[10,28],[0,36],[-10,28],[-30,31],[-38,4],[-28,-18]],
+  dominion:[[0,-34],[24,-14],[38,7],[25,28],[9,22],[0,35],[-9,22],[-25,28],[-38,7],[-24,-14]],
+  astral:[[0,-38],[18,-22],[31,-2],[39,18],[14,14],[4,34],[0,25],[-4,34],[-14,14],[-39,18],[-31,-2],[-18,-22]],
+  singularity:[[0,-33],[20,-20],[34,0],[27,24],[10,22],[0,34],[-10,22],[-27,24],[-34,0],[-20,-20]],
+  aphelion:[[0,-45],[13,-18],[33,8],[28,25],[8,16],[0,36],[-8,16],[-28,25],[-33,8],[-13,-18]],
+  omega:[[0,-39],[24,-20],[40,8],[21,21],[12,36],[0,26],[-12,36],[-21,21],[-40,8],[-24,-20]],
+  ultima:[[0,-45],[17,-25],[34,-7],[42,17],[18,17],[7,38],[0,28],[-7,38],[-18,17],[-42,17],[-34,-7],[-17,-25]],
+};
+function mirrorLine(x1,y1,x2,y2){
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-x1,y1);ctx.lineTo(-x2,y2);ctx.stroke();
+}
+function mirrorPoly(points){
+  poly(points);ctx.fill();ctx.stroke();
+  poly(points.map(p=>[-p[0],p[1]]));ctx.fill();ctx.stroke();
+}
+function mirrorDot(x,y,r){
+  ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();
+  ctx.beginPath();ctx.arc(-x,y,r,0,TAU);ctx.fill();
+}
+function drawShipDesignAccents(id,ship,core,lightCraft){
+  const t=frame*.025;
+  const glow=lightCraft?0:9;
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  ctx.strokeStyle=h2r(core.color,.72);
+  ctx.fillStyle=h2r(ship.color,.22);
+  ctx.lineWidth=1.4;
+  ctx.shadowColor=core.color;
+  ctx.shadowBlur=glow;
+  switch(id){
+    case 'standard':
+      mirrorLine(6,-18,15,14);
+      mirrorLine(12,2,22,9);
+      ctx.fillStyle=h2r(core.color,.22);
+      mirrorDot(13,16,3);
+      break;
+    case 'striker':
+      ctx.strokeStyle=HOYO_UI.rose;ctx.lineWidth=2.4;
+      ctx.beginPath();ctx.moveTo(0,-43);ctx.lineTo(0,-7);ctx.stroke();
+      mirrorLine(8,-14,28,17);
+      mirrorLine(5,-28,16,-8);
+      break;
+    case 'sniper':
+      ctx.strokeStyle=HOYO_UI.blue;ctx.lineWidth=2.2;
+      ctx.beginPath();ctx.moveTo(0,-52);ctx.lineTo(0,20);ctx.stroke();
+      mirrorLine(7,-25,17,2);
+      mirrorLine(12,8,29,13);
+      break;
+    case 'guardian':
+      ctx.fillStyle=h2r(HOYO_UI.blue,.18);ctx.strokeStyle=HOYO_UI.blue;ctx.lineWidth=1.5;
+      mirrorPoly([[12,-16],[31,2],[24,25],[16,18]]);
+      ctx.beginPath();ctx.arc(0,4,19,0,TAU);ctx.stroke();
+      break;
+    case 'mirage':
+      ctx.globalAlpha=.45;
+      ctx.strokeStyle=HOYO_UI.jade;ctx.lineWidth=1.2;
+      mirrorLine(18,-13,40,16);
+      mirrorLine(9,7,30,28);
+      ctx.globalAlpha=1;
+      ctx.strokeStyle=h2r(core.color,.75);
+      ctx.beginPath();ctx.arc(0,0,18,t,t+Math.PI*1.1);ctx.stroke();
+      break;
+    case 'carrier':
+      ctx.fillStyle=h2r(HOYO_UI.gold,.18);ctx.strokeStyle=HOYO_UI.gold;ctx.lineWidth=1.3;
+      mirrorPoly([[17,-3],[36,2],[27,18],[16,14]]);
+      ctx.fillStyle=HOYO_UI.jade;
+      mirrorDot(23,4,3.2);mirrorDot(18,16,2.6);
+      break;
+    case 'vanguard':
+      ctx.strokeStyle=HOYO_UI.blue;ctx.lineWidth=1.7;
+      mirrorLine(8,-24,25,7);
+      mirrorLine(12,18,29,7);
+      ctx.fillStyle=h2r(HOYO_UI.gold,.24);
+      mirrorPoly([[7,-22],[17,-15],[11,-4],[4,-9]]);
+      break;
+    case 'oracle':
+      ctx.strokeStyle=HOYO_UI.jade;ctx.lineWidth=1.4;
+      ctx.beginPath();ctx.arc(0,0,24,t,t+Math.PI*1.35);ctx.stroke();
+      ctx.beginPath();ctx.arc(0,0,32,-t,-t+Math.PI*.72);ctx.stroke();
+      ctx.fillStyle=HOYO_UI.jade;
+      mirrorDot(18,-4,2.6);mirrorDot(13,19,2.4);
+      break;
+    case 'eclipse':
+      ctx.strokeStyle='#b96cff';ctx.lineWidth=1.8;
+      mirrorLine(6,-28,35,18);
+      mirrorLine(13,2,40,22);
+      ctx.fillStyle=h2r('#b96cff',.20);
+      mirrorPoly([[10,-15],[33,6],[20,11],[5,-1]]);
+      break;
+    case 'titan':
+      ctx.fillStyle=h2r(HOYO_UI.blue,.20);ctx.strokeStyle=HOYO_UI.blue;ctx.lineWidth=1.7;
+      mirrorPoly([[13,-19],[35,1],[28,28],[13,24]]);
+      ctx.strokeStyle=HOYO_UI.gold;
+      mirrorLine(8,-8,24,-2);
+      mirrorLine(8,9,25,18);
+      break;
+    case 'dominion':
+      ctx.strokeStyle=HOYO_UI.rose;ctx.lineWidth=2.1;
+      for(const ox of [-13,0,13]){ctx.beginPath();ctx.moveTo(ox,-34);ctx.lineTo(ox,-49);ctx.stroke();}
+      mirrorLine(11,-18,33,6);
+      mirrorLine(16,10,38,8);
+      break;
+    case 'astral':
+      ctx.strokeStyle='#eef7ff';ctx.lineWidth=1.4;
+      mirrorLine(5,-31,36,18);
+      mirrorLine(15,-18,42,4);
+      mirrorLine(4,28,15,11);
+      ctx.fillStyle=HOYO_UI.gold;
+      mirrorDot(23,-3,2.4);
+      break;
+    case 'singularity':
+      ctx.strokeStyle=HOYO_UI.gold;ctx.lineWidth=1.3;
+      ctx.beginPath();ctx.ellipse(0,2,31,16,t,0,TAU);ctx.stroke();
+      ctx.beginPath();ctx.ellipse(0,2,18,31,-t*.7,0,TAU);ctx.stroke();
+      ctx.fillStyle=h2r('#b96cff',.28);
+      mirrorDot(22,14,3);
+      break;
+    case 'aphelion':
+      ctx.strokeStyle='#ff7a3d';ctx.lineWidth=2.2;
+      ctx.beginPath();ctx.moveTo(0,-51);ctx.lineTo(0,-4);ctx.stroke();
+      mirrorLine(8,-20,31,9);
+      mirrorLine(14,15,31,28);
+      ctx.strokeStyle=HOYO_UI.gold;ctx.lineWidth=1.1;
+      ctx.beginPath();ctx.arc(0,-9,25,Math.PI*.08,Math.PI*.92);ctx.stroke();
+      break;
+    case 'omega':
+      ctx.strokeStyle=HOYO_UI.jade;ctx.lineWidth=1.7;
+      mirrorLine(5,-34,39,9);
+      mirrorLine(7,31,28,16);
+      ctx.beginPath();ctx.arc(0,0,23,t,t+Math.PI*1.7);ctx.stroke();
+      ctx.strokeStyle=HOYO_UI.blue;
+      ctx.beginPath();ctx.arc(0,0,31,-t,-t+Math.PI*1.1);ctx.stroke();
+      break;
+    case 'ultima':
+      ctx.strokeStyle='#eef7ff';ctx.lineWidth=1.7;
+      mirrorLine(4,-38,42,17);
+      mirrorLine(12,-24,31,-5);
+      mirrorLine(6,35,17,15);
+      ctx.strokeStyle=HOYO_UI.gold;
+      ctx.beginPath();ctx.arc(0,-3,24,t,t+Math.PI*1.5);ctx.stroke();
+      ctx.beginPath();ctx.arc(0,-3,34,-t,-t+Math.PI*.9);ctx.stroke();
+      ctx.fillStyle=HOYO_UI.gold;
+      mirrorDot(17,-20,2.8);mirrorDot(27,8,2.4);
+      break;
+    default:
+      mirrorLine(8,-18,18,14);
+      mirrorLine(10,4,20,10);
+      break;
+  }
+  ctx.restore();
+}
 function drawCraft(x,y,s=1,overrideShipId=null,overrideCoreId=null){
   const ship=overrideShipId?(SHIP_BY_ID[overrideShipId]||SHIP_DEFS[0]):activeShipDef();
   const core=overrideCoreId?(CORE_BY_ID[overrideCoreId]||CORE_DEFS[0]):activeCoreDef();
@@ -1864,23 +2026,17 @@ function drawCraft(x,y,s=1,overrideShipId=null,overrideCoreId=null){
     ctx.fillStyle=h2r(ship.color,.16);
     ctx.strokeStyle=ship.color;
     ctx.lineWidth=2;
-    if(ship.id==='striker'){
-      poly([[0,-28],[24,18],[7,10],[0,26],[-7,10],[-24,18]]);
-    }else if(ship.id==='sniper'){
-      poly([[0,-34],[12,-10],[25,12],[8,9],[0,30],[-8,9],[-25,12],[-12,-10]]);
-    }else if(ship.id==='guardian'){
-      poly([[0,-22],[24,-4],[20,22],[0,30],[-20,22],[-24,-4]]);
-    }else if(ship.id==='mirage'){
-      poly([[0,-30],[20,-2],[29,15],[9,8],[0,28],[-9,8],[-29,15],[-20,-2]]);
-    }else if(ship.id==='carrier'){
-      poly([[0,-24],[28,4],[18,18],[8,12],[0,28],[-8,12],[-18,18],[-28,4]]);
-    }else{
-      poly([[0,-26],[20,4],[12,22],[0,16],[-12,22],[-20,4]]);
-    }
+    poly(SHIP_BODY_POINTS[ship.id] || SHIP_BODY_POINTS.standard);
     ctx.fill();ctx.stroke();
+    drawShipDesignAccents(ship.id,ship,core,lightCraft);
+    const heavy=ship.id==='guardian'||ship.id==='titan'||ship.id==='dominion';
+    const wide=ship.id==='carrier'||ship.id==='omega'||ship.id==='ultima';
+    const engineY=heavy?17:(ship.id==='sniper'?19:10);
+    const engineX=wide?22:(heavy?18:14);
+    const engineH=heavy?11:(ship.id==='striker'?18:14);
     ctx.fillStyle=h2r(ship.color,.28);
-    ctx.beginPath();ctx.ellipse(-14,8,5,14,0,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.ellipse(14,8,5,14,0,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(-engineX,engineY,wide?6:5,engineH,0,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(engineX,engineY,wide?6:5,engineH,0,0,Math.PI*2);ctx.fill();
     const turretN=(mount.turret||[]).length;
     const armorN=(mount.armor||[]).length;
     const droneN=(mount.drone||[]).length;
@@ -1909,6 +2065,17 @@ function drawCraft(x,y,s=1,overrideShipId=null,overrideCoreId=null){
     ctx.lineWidth=1.5;
     ctx.beginPath();ctx.arc(0,0,22,0,Math.PI*2);ctx.stroke();
     ctx.beginPath();ctx.arc(0,0,30,frame*.02,Math.PI*1.35+frame*.02);ctx.stroke();
+    ctx.strokeStyle=h2r(core.color,.42);
+    ctx.lineWidth=1.1;
+    for(let i=0;i<3;i++){
+      const a=frame*.026+i*TAU/3;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a)*12,Math.sin(a)*12);
+      ctx.lineTo(Math.cos(a)*25,Math.sin(a)*25);
+      ctx.stroke();
+    }
+    ctx.fillStyle=h2r(core.color,.20);
+    mirrorPoly([[3,-18],[8,-6],[3,1]]);
   }
 
   ctx.shadowColor=core.color;ctx.shadowBlur=lightCraft?6:20;
