@@ -18,10 +18,14 @@ const RUN_TOKEN_WAVE_BONUS = 25;
 const RUN_TOKEN_TIME_BONUS = 1;
 const RUN_TOKEN_PAYOUT_DIVISOR = 100;
 const BODY_STAT_GROWTH = 1.05;
-const MAX_PARTICLES = 120;
-const MAX_EP_ORBS   = 42;
-const MAX_ARROWS    = 140;
-const MAX_FLOAT_TEXTS = 28;
+const DPR_LIMIT = 1.6;
+const BG_GRID_STEP = 56;
+const BG_STAR_COUNT = 58;
+const BG_BEAM_COUNT = 4;
+const MAX_PARTICLES = 72;
+const MAX_EP_ORBS   = 28;
+const MAX_ARROWS    = 110;
+const MAX_FLOAT_TEXTS = 22;
 const GRACE_FRAMES  = 120;
 const FPS           = 60;
 const WAVE_DURATION_FRAMES = FPS * 30;
@@ -39,7 +43,7 @@ const BOSS_HP_MULT = 18;
 const BOSS_CONTACT_MULT = 4;
 const BOSS_BULLET_BASE_DAMAGE = 34;
 const BOSS_BULLET_DAMAGE_STEP = 9;
-const MAX_ENEMY_BULLETS = 190;
+const MAX_ENEMY_BULLETS = 130;
 const DAMAGE_XP_RATE = 0.032;
 const MULTISHOT_DAMAGE_EXP = 0.34;
 const MULTISHOT_FIRE_DELAY_STEP = 0.07;
@@ -130,7 +134,7 @@ function resizeCanvas(){
   const rect = canvas.getBoundingClientRect();
   const cssW = Math.max(1, rect.width || W);
   const cssH = Math.max(1, rect.height || H);
-  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  const dpr = Math.min(window.devicePixelRatio || 1, DPR_LIMIT);
   const nextW = Math.round(cssW * dpr);
   const nextH = Math.round(cssH * dpr);
 
@@ -143,7 +147,7 @@ function resizeCanvas(){
   renderScaleY = nextH / H;
   ctx.setTransform(renderScaleX, 0, 0, renderScaleY, 0, 0);
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingQuality = 'low';
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -186,12 +190,22 @@ const BODY_UPGRADE_DEFS = [
 ];
 const SHIP_DEFS = [
   { id:'coreOnly', name:'NU-00 ネイキッド', icon:'C0', role:'裸核フレーム', cost:0, color:'#1ed6ff', slots:{turret:0,armor:0,drone:0,coreBoost:0}, mult:{hp:.85,defense:.9,attack:1,fireRate:1.05} },
-  { id:'standard', name:'AF-01 アーク', icon:'AF', role:'汎用フレーム', cost:120, color:'#1ed6ff', slots:{turret:1,armor:1,drone:1,coreBoost:1}, mult:{hp:2.0,defense:1.55,attack:2.2,fireRate:1.45} },
-  { id:'striker',  name:'VX-03 レイザー', icon:'VX', role:'強襲砲撃型', cost:700, color:'#ff3b62', slots:{turret:2,armor:0,drone:1,coreBoost:1}, mult:{hp:2.7,defense:1.85,attack:12.0,fireRate:2.4} },
-  { id:'sniper',   name:'SR-05 ロングレイ', icon:'SR', role:'長射程狙撃型', cost:1200, color:'#eef7ff', slots:{turret:2,armor:1,drone:0,coreBoost:1}, mult:{hp:3.4,defense:2.0,attack:28.0,fireRate:1.25} },
-  { id:'guardian', name:'BG-12 バルワーク', icon:'BG', role:'重装防壁型', cost:1800, color:'#82d7ff', slots:{turret:1,armor:2,drone:0,coreBoost:1}, mult:{hp:9.0,defense:8.0,attack:8.0,fireRate:1.7} },
-  { id:'mirage',   name:'EX-09 ミラージュ', icon:'EX', role:'高速回避型', cost:2800, color:'#36f39b', slots:{turret:1,armor:0,drone:2,coreBoost:2}, mult:{hp:5.0,defense:3.5,attack:30.0,fireRate:4.2} },
-  { id:'carrier',  name:'DR-07 ハイヴ', icon:'DR', role:'ドローン母機', cost:5000, color:'#b8a7ff', slots:{turret:0,armor:1,drone:2,coreBoost:1}, mult:{hp:14.0,defense:8.0,attack:100.0,fireRate:3.2} },
+  { id:'standard', name:'AF-01 アーク', icon:'AF', role:'汎用フレーム', cost:160, color:'#1ed6ff', slots:{turret:1,armor:1,drone:1,coreBoost:1}, mult:{hp:2.0,defense:1.55,attack:2.2,fireRate:1.45} },
+  { id:'striker',  name:'VX-03 レイザー', icon:'VX', role:'強襲砲撃型', cost:950, color:'#ff3b62', slots:{turret:2,armor:0,drone:1,coreBoost:1}, mult:{hp:2.7,defense:1.85,attack:12.0,fireRate:2.4} },
+  { id:'sniper',   name:'SR-05 ロングレイ', icon:'SR', role:'長射程狙撃型', cost:1600, color:'#eef7ff', slots:{turret:2,armor:1,drone:0,coreBoost:1}, mult:{hp:3.4,defense:2.0,attack:28.0,fireRate:1.25} },
+  { id:'guardian', name:'BG-12 バルワーク', icon:'BG', role:'重装防壁型', cost:2400, color:'#82d7ff', slots:{turret:1,armor:2,drone:0,coreBoost:1}, mult:{hp:9.0,defense:8.0,attack:8.0,fireRate:1.7} },
+  { id:'mirage',   name:'EX-09 ミラージュ', icon:'EX', role:'高速回避型', cost:3800, color:'#36f39b', slots:{turret:1,armor:0,drone:2,coreBoost:2}, mult:{hp:5.0,defense:3.5,attack:30.0,fireRate:4.2} },
+  { id:'carrier',  name:'DR-07 ハイヴ', icon:'DR', role:'ドローン母機', cost:7000, color:'#b8a7ff', slots:{turret:0,armor:1,drone:2,coreBoost:1}, mult:{hp:14.0,defense:8.0,attack:100.0,fireRate:3.2} },
+  { id:'vanguard', name:'VG-11 ヴァンガード', icon:'VG', role:'上位汎用型', cost:12000, color:'#1ed6ff', slots:{turret:2,armor:1,drone:1,coreBoost:1}, mult:{hp:24,defense:14,attack:180,fireRate:4.6} },
+  { id:'oracle',   name:'OR-18 オラクル', icon:'OR', role:'制御予測型', cost:45000, color:'#36f39b', slots:{turret:1,armor:1,drone:2,coreBoost:2}, mult:{hp:42,defense:26,attack:620,fireRate:7.8} },
+  { id:'eclipse',  name:'EC-24 エクリプス', icon:'EC', role:'暗黒強襲型', cost:120000, color:'#b96cff', slots:{turret:2,armor:1,drone:1,coreBoost:2}, mult:{hp:85,defense:52,attack:2100,fireRate:12} },
+  { id:'titan',    name:'TN-32 タイタン', icon:'TN', role:'超重装殲滅型', cost:350000, color:'#82d7ff', slots:{turret:2,armor:2,drone:0,coreBoost:2}, mult:{hp:260,defense:210,attack:6500,fireRate:7.4} },
+  { id:'dominion', name:'DM-44 ドミニオン', icon:'DM', role:'支配火力型', cost:1200000, color:'#ff3b62', slots:{turret:3,armor:1,drone:1,coreBoost:2}, mult:{hp:520,defense:340,attack:26000,fireRate:18} },
+  { id:'astral',   name:'AS-57 アストラル', icon:'AS', role:'星間機動型', cost:4500000, color:'#eef7ff', slots:{turret:2,armor:1,drone:2,coreBoost:3}, mult:{hp:1200,defense:820,attack:98000,fireRate:32} },
+  { id:'singularity', name:'SG-70 シンギュラリティ', icon:'SG', role:'重力炉搭載型', cost:15000000, color:'#b8a7ff', slots:{turret:3,armor:2,drone:1,coreBoost:3}, mult:{hp:4200,defense:3000,attack:420000,fireRate:44} },
+  { id:'aphelion', name:'AP-83 アフェリオン', icon:'AP', role:'遠日点砲撃型', cost:60000000, color:'#ff7a3d', slots:{turret:3,armor:1,drone:2,coreBoost:3}, mult:{hp:15000,defense:9000,attack:1800000,fireRate:70} },
+  { id:'omega',    name:'OM-99 オメガ', icon:'OM', role:'終端戦術型', cost:250000000, color:'#36f39b', slots:{turret:3,armor:2,drone:2,coreBoost:3}, mult:{hp:70000,defense:46000,attack:9500000,fireRate:120} },
+  { id:'ultima',   name:'UT-00 アルティマ', icon:'UT', role:'最終世代機', cost:1000000000, color:'#eef7ff', slots:{turret:4,armor:2,drone:2,coreBoost:4}, mult:{hp:420000,defense:300000,attack:62000000,fireRate:220} },
 ];
 const CORE_DEFS = [
   { id:'basic',   name:'C-0 シード', icon:'C0', role:'標準コア', cost:0,  color:'#1ed6ff', mult:{hp:1,defense:1,attack:1,fireRate:1} },
@@ -208,21 +222,41 @@ const SHIP_EFFECTS = {
   sniper:'射程 +40% / 6射ごとにレール弾',
   guardian:'シールド +3 / 重装甲',
   mirage:'会心率 +10% / 当たり判定小',
-  carrier:'支援ドローン +3 / 最終火力特化'
+  carrier:'支援ドローン +3 / 最終火力特化',
+  vanguard:'基礎性能を大幅底上げ',
+  oracle:'ドローンとコア拡張を両立',
+  eclipse:'高火力と高連射の上位強襲機',
+  titan:'圧倒的な耐久と装甲',
+  dominion:'砲台3枠の制圧火力',
+  astral:'高速連射と拡張性の星間機',
+  singularity:'重力炉で全性能を爆発強化',
+  aphelion:'遠距離戦向けの超火力機',
+  omega:'終盤用の総合最上位機',
+  ultima:'10億級の最終世代フレーム'
 };
 const PART_DEFS = [
-  { id:'cannon',   name:'T-ランス砲台', icon:'AT', type:'turret',    cost:160, color:'#ff3b62', mult:{attack:3.2} },
-  { id:'barrel',   name:'T-クイック砲身', icon:'FR', type:'turret',    cost:180, color:'#1ed6ff', mult:{fireRate:2.6} },
-  { id:'railgun',  name:'T-レールガン', icon:'RG', type:'turret',    cost:760, color:'#eef7ff', mult:{attack:6.0,fireRate:.85} },
-  { id:'plate',    name:'A-ミラー装甲', icon:'AR', type:'armor',     cost:220, color:'#82d7ff', mult:{defense:2.8} },
-  { id:'frame',    name:'A-バイタル骨格', icon:'HP', type:'armor',     cost:260, color:'#ff6b93', mult:{hp:2.5} },
-  { id:'aegis',    name:'A-イージス装甲', icon:'AG', type:'armor',     cost:840, color:'#82d7ff', mult:{hp:1.8,defense:4.5} },
-  { id:'droneBay', name:'D-ドローンベイ', icon:'DR', type:'drone',   cost:420, color:'#9cff5e', mult:{attack:1.8,fireRate:1.8} },
-  { id:'bitLink',  name:'D-ビットリンク', icon:'BT', type:'drone',     cost:520, color:'#eef7ff', mult:{fireRate:2.2} },
-  { id:'swarmLink', name:'D-スウォームリンク', icon:'SW', type:'drone', cost:980, color:'#36f39b', mult:{attack:2.4,fireRate:2.4} },
-  { id:'coreLink', name:'C-コアリンク', icon:'LK', type:'coreBoost', cost:900, color:'#b96cff', mult:{hp:1.65,defense:1.65,attack:1.65,fireRate:1.65} },
-  { id:'overclock', name:'C-オーバークロック', icon:'OC', type:'coreBoost', cost:1200, color:'#b8a7ff', mult:{attack:2.4,fireRate:2.4} },
-  { id:'rangeExt', name:'C-レンジエクステンダ', icon:'RE', type:'coreBoost', cost:1400, color:'#1ed6ff', mult:{attack:1.4,fireRate:1.4} },
+  { id:'cannon',   name:'T-ランス砲台', icon:'AT', type:'turret',    cost:210, color:'#ff3b62', mult:{attack:3.2} },
+  { id:'barrel',   name:'T-クイック砲身', icon:'FR', type:'turret',    cost:240, color:'#1ed6ff', mult:{fireRate:2.6} },
+  { id:'railgun',  name:'T-レールガン', icon:'RG', type:'turret',    cost:980, color:'#eef7ff', mult:{attack:6.0,fireRate:.85} },
+  { id:'plate',    name:'A-ミラー装甲', icon:'AR', type:'armor',     cost:290, color:'#82d7ff', mult:{defense:2.8} },
+  { id:'frame',    name:'A-バイタル骨格', icon:'HP', type:'armor',     cost:340, color:'#ff6b93', mult:{hp:2.5} },
+  { id:'aegis',    name:'A-イージス装甲', icon:'AG', type:'armor',     cost:1100, color:'#82d7ff', mult:{hp:1.8,defense:4.5} },
+  { id:'droneBay', name:'D-ドローンベイ', icon:'DR', type:'drone',   cost:560, color:'#9cff5e', mult:{attack:1.8,fireRate:1.8} },
+  { id:'bitLink',  name:'D-ビットリンク', icon:'BT', type:'drone',     cost:700, color:'#eef7ff', mult:{fireRate:2.2} },
+  { id:'swarmLink', name:'D-スウォームリンク', icon:'SW', type:'drone', cost:1300, color:'#36f39b', mult:{attack:2.4,fireRate:2.4} },
+  { id:'coreLink', name:'C-コアリンク', icon:'LK', type:'coreBoost', cost:1200, color:'#b96cff', mult:{hp:1.65,defense:1.65,attack:1.65,fireRate:1.65} },
+  { id:'overclock', name:'C-オーバークロック', icon:'OC', type:'coreBoost', cost:1600, color:'#b8a7ff', mult:{attack:2.4,fireRate:2.4} },
+  { id:'rangeExt', name:'C-レンジエクステンダ', icon:'RE', type:'coreBoost', cost:1900, color:'#1ed6ff', mult:{attack:1.4,fireRate:1.4} },
+  { id:'plasmaArray', name:'T-プラズマアレイ', icon:'PA', type:'turret', cost:8000, color:'#ff3b62', mult:{attack:18,fireRate:1.4} },
+  { id:'phaseCannon', name:'T-フェイズカノン', icon:'PH', type:'turret', cost:26000, color:'#b96cff', mult:{attack:60,fireRate:.95} },
+  { id:'singularityRail', name:'T-シンギュラレール', icon:'SG', type:'turret', cost:120000, color:'#eef7ff', mult:{attack:220,fireRate:.82} },
+  { id:'neutronHull', name:'A-ニュートロン外殻', icon:'NH', type:'armor', cost:15000, color:'#82d7ff', mult:{hp:22,defense:18} },
+  { id:'chronosPlate', name:'A-クロノス装甲', icon:'CH', type:'armor', cost:85000, color:'#36f39b', mult:{hp:80,defense:65} },
+  { id:'celestialAegis', name:'A-セレスティアル防壁', icon:'CE', type:'armor', cost:600000, color:'#b8a7ff', mult:{hp:350,defense:280} },
+  { id:'nanoSwarm', name:'D-ナノスウォーム', icon:'NS', type:'drone', cost:45000, color:'#9cff5e', mult:{attack:25,fireRate:18} },
+  { id:'quantumHive', name:'D-クオンタムハイヴ', icon:'QH', type:'drone', cost:350000, color:'#36f39b', mult:{attack:140,fireRate:95} },
+  { id:'zeroPointCore', name:'C-ゼロポイント炉', icon:'ZP', type:'coreBoost', cost:2500000, color:'#1ed6ff', mult:{hp:300,defense:250,attack:450,fireRate:120} },
+  { id:'eventHorizonCore', name:'C-事象境界コア', icon:'EH', type:'coreBoost', cost:750000000, color:'#eef7ff', mult:{hp:120000,defense:90000,attack:180000,fireRate:20000} },
 ];
 const PART_EFFECTS = {
   cannon:'3射ごとに超高威力ランス弾',
@@ -236,7 +270,17 @@ const PART_EFFECTS = {
   swarmLink:'支援ドローン +3',
   coreLink:'経験値 +50%',
   overclock:'会心率 +15%',
-  rangeExt:'射程 +35%'
+  rangeExt:'射程 +35%',
+  plasmaArray:'高火力プラズマ連装砲',
+  phaseCannon:'位相干渉で単発火力を増幅',
+  singularityRail:'重力収束レールで超火力',
+  neutronHull:'上位耐久と装甲を両立',
+  chronosPlate:'時間装甲で耐久を大幅強化',
+  celestialAegis:'終盤用の高級防壁',
+  nanoSwarm:'ナノ群体が連射を補助',
+  quantumHive:'量子ドローン火力を展開',
+  zeroPointCore:'全性能を上位水準へ増幅',
+  eventHorizonCore:'超高額の最終拡張コア'
 };
 const SHIP_BY_ID = Object.fromEntries(SHIP_DEFS.map(d=>[d.id,d]));
 const CORE_BY_ID = Object.fromEntries(CORE_DEFS.map(d=>[d.id,d]));
@@ -260,6 +304,16 @@ const PART_INFO={
   coreLink:{tier:'EPIC',desc:'全システムを底上げ。'},
   overclock:{tier:'EPIC',desc:'攻撃と連射を過励起。'},
   rangeExt:{tier:'EPIC',desc:'射程と命中余裕を伸ばす。'},
+  plasmaArray:{tier:'MYTH',desc:'上位砲台の入口。'},
+  phaseCannon:{tier:'MYTH',desc:'火力を指数的に押し上げる。'},
+  singularityRail:{tier:'RELIC',desc:'超重量の一点突破火力。'},
+  neutronHull:{tier:'MYTH',desc:'高耐久フレーム用外殻。'},
+  chronosPlate:{tier:'RELIC',desc:'後半WAVE向けの時間装甲。'},
+  celestialAegis:{tier:'RELIC',desc:'高額防壁で被弾を受け切る。'},
+  nanoSwarm:{tier:'MYTH',desc:'高速ドローン火力を展開。'},
+  quantumHive:{tier:'RELIC',desc:'ドローン枠を終盤火力へ変える。'},
+  zeroPointCore:{tier:'RELIC',desc:'全性能の桁をひとつ上げる。'},
+  eventHorizonCore:{tier:'OMEGA',desc:'最終機体向けの超高額拡張。'},
 };
 const SLOT_ORDER=['turret','armor','drone','coreBoost'];
 const SPECIAL_DEFS = [
@@ -286,6 +340,7 @@ const makeSpecialLevels = () => Object.fromEntries(SPECIAL_DEFS.map(d=>[d.id,0])
 // ─────────────────────────────────────
 let state   = 'start';
 let score   = 0, wave = 1, frame = 0;
+let runStartWave = 1;
 let coins   = 0;
 let tokensEarned = 0;
 let hp      = 100, maxHp = 100;
@@ -327,18 +382,21 @@ function freshMeta(settings={...DEFAULT_SETTINGS}){
     coreLevels:{basic:0},
     mountedParts:{},
     grants:{[DEMO_GRANT_KEY]:true},
+    highScore:{score:0,wave:1},
+    bestWave:1,
     settings:{...DEFAULT_SETTINGS,...settings}
   };
 }
 let meta = freshMeta();
 let homeState = 'home'; // 'home' | 'store' | 'warehouse' | 'upgrade' | 'settings' | 'codex'
 let storeTab = 'ship';   // 'ship' | 'core' | 'part'
+let storePages = { ship:0, core:0, part:0 };
 let warehouseTab = 'ship'; // 'ship' | 'turret' | 'armor' | 'drone' | 'coreBoost'
 let codexTab = 'special';
 let codexPage = 0;
 let pauseView = 'menu';
 let resetConfirmFrames = 0;
-let pendingShipPurchaseId = null;
+let pendingStorePurchase = null;
 
 // ─────────────────────────────────────
 //  ステータス計算
@@ -492,6 +550,41 @@ function bodyStatReadouts(){
     { label:'連射', value:fmtMult(bodyMult('fireRate')), color:'#00f0ff' },
   ];
 }
+function normalizeHighScore(){
+  const saved=meta.highScore || {};
+  const scoreValue=Math.max(0,Math.floor(Number(saved.score)||Number(meta.bestScore)||0));
+  const highScoreWave=Math.max(1,Math.floor(Number(saved.wave)||Number(meta.bestWave)||1));
+  const bestWave=Math.max(1,Math.floor(Number(meta.bestWave)||highScoreWave));
+  meta.highScore={score:scoreValue,wave:highScoreWave};
+  meta.bestWave=Math.max(bestWave,highScoreWave);
+}
+function highScoreWave(){
+  normalizeHighScore();
+  return Math.max(meta.bestWave||1,meta.highScore?.wave||1);
+}
+function highScoreCheckpointWave(){
+  const best=highScoreWave();
+  return Math.max(1,Math.floor((best-1)/BOSS_WAVE_INTERVAL)*BOSS_WAVE_INTERVAL+1);
+}
+function canUseHighScoreCheckpoint(){
+  return highScoreCheckpointWave()>1;
+}
+function recordRunHighScore(){
+  normalizeHighScore();
+  const currentWave=Math.max(1,Math.floor(wave)||1);
+  const currentScore=Math.max(0,Math.floor(score)||0);
+  let changed=false;
+  if(currentWave>meta.bestWave){
+    meta.bestWave=currentWave;
+    changed=true;
+  }
+  if(currentScore>meta.highScore.score || (currentScore===meta.highScore.score&&currentWave>meta.highScore.wave)){
+    meta.highScore={score:currentScore,wave:currentWave};
+    changed=true;
+  }
+  if(changed) saveMeta();
+  return changed;
+}
 function loadMeta(){
   let shouldSave=false;
   try{
@@ -510,6 +603,8 @@ function loadMeta(){
       meta.coreLevels={basic:0,...(saved.coreLevels||{})};
       meta.mountedParts={...(saved.mountedParts||{})};
       meta.grants={...(saved.grants||{})};
+      meta.highScore={...(saved.highScore||{})};
+      meta.bestWave=Number(saved.bestWave)||Number(saved.highScore?.wave)||1;
       meta.settings={...DEFAULT_SETTINGS,...(saved.settings||{})};
       if(!meta.grants[DEMO_GRANT_KEY]){
         meta.tokens+=DEMO_START_TOKENS;
@@ -524,6 +619,7 @@ function loadMeta(){
     }
   }catch(e){}
   normalizeSettings();
+  normalizeHighScore();
   invalidateLoadoutCache();
   if(shouldSave) saveMeta();
 }
@@ -537,10 +633,11 @@ function resetSaveData(){
   normalizeSettings();
   normalizeMounts();
   storeTab='ship';
+  storePages={ship:0,core:0,part:0};
   warehouseTab='ship';
   codexTab='special';
   codexPage=0;
-  pendingShipPurchaseId=null;
+  clearPendingStorePurchase();
   saveMeta();
   stopTouchMove();
   resetConfirmFrames=0;
@@ -650,7 +747,7 @@ function setTouchControlMode(mode){
 function calculateTokenPayout(){
   const scoreBonus=Math.floor(score/TOKEN_SCORE_UNIT);
   const coinBonus=coins*RUN_TOKEN_COIN_MULT;
-  const waveBonus=Math.max(0,wave-1)*RUN_TOKEN_WAVE_BONUS;
+  const waveBonus=Math.max(0,wave-runStartWave)*RUN_TOKEN_WAVE_BONUS;
   const timeBonus=Math.floor((frame/FPS)*RUN_TOKEN_TIME_BONUS);
   const rawGain=scoreBonus+coinBonus+waveBonus+timeBonus;
   return Math.max(0,Math.floor(rawGain/RUN_TOKEN_PAYOUT_DIVISOR));
@@ -718,6 +815,17 @@ function partMountedShip(partId){
   }
   return null;
 }
+function clearPendingStorePurchase(){
+  pendingStorePurchase=null;
+}
+function setPendingStorePurchase(action){
+  pendingStorePurchase=action;
+  addFloat(W/2,156,`${action.title}しますか？`,action.color,11);
+  playSfx('select');
+}
+function isPendingStorePurchase(kind,id=null){
+  return pendingStorePurchase?.kind===kind && (id===null || pendingStorePurchase.id===id);
+}
 function buyOrSelectShip(id){
   const ship=SHIP_BY_ID[id];
   if(!ship) return;
@@ -725,12 +833,12 @@ function buyOrSelectShip(id){
     meta.selectedShip=id;
     normalizeMounts();
     saveMeta();
-    pendingShipPurchaseId=null;
+    clearPendingStorePurchase();
     addFloat(W/2,156,`${ship.icon} ${displayName('ship',ship)} セレクト`,ship.color,11);
     return;
   }
   if(meta.tokens<ship.cost){
-    pendingShipPurchaseId=null;
+    clearPendingStorePurchase();
     addFloat(W/2,156,`トークン ${ship.cost} 必要`,'#b8a7ff',11);
     shake(3);
     return;
@@ -739,7 +847,7 @@ function buyOrSelectShip(id){
   meta.ownedShips[id]=true;
   meta.selectedShip=id;
   normalizeMounts();
-  pendingShipPurchaseId=null;
+  clearPendingStorePurchase();
   saveMeta();
   burst(W/2,170,ship.color,16);
   addFloat(W/2,156,`${ship.icon} ${displayName('ship',ship)} ゲット`,ship.color,11);
@@ -752,19 +860,21 @@ function requestShipPurchase(id){
     return;
   }
   if(meta.tokens<ship.cost){
-    pendingShipPurchaseId=null;
+    clearPendingStorePurchase();
     addFloat(W/2,156,`トークン ${ship.cost} 必要`,'#b8a7ff',11);
     shake(3);
     return;
   }
-  pendingShipPurchaseId=id;
-  addFloat(W/2,156,`${displayName('ship',ship)} を購入しますか？`,ship.color,11);
-  playSfx('select');
-}
-function confirmShipPurchase(){
-  const ship=SHIP_BY_ID[pendingShipPurchaseId];
-  if(!ship) return;
-  buyOrSelectShip(ship.id);
+  setPendingStorePurchase({
+    kind:'ship',
+    id,
+    tab:'ship',
+    icon:ship.icon,
+    color:ship.color,
+    cost:ship.cost,
+    title:`${displayName('ship',ship)} を購入`,
+    desc:'購入するとすぐセレクトされます。'
+  });
 }
 function buyOrMountCore(id){
   const core=CORE_BY_ID[id];
@@ -772,10 +882,12 @@ function buyOrMountCore(id){
   if(meta.ownedCores[id]){
     meta.selectedCore=id;
     saveMeta();
+    clearPendingStorePurchase();
     addFloat(W/2,156,`${core.icon} ${displayName('core',core)} セット`,core.color,11);
     return;
   }
   if(meta.tokens<core.cost){
+    clearPendingStorePurchase();
     addFloat(W/2,156,`トークン ${core.cost} 必要`,'#b8a7ff',11);
     shake(3);
     return;
@@ -784,28 +896,76 @@ function buyOrMountCore(id){
   meta.ownedCores[id]=true;
   meta.coreLevels[id]=0;
   meta.selectedCore=id;
+  clearPendingStorePurchase();
   saveMeta();
   burst(W/2,170,core.color,16);
   addFloat(W/2,156,`${core.icon} ${displayName('core',core)} ゲット`,core.color,11);
+}
+function requestCorePurchase(id){
+  const core=CORE_BY_ID[id];
+  if(!core) return;
+  if(meta.ownedCores[id]){
+    buyOrMountCore(id);
+    return;
+  }
+  if(meta.tokens<core.cost){
+    clearPendingStorePurchase();
+    addFloat(W/2,156,`トークン ${core.cost} 必要`,'#b8a7ff',11);
+    shake(3);
+    return;
+  }
+  setPendingStorePurchase({
+    kind:'core',
+    id,
+    tab:'core',
+    icon:core.icon,
+    color:core.color,
+    cost:core.cost,
+    title:`${displayName('core',core)} を購入`,
+    desc:'購入するとすぐセットされます。'
+  });
 }
 function upgradeMountedCore(){
   const cost=coreUpgradeCost();
   const core=selectedCoreDef();
   if(meta.tokens<cost){
+    clearPendingStorePurchase();
     addFloat(W/2,156,`トークン ${cost} 必要`,'#b8a7ff',11);
     shake(3);
     return;
   }
   meta.tokens-=cost;
   meta.coreLevels[core.id]=(meta.coreLevels[core.id]||0)+1;
+  clearPendingStorePurchase();
   saveMeta();
   burst(W/2,170,core.color,16);
   addFloat(W/2,156,`${core.icon} コア Lv.${meta.coreLevels[core.id]}`,core.color,11);
+}
+function requestCoreUpgrade(){
+  const cost=coreUpgradeCost();
+  const core=selectedCoreDef();
+  if(meta.tokens<cost){
+    clearPendingStorePurchase();
+    addFloat(W/2,156,`トークン ${cost} 必要`,'#b8a7ff',11);
+    shake(3);
+    return;
+  }
+  setPendingStorePurchase({
+    kind:'coreUpgrade',
+    id:core.id,
+    tab:'core',
+    icon:core.icon,
+    color:core.color,
+    cost,
+    title:`${displayName('core',core)} を強化`,
+    desc:`Lv.${selectedCoreLevel()} > Lv.${selectedCoreLevel()+1}`
+  });
 }
 function buyPart(id){
   const part=PART_BY_ID[id];
   if(!part||meta.ownedParts[id]) return;
   if(meta.tokens<part.cost){
+    clearPendingStorePurchase();
     addFloat(W/2,156,`トークン ${part.cost} 必要`,'#b8a7ff',11);
     shake(3);
     return;
@@ -823,9 +983,38 @@ function buyPart(id){
     mount[part.type]=list;
     meta.mountedParts[ship.id]=mount;
   }
+  clearPendingStorePurchase();
   saveMeta();
   burst(W/2,170,part.color,16);
   addFloat(W/2,156,`${part.icon} ${displayName('part',part)} ${autoMounted?'オートセット':'ゲット'}`,part.color,11);
+}
+function requestPartPurchase(id){
+  const part=PART_BY_ID[id];
+  if(!part||meta.ownedParts[id]) return;
+  if(meta.tokens<part.cost){
+    clearPendingStorePurchase();
+    addFloat(W/2,156,`トークン ${part.cost} 必要`,'#b8a7ff',11);
+    shake(3);
+    return;
+  }
+  setPendingStorePurchase({
+    kind:'part',
+    id,
+    tab:'part',
+    icon:part.icon,
+    color:part.color,
+    cost:part.cost,
+    title:`${displayName('part',part)} を購入`,
+    desc:'空きスロットがあれば自動セットされます。'
+  });
+}
+function confirmStorePurchase(){
+  const action=pendingStorePurchase;
+  if(!action) return;
+  if(action.kind==='ship') buyOrSelectShip(action.id);
+  else if(action.kind==='core') buyOrMountCore(action.id);
+  else if(action.kind==='coreUpgrade') upgradeMountedCore();
+  else if(action.kind==='part') buyPart(action.id);
 }
 function toggleMountPart(id){
   const part=PART_BY_ID[id];
@@ -986,6 +1175,7 @@ const waveSecondsLeft = () => {
 };
 function startNextWave(){
   wave++;
+  recordRunHighScore();
   waveFrame=0;
   waveBanner=120;
   grantSkillPoint();
@@ -1050,10 +1240,10 @@ function initBg(){
   pauseButtonGradient.addColorStop(.55,'rgba(21,20,18,.84)');
   pauseButtonGradient.addColorStop(1,'rgba(5,8,13,.92)');
   bgLines=[];
-  for(let x=0;x<=W;x+=40) bgLines.push({t:'v',x});
-  for(let y=0;y<=H;y+=40) bgLines.push({t:'h',y});
+  for(let x=0;x<=W;x+=BG_GRID_STEP) bgLines.push({t:'v',x});
+  for(let y=0;y<=H;y+=BG_GRID_STEP) bgLines.push({t:'h',y});
   bgStars=[];
-  for(let i=0;i<105;i++) bgStars.push({
+  for(let i=0;i<BG_STAR_COUNT;i++) bgStars.push({
     x:Math.random()*W, y:Math.random()*H,
     r:Math.random()*1.5+.25,
     layer:Math.random()<.72?0:1,
@@ -1061,7 +1251,7 @@ function initBg(){
     spd:Math.random()*.018+.006
   });
   bgBeams=[];
-  for(let i=0;i<8;i++) bgBeams.push({
+  for(let i=0;i<BG_BEAM_COUNT;i++) bgBeams.push({
     x:-W+Math.random()*W*2,
     y:Math.random()*H,
     len:90+Math.random()*170,
@@ -1086,7 +1276,7 @@ function drawBg(){
     ctx.fillRect(24,y+14,W-48,1);
   }
 
-  const gridShift=(t*7)%40;
+  const gridShift=(t*7)%BG_GRID_STEP;
   ctx.strokeStyle='rgba(184,167,255,0.030)'; ctx.lineWidth=.5;
   for(const l of bgLines){
     ctx.beginPath();
@@ -1126,7 +1316,8 @@ function drawBg(){
     const y=s.layer?(s.y+drift)%H:s.y;
     const a=(s.layer?.13:.08)+Math.abs(Math.sin(s.phase))*(s.layer?.22:.14);
     ctx.fillStyle=`rgba(255,247,232,${a})`;
-    ctx.beginPath();ctx.arc(s.x,y,s.r,0,TAU);ctx.fill();
+    const d=Math.max(1,s.r*1.4);
+    ctx.fillRect(s.x-d*.5,y-d*.5,d,d);
   }
 
   ctx.fillStyle=bgScanGradient;
@@ -1518,6 +1709,7 @@ function updateEnemyBullets(){
 function drawEnemyBullets(){
   ctx.save();
   ctx.globalCompositeOperation='lighter';
+  ctx.shadowBlur=0;
   for(const b of enemyBullets){
     const col=b.color||HOYO_UI.rose;
     ctx.strokeStyle=h2r(col,.36);
@@ -1526,8 +1718,6 @@ function drawEnemyBullets(){
     ctx.moveTo(b.prevX,b.prevY);
     ctx.lineTo(b.x,b.y);
     ctx.stroke();
-    ctx.shadowColor=col;
-    ctx.shadowBlur=10;
     ctx.fillStyle=col;
     if(b.kind==='ring'){
       ctx.beginPath();
@@ -1742,7 +1932,7 @@ function drawEnemy(e){
 //  パーティクル
 // ─────────────────────────────────────
 function burst(x,y,color,n){
-  const cnt=Math.min(Math.ceil(n*.65), MAX_PARTICLES-particles.length);
+  const cnt=Math.min(Math.ceil(n*.45), MAX_PARTICLES-particles.length);
   for(let i=0;i<cnt;i++){
     const angle=Math.random()*Math.PI*2, spd=1+Math.random()*3.5;
     particles.push({x,y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,life:28+Math.random()*22,maxLife:50,color,size:1.5+Math.random()*2});
@@ -3458,9 +3648,43 @@ function drawHomeTokenBadge(){
 // ─────────────────────────────────────
 //  スタート・ゲームオーバー画面
 // ─────────────────────────────────────
+function checkpointButtonRect(){
+  return {x:34,y:326,w:W-68,h:24};
+}
+function drawHighScoreBadge(x,y,w,h){
+  normalizeHighScore();
+  ctx.save();
+  drawCutPanel(x,y,w,h,HOYO_UI.gold,false);
+  ctx.textAlign='left';
+  ctx.textBaseline='middle';
+  ctx.font=`900 9px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.gold;
+  ctx.fillText('HIGH SCORE',x+12,y+13);
+  ctx.font=`900 15px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.text;
+  ctx.fillText(`WAVE ${formatCompactNumber(highScoreWave())}`,x+12,y+31);
+  ctx.font=`900 10px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.muted;
+  ctx.fillText(formatCompactNumber(meta.highScore.score),x+12,y+47);
+  ctx.restore();
+}
+function drawCheckpointButton(){
+  const r=checkpointButtonRect();
+  const active=canUseHighScoreCheckpoint();
+  const target=highScoreCheckpointWave();
+  ctx.save();
+  drawCutPanel(r.x,r.y,r.w,r.h,active?HOYO_UI.gold:HOYO_UI.faint,active);
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.font=`900 11px ${UI_FONT}`;
+  ctx.fillStyle=active?HOYO_UI.gold:HOYO_UI.faint;
+  ctx.fillText(active?`CHECKPOINT START  WAVE ${target}`:'CHECKPOINT LOCKED  BEST WAVE 11+',r.x+r.w/2,r.y+r.h/2+1);
+  ctx.restore();
+}
 const BTN_W=200, BTN_H=50;
 const GAME_OVER_RETRY_Y=H/2+76;
 const GAME_OVER_HOME_Y=H/2+134;
+const GAME_OVER_CHECKPOINT_Y=H/2+192;
 const INSTALL_BTN={x:W/2-80,y:H-72,w:160,h:34};
 const HOME_START_Y=366;
 const HOME_TABS=[
@@ -3727,6 +3951,64 @@ function drawCraftInCard(x,y,w,h,shipId,coreId){
 }
 
 // ── ストア画面 ──
+const STORE_PAGE_SIZE={ship:8,core:6,part:8};
+const STORE_PAGER={y:522,w:78,h:20,gap:18};
+function storeDefs(tab=storeTab){
+  if(tab==='ship') return SHIP_DEFS;
+  if(tab==='core') return CORE_DEFS;
+  return PART_DEFS;
+}
+function storePageCount(tab=storeTab){
+  return Math.max(1,Math.ceil(storeDefs(tab).length/(STORE_PAGE_SIZE[tab]||8)));
+}
+function normalizeStorePage(tab=storeTab){
+  const pages=storePageCount(tab);
+  storePages[tab]=Math.max(0,Math.min(pages-1,storePages[tab]||0));
+}
+function visibleStoreDefs(tab=storeTab){
+  normalizeStorePage(tab);
+  const size=STORE_PAGE_SIZE[tab]||8;
+  const start=(storePages[tab]||0)*size;
+  return storeDefs(tab).slice(start,start+size);
+}
+function drawStorePager(tab=storeTab){
+  const pages=storePageCount(tab);
+  if(pages<=1) return;
+  const p=STORE_PAGER, left={x:W/2-p.w-p.gap/2,y:p.y,w:p.w,h:p.h}, right={x:W/2+p.gap/2,y:p.y,w:p.w,h:p.h};
+  const page=storePages[tab]||0;
+  for(const b of [
+    {r:left,label:'前へ',on:page>0},
+    {r:right,label:'次へ',on:page<pages-1}
+  ]){
+    drawCutPanel(b.r.x,b.r.y,b.r.w,b.r.h,b.on?HOYO_UI.blue:HOYO_UI.faint,b.on);
+    ctx.font=`900 10px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=b.on?HOYO_UI.blue:HOYO_UI.faint;
+    ctx.fillText(b.label,b.r.x+b.r.w/2,b.r.y+b.r.h/2+1);
+  }
+  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(`${page+1}/${pages}`,W/2,p.y+p.h/2+1);
+}
+function handleStorePager(cx,cy,tab=storeTab){
+  const pages=storePageCount(tab);
+  if(pages<=1) return false;
+  const p=STORE_PAGER;
+  if(cy<p.y||cy>p.y+p.h) return false;
+  const left={x:W/2-p.w-p.gap/2,y:p.y,w:p.w,h:p.h}, right={x:W/2+p.gap/2,y:p.y,w:p.w,h:p.h};
+  if(cx>=left.x&&cx<=left.x+left.w&&storePages[tab]>0){
+    clearPendingStorePurchase();
+    storePages[tab]--;
+    playSfx('select');
+    return true;
+  }
+  if(cx>=right.x&&cx<=right.x+right.w&&storePages[tab]<pages-1){
+    clearPendingStorePurchase();
+    storePages[tab]++;
+    playSfx('select');
+    return true;
+  }
+  return cx>=left.x&&cx<=right.x+right.w;
+}
 function drawLoadoutPanel(x,y,w,h,ship=selectedShipDef()){
   const core=selectedCoreDef();
   drawCutPanel(x,y,w,h,ship.color,false);
@@ -3757,44 +4039,44 @@ function drawStoreShipCard(i,ship,startY){
   fillFitText(shipEffectText(ship),cx+10,cy+85,cw-20);
   if(sel) drawStatusTag(cx+cw-86,cy+7,76,17,'セレクト中',HOYO_UI.gold,true);
   else if(owned) drawStatusTag(cx+cw-76,cy+7,66,17,'セレクト',HOYO_UI.jade,false);
-  else if(pendingShipPurchaseId===ship.id) drawStatusTag(cx+cw-76,cy+7,66,17,'確認中',HOYO_UI.rose,true);
+  else if(isPendingStorePurchase('ship',ship.id)) drawStatusTag(cx+cw-76,cy+7,66,17,'確認中',HOYO_UI.rose,true);
   else drawTokenAmount(cx+cw-9,cy+16,ship.cost,'right',8);
 }
-function shipPurchaseConfirmPanelRect(){
+function storePurchaseConfirmPanelRect(){
   return {x:14,y:546,w:W-28,h:104};
 }
-function shipPurchaseConfirmButtonRect(kind){
-  const p=shipPurchaseConfirmPanelRect();
+function storePurchaseConfirmButtonRect(kind){
+  const p=storePurchaseConfirmPanelRect();
   const gap=10, bw=(p.w-36-gap)/2, by=p.y+58;
   return kind==='cancel'
     ? {x:p.x+18,y:by,w:bw,h:34}
     : {x:p.x+18+bw+gap,y:by,w:bw,h:34};
 }
-function drawShipPurchaseConfirmPanel(){
-  const ship=SHIP_BY_ID[pendingShipPurchaseId];
-  if(!ship || meta.ownedShips[ship.id] || storeTab!=='ship') return;
-  const p=shipPurchaseConfirmPanelRect();
+function drawStorePurchaseConfirmPanel(){
+  const action=pendingStorePurchase;
+  if(!action || action.tab!==storeTab) return;
+  const p=storePurchaseConfirmPanelRect();
   ctx.save();
   ctx.fillStyle='rgba(5,6,7,.68)';
   ctx.fillRect(0,p.y-10,W,H-p.y+10);
-  drawCutPanel(p.x,p.y,p.w,p.h,ship.color,true);
+  drawCutPanel(p.x,p.y,p.w,p.h,action.color,true);
   ctx.textAlign='left';ctx.textBaseline='middle';
-  drawStatusTag(p.x+14,p.y+14,48,28,ship.icon,ship.color,true);
+  drawStatusTag(p.x+14,p.y+14,48,28,action.icon,action.color,true);
   ctx.font=`900 14px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(`${displayName('ship',ship)} を購入`,p.x+74,p.y+20,p.w-150);
+  fillFitText(action.title,p.x+74,p.y+20,p.w-150);
   ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('購入するとすぐセレクトされます。',p.x+74,p.y+40);
-  drawTokenAmount(p.x+p.w-16,p.y+28,ship.cost,'right',9);
+  ctx.fillText(action.desc,p.x+74,p.y+40);
+  drawTokenAmount(p.x+p.w-16,p.y+28,action.cost,'right',9);
 
-  const cancel=shipPurchaseConfirmButtonRect('cancel');
-  const buy=shipPurchaseConfirmButtonRect('buy');
+  const cancel=storePurchaseConfirmButtonRect('cancel');
+  const buy=storePurchaseConfirmButtonRect('buy');
   drawCutPanel(cancel.x,cancel.y,cancel.w,cancel.h,HOYO_UI.faint,false);
-  drawCutPanel(buy.x,buy.y,buy.w,buy.h,meta.tokens>=ship.cost?HOYO_UI.gold:HOYO_UI.faint,true);
+  drawCutPanel(buy.x,buy.y,buy.w,buy.h,meta.tokens>=action.cost?HOYO_UI.gold:HOYO_UI.faint,true);
   ctx.font=`900 13px ${UI_FONT}`;ctx.textAlign='center';
   ctx.fillStyle=HOYO_UI.muted;
   ctx.fillText('キャンセル',cancel.x+cancel.w/2,cancel.y+cancel.h/2+1);
-  ctx.fillStyle=meta.tokens>=ship.cost?HOYO_UI.gold:HOYO_UI.faint;
-  ctx.fillText('購入する',buy.x+buy.w/2,buy.y+buy.h/2+1);
+  ctx.fillStyle=meta.tokens>=action.cost?HOYO_UI.gold:HOYO_UI.faint;
+  ctx.fillText(action.kind==='coreUpgrade'?'強化する':'購入する',buy.x+buy.w/2,buy.y+buy.h/2+1);
   ctx.restore();
 }
 function drawStoreCoreCard(i,core,startY){
@@ -3813,6 +4095,7 @@ function drawStoreCoreCard(i,core,startY){
   ctx.fillText(fitText(multText(core.mult,true),cw-22),cx+cw/2,cy+61);
   if(sel) drawStatusTag(cx+cw/2-42,cy+70,84,17,'セット中',HOYO_UI.gold,true);
   else if(owned) drawStatusTag(cx+cw/2-32,cy+70,64,17,'セット',HOYO_UI.jade,false);
+  else if(isPendingStorePurchase('core',core.id)) drawStatusTag(cx+cw/2-32,cy+70,64,17,'確認中',HOYO_UI.rose,true);
   else drawTokenAmount(cx+cw/2,cy+79,core.cost,'center',8);
 }
 function drawStorePartCard(i,part,startY){
@@ -3834,6 +4117,7 @@ function drawStorePartCard(i,part,startY){
   fillFitText(multText(part.mult,true),cx+10,cy+68,cw-20);
   if(mounted) drawStatusTag(cx+cw-74,cy+7,64,17,'装着中',HOYO_UI.gold,true);
   else if(owned) drawStatusTag(cx+cw-70,cy+7,60,17,partSlotStatus(part),HOYO_UI.jade,false);
+  else if(isPendingStorePurchase('part',part.id)) drawStatusTag(cx+cw-70,cy+7,60,17,'確認中',HOYO_UI.rose,true);
   else drawTokenAmount(cx+cw-8,cy+16,part.cost,'right',8);
   ctx.textAlign='right';ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
   ctx.fillText(owned?'倉庫':partSlotStatus(part),cx+cw-8,cy+38);
@@ -3845,8 +4129,8 @@ function drawStoreScreen(){
   drawTabRow(['ship','core','part'],{ship:'SHIP',core:'CORE',part:'PART'},storeTab,62);
   const cy=102;
   if(storeTab==='ship'){
-    for(let i=0;i<SHIP_DEFS.length;i++) drawStoreShipCard(i,SHIP_DEFS[i],cy);
-    drawShipPurchaseConfirmPanel();
+    const items=visibleStoreDefs('ship');
+    for(let i=0;i<items.length;i++) drawStoreShipCard(i,items[i],cy);
   }else if(storeTab==='core'){
     const core=selectedCoreDef(),lv=selectedCoreLevel(),uc=coreUpgradeCost(),can=meta.tokens>=uc;
     drawCutPanel(14,cy,W-28,46,can?HOYO_UI.gold:core.color,can);
@@ -3854,13 +4138,17 @@ function drawStoreScreen(){
     ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=core.color;
     fillFitText(`${core.icon} ${displayName('core',core)}  Lv.${lv} > ${lv+1}`,26,cy+17,W-128);
     ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=can?HOYO_UI.gold:HOYO_UI.muted;
-    ctx.fillText(can?'コアアップ可能':'トークン不足',26,cy+33);
+    ctx.fillText(isPendingStorePurchase('coreUpgrade',core.id)?'強化確認中':(can?'コアアップ可能':'トークン不足'),26,cy+33);
     drawTokenAmount(W-22,cy+23,uc,'right',9);
-    for(let i=0;i<CORE_DEFS.length;i++) drawStoreCoreCard(i,CORE_DEFS[i],cy+58);
+    const items=visibleStoreDefs('core');
+    for(let i=0;i<items.length;i++) drawStoreCoreCard(i,items[i],cy+58);
   }else{
     drawLoadoutPanel(14,cy,W-28,72);
-    for(let i=0;i<PART_DEFS.length;i++) drawStorePartCard(i,PART_DEFS[i],cy+74);
+    const items=visibleStoreDefs('part');
+    for(let i=0;i<items.length;i++) drawStorePartCard(i,items[i],cy+74);
   }
+  drawStorePager(storeTab);
+  drawStorePurchaseConfirmPanel();
   ctx.restore();
 }
 const WAREHOUSE_TABS=['ship','turret','armor','drone','coreBoost'];
@@ -3875,33 +4163,42 @@ function hitTwoColCard(cx,cy,count,startY,ch,gap=8){
   return -1;
 }
 function handleStoreClick(cx,cy){
-  if(hitBackBtn(cx,cy)){pendingShipPurchaseId=null;homeState='home';return;}
+  if(hitBackBtn(cx,cy)){clearPendingStorePurchase();homeState='home';return;}
   const tab=hitTabRow(cx,cy,['ship','core','part'],62);
-  if(tab){pendingShipPurchaseId=null;storeTab=tab;return;}
+  if(tab){clearPendingStorePurchase();storeTab=tab;normalizeStorePage(storeTab);return;}
+  if(handleStorePager(cx,cy,storeTab)) return;
   const cy0=102;
-  if(storeTab==='ship'){
-    if(pendingShipPurchaseId){
-      const cancel=shipPurchaseConfirmButtonRect('cancel');
-      const buy=shipPurchaseConfirmButtonRect('buy');
-      if(cx>=cancel.x&&cx<=cancel.x+cancel.w&&cy>=cancel.y&&cy<=cancel.y+cancel.h){
-        pendingShipPurchaseId=null;
-        playSfx('denied');
-        return;
-      }
-      if(cx>=buy.x&&cx<=buy.x+buy.w&&cy>=buy.y&&cy<=buy.y+buy.h){
-        confirmShipPurchase();
-        return;
-      }
+  if(pendingStorePurchase&&pendingStorePurchase.tab===storeTab){
+    const cancel=storePurchaseConfirmButtonRect('cancel');
+    const buy=storePurchaseConfirmButtonRect('buy');
+    if(cx>=cancel.x&&cx<=cancel.x+cancel.w&&cy>=cancel.y&&cy<=cancel.y+cancel.h){
+      clearPendingStorePurchase();
+      playSfx('denied');
+      return;
     }
-    const idx=hitTwoColCard(cx,cy,SHIP_DEFS.length,cy0,92,8);
-    if(idx>=0) requestShipPurchase(SHIP_DEFS[idx].id);
+    if(cx>=buy.x&&cx<=buy.x+buy.w&&cy>=buy.y&&cy<=buy.y+buy.h){
+      confirmStorePurchase();
+      return;
+    }
+    const panel=storePurchaseConfirmPanelRect();
+    if(cy>=panel.y-10){
+      clearPendingStorePurchase();
+      return;
+    }
+  }
+  if(storeTab==='ship'){
+    const items=visibleStoreDefs('ship');
+    const idx=hitTwoColCard(cx,cy,items.length,cy0,92,8);
+    if(idx>=0) requestShipPurchase(items[idx].id);
   }else if(storeTab==='core'){
-    if(cx>=14&&cx<=W-14&&cy>=cy0&&cy<=cy0+46){upgradeMountedCore();return;}
-    const idx=hitTwoColCard(cx,cy,CORE_DEFS.length,cy0+58,92,8);
-    if(idx>=0) buyOrMountCore(CORE_DEFS[idx].id);
+    if(cx>=14&&cx<=W-14&&cy>=cy0&&cy<=cy0+46){requestCoreUpgrade();return;}
+    const items=visibleStoreDefs('core');
+    const idx=hitTwoColCard(cx,cy,items.length,cy0+58,92,8);
+    if(idx>=0) requestCorePurchase(items[idx].id);
   }else{
-    const idx=hitTwoColCard(cx,cy,PART_DEFS.length,cy0+74,80,8);
-    if(idx>=0) buyPart(PART_DEFS[idx].id);
+    const items=visibleStoreDefs('part');
+    const idx=hitTwoColCard(cx,cy,items.length,cy0+74,80,8);
+    if(idx>=0) requestPartPurchase(items[idx].id);
   }
 }
 
@@ -4437,6 +4734,7 @@ function drawHomeScreenV3(){
   ctx.font=`900 14px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText('SELECTED',hx+68,hy+30);
   ctx.restore();
+  drawHighScoreBadge(hx+hw-128,hy+16,108,58);
 
   ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.font=`900 28px ${DISPLAY_FONT}`;ctx.fillStyle=HOYO_UI.text;
@@ -4462,6 +4760,7 @@ function drawHomeScreenV3(){
   fillFitText(slotText(ship),hx+32,infoY+20,hw-64);
   ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=ship.color;
   fillFitText(loadoutText(ship.id),hx+32,infoY+39,hw-64);
+  drawCheckpointButton();
 
   const sx=W/2-BTN_W/2, sy=HOME_START_Y;
   drawCutPanel(sx,sy,BTN_W,BTN_H,HOYO_UI.gold,true);
@@ -4512,42 +4811,53 @@ function drawGameOver(){
   ctx.shadowColor='#ff2d78'; ctx.shadowBlur=12; ctx.fillStyle='#ff2d78';
   ctx.fillText('GAME OVER',W/2,H/2-74); ctx.shadowBlur=0;
   ctx.font='14px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif'; ctx.fillStyle='#c8c8e0';
-  ctx.fillText(`SCORE   ${formatCompactNumber(score)}`,W/2,H/2+6);
-  ctx.fillText(`WAVE    ${wave}`,W/2,H/2+30);
+  ctx.fillText(`SCORE   ${formatCompactNumber(score)} / HI ${formatCompactNumber(meta.highScore.score)}`,W/2,H/2+6);
+  ctx.fillText(`WAVE    ${wave} / BEST ${formatCompactNumber(highScoreWave())}`,W/2,H/2+30);
   ctx.globalAlpha=tokensEarned>0?1:.45;
   drawTokenAmount(W/2,H/2+54,`+${tokensEarned}`,'center',14);
   ctx.globalAlpha=1;
   drawBtn(W/2-BTN_W/2,GAME_OVER_RETRY_Y,BTN_W,BTN_H,'リトライ','#00f0ff');
   drawBtn(W/2-BTN_W/2,GAME_OVER_HOME_Y,BTN_W,BTN_H,'ホーム','#88aaff');
+  if(canUseHighScoreCheckpoint()) drawBtn(W/2-BTN_W/2,GAME_OVER_CHECKPOINT_Y,BTN_W,BTN_H,`WAVE ${highScoreCheckpointWave()}`,'#b8a7ff');
   ctx.restore();
 }
 
 // ─────────────────────────────────────
 //  ゲーム開始・終了
 // ─────────────────────────────────────
-function startGame(){
+function startGame(startWave=1){
   unlockAudio();
   invalidateLoadoutCache();
   const loadout=getLoadoutSnapshot();
-  state='play'; score=0; coins=0; wave=1; frame=0; hp=100; maxHp=100;
+  const startAt=Math.max(1,Math.floor(Number(startWave)||1));
+  runStartWave=startAt;
+  state='play'; score=0; coins=0; wave=startAt; frame=0; hp=100; maxHp=100;
   maxHp=Math.ceil(100*bodyMult('hp')); hp=maxHp;
-  xp=0; xpLevel=0; hitXpBank=0; tokensEarned=0; invincible=0; skillPoints=loadout.ship.id==='coreOnly'?2:1; fireTimer=0; regenBank=0; shield=0; shieldCooldown=0; droneTimer=0; bitTimer=0; shotSeq=0; waveBanner=0; waveFrame=0;
+  xp=0; xpLevel=0; hitXpBank=0; tokensEarned=0; invincible=0; skillPoints=(loadout.ship.id==='coreOnly'?2:1)+Math.max(0,startAt-1); fireTimer=0; regenBank=0; shield=0; shieldCooldown=0; droneTimer=0; bitTimer=0; shotSeq=0; waveBanner=startAt>1?120:0; waveFrame=0;
   arrows=[];enemies=[];enemyBullets=[];particles=[];epOrbs=[];floatTexts=[];pendingSpecials=[];upgradeZones=[];
   statLevels   ={fireRate:0,bulletSpeed:0,damage:0,range:0,hp:0,xpMult:0,speed:0,critChance:0,critDamage:0,regen:0};
   specialLevels=makeSpecialLevels();
   player.x=W/2; player.y=PLAYER_Y; player.prevX=player.x; player.prevY=player.y;
+  if(startAt>1) addFloat(W/2,86,`CHECKPOINT WAVE ${startAt}`,HOYO_UI.gold,13);
+  if(startAt%BOSS_WAVE_INTERVAL===0) spawnBoss();
   resetBgmTrack(true);
   playBgm();
   playSfx('start');
 }
 function endGame(){
-  if(state!=='dead') awardTokens();
+  if(state!=='dead'){
+    recordRunHighScore();
+    awardTokens();
+  }
   state='dead';
   pauseBgm();
   playSfx('dead');
 }
 function returnHome(){
-  if(state==='play'||state==='pause') awardTokens();
+  if(state==='play'||state==='pause'){
+    recordRunHighScore();
+    awardTokens();
+  }
   state='start';
   homeState='home';
   pauseView='menu';
@@ -4665,6 +4975,7 @@ function handleCanvasAction(cx,cy){
   if(state==='dead'){
     if(hitRetry(cx,cy)){startGame();return true;}
     if(hitGameOverHome(cx,cy)){returnHome();return true;}
+    if(hitGameOverCheckpoint(cx,cy)){startGame(highScoreCheckpointWave());return true;}
   }
   return false;
 }
@@ -4676,9 +4987,14 @@ canvas.addEventListener('selectstart',e=>e.preventDefault());
 canvas.addEventListener('dragstart',e=>e.preventDefault());
 // ホームボタン判定
 function hitBtn(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>HOME_START_Y&&cy<HOME_START_Y+BTN_H; }
+function hitCheckpointStart(cx,cy){
+  const r=checkpointButtonRect();
+  return canUseHighScoreCheckpoint()&&cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h;
+}
 function hitInstall(cx,cy){ return canShowInstallAction()&&cx>=INSTALL_BTN.x&&cx<=INSTALL_BTN.x+INSTALL_BTN.w&&cy>=INSTALL_BTN.y&&cy<=INSTALL_BTN.y+INSTALL_BTN.h; }
 function hitRetry(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>GAME_OVER_RETRY_Y&&cy<GAME_OVER_RETRY_Y+BTN_H; }
 function hitGameOverHome(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>GAME_OVER_HOME_Y&&cy<GAME_OVER_HOME_Y+BTN_H; }
+function hitGameOverCheckpoint(cx,cy){ return canUseHighScoreCheckpoint()&&cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>GAME_OVER_CHECKPOINT_Y&&cy<GAME_OVER_CHECKPOINT_Y+BTN_H; }
 function hitPause(cx,cy){ return cx>=PAUSE_BTN.x&&cx<=PAUSE_BTN.x+PAUSE_BTN.w&&cy>=PAUSE_BTN.y&&cy<=PAUSE_BTN.y+PAUSE_BTN.h; }
 function hitNavBtn(cx,cy){
   for(let i=0;i<HOME_NAV_BTNS.length;i++){
@@ -4691,6 +5007,7 @@ function hitNavBtn(cx,cy){
 }
 function handleHomeClick(cx,cy){
   if(hitInstall(cx,cy)){installApp();return true;}
+  if(hitCheckpointStart(cx,cy)){startGame(highScoreCheckpointWave());return true;}
   if(hitBtn(cx,cy)){startGame();return true;}
   const nav=hitNavBtn(cx,cy);
   if(nav){homeState=nav;return true;}

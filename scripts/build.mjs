@@ -1,6 +1,7 @@
-import { cp, mkdir, copyFile, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, copyFile, readFile, writeFile, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
+import { join, relative, sep } from "node:path";
 
 await mkdir("dist", { recursive: true });
 await copyFile("index.html", "dist/index.html");
@@ -77,13 +78,33 @@ function makeIcon(size) {
 await writeFile("dist/icon-192.png", makeIcon(192));
 await writeFile("dist/icon-512.png", makeIcon(512));
 
-const cacheInputs = await Promise.all([
-  "dist/index.html",
-  "dist/src/game.js",
-  "dist/manifest.webmanifest",
-  "dist/icon-192.png",
-  "dist/icon-512.png"
-].map(file => readFile(file)));
-const cacheVersion = createHash("sha256").update(Buffer.concat(cacheInputs)).digest("hex").slice(0, 12);
+async function listFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const file = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listFiles(file));
+    } else {
+      files.push(file);
+    }
+  }
+  return files;
+}
+
+const distFiles = (await listFiles("dist"))
+  .filter(file => !file.endsWith(`${sep}sw.js`))
+  .map(file => relative("dist", file).split(sep).join("/"))
+  .sort();
+const precacheAssets = ["./", ...distFiles];
 const sw = await readFile("dist/sw.js", "utf8");
-await writeFile("dist/sw.js", sw.replace("__CACHE_VERSION__", cacheVersion), "utf8");
+const cacheInputs = await Promise.all(distFiles.map(file => readFile(`dist/${file}`)));
+cacheInputs.push(Buffer.from(sw));
+const cacheVersion = createHash("sha256").update(Buffer.concat(cacheInputs)).digest("hex").slice(0, 12);
+await writeFile(
+  "dist/sw.js",
+  sw
+    .replace("__CACHE_VERSION__", cacheVersion)
+    .replace("__PRECACHE_ASSETS__", JSON.stringify(precacheAssets, null, 2)),
+  "utf8"
+);
