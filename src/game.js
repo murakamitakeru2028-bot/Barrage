@@ -778,17 +778,11 @@ function handleGoogleCredential(response){
     const profile=normalizeGoogleProfile(payload);
     if(!profile) throw new Error('invalid profile');
     if(accountState.profile?.sub===profile.sub && accountState.profile.gameName) profile.gameName=accountState.profile.gameName;
-    const previousMeta=meta;
-    saveMeta();
-    const key=googleAccountSaveKey(profile.sub);
-    const hasAccountSave=!!localStorage.getItem(key);
     accountState.profile=profile;
     accountState.message='LINKED';
     persistAccountSession();
-    if(!hasAccountSave) localStorage.setItem(key,JSON.stringify(previousMeta));
-    loadMeta();
-    upsertRankingEntry(true);
-    addFloat(W/2,286,`${profile.name} とリンク`,HOYO_UI.jade,11);
+    resetProgressForGoogleLogin(profile);
+    addFloat(W/2,286,`${profile.name} とリンク / データ初期化`,HOYO_UI.jade,11);
     playSfx('upgrade');
   }catch(e){
     accountState.message='LOGIN FAILED';
@@ -839,6 +833,10 @@ function loadRankingEntries(){
 }
 function saveRankingEntries(entries){
   try{localStorage.setItem(RANKING_KEY,JSON.stringify(entries.slice(0,RANKING_LIMIT)));}catch(e){}
+}
+function removeRankingEntryById(id){
+  if(!id) return;
+  saveRankingEntries(loadRankingEntries().filter(r=>r.id!==id));
 }
 function sortRankingEntries(entries){
   return entries.sort((a,b)=>(b.score-a.score)||(b.wave-a.wave)||(b.updatedAt-a.updatedAt));
@@ -896,6 +894,27 @@ function setGameUserName(){
   upsertRankingEntry(true);
   addFloat(W/2,286,`${name} に変更`,HOYO_UI.jade,11);
   playSfx('select');
+}
+function resetProgressForGoogleLogin(profile){
+  const keepSettings={...DEFAULT_SETTINGS,...(meta.settings||{})};
+  meta=freshMeta(keepSettings);
+  normalizeSettings();
+  normalizeMounts();
+  normalizeHighScore();
+  storeTab='ship';
+  storePages={ship:0,core:0,part:0,drone:0};
+  warehouseTab='ship';
+  codexTab='special';
+  codexPage=0;
+  clearPendingStorePurchase();
+  invalidateLoadoutCache();
+  const fresh=JSON.stringify(meta);
+  try{
+    localStorage.setItem(SAVE_KEY,fresh);
+    localStorage.setItem(googleAccountSaveKey(profile.sub),fresh);
+  }catch(e){}
+  removeRankingEntryById('local:guest');
+  removeRankingEntryById(`google:${profile.sub}`);
 }
 function loadMeta(){
   let shouldSave=false;
