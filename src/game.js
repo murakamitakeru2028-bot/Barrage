@@ -27,24 +27,24 @@ const MAX_PARTICLES = 72;
 const MAX_EP_ORBS   = 28;
 const MAX_ARROWS    = 110;
 const MAX_FLOAT_TEXTS = 22;
-const MAX_ACTIVE_ENEMIES = 58;
+const MAX_ACTIVE_ENEMIES = 66;
 const GRACE_FRAMES  = 120;
 const FPS           = 60;
 const WAVE_DURATION_FRAMES = FPS * 10;
 const ENEMY_HP_BASE = 58;
-const ENEMY_HP_LINEAR = 32;
-const ENEMY_HP_QUAD = 2.8;
-const ENEMY_HP_EXP = 1.052;
-const ENEMY_HP_LATE_START = 18;
-const ENEMY_HP_LATE_EXP = 1.045;
-const ENEMY_HP_BRUTAL_START = 55;
-const ENEMY_HP_BRUTAL_EXP = 1.075;
-const ENEMY_CONTACT_EXP = 1.012;
+const ENEMY_HP_LINEAR = 42;
+const ENEMY_HP_QUAD = 4.2;
+const ENEMY_HP_EXP = 1.066;
+const ENEMY_HP_LATE_START = 12;
+const ENEMY_HP_LATE_EXP = 1.058;
+const ENEMY_HP_BRUTAL_START = 40;
+const ENEMY_HP_BRUTAL_EXP = 1.09;
+const ENEMY_CONTACT_EXP = 1.018;
 const BOSS_WAVE_INTERVAL = 10;
 const BOSS_HP_MULT = 18;
 const BOSS_CONTACT_MULT = 4;
-const BOSS_BULLET_BASE_DAMAGE = 34;
-const BOSS_BULLET_DAMAGE_STEP = 9;
+const BOSS_BULLET_BASE_DAMAGE = 36;
+const BOSS_BULLET_DAMAGE_STEP = 11;
 const MAX_ENEMY_BULLETS = 82;
 const DAMAGE_XP_RATE = 0.032;
 const MULTISHOT_DAMAGE_EXP = 0.34;
@@ -1874,7 +1874,7 @@ function drawArrows(){
   }
 }
 function bossBulletDamage(tier){
-  return Math.ceil((BOSS_BULLET_BASE_DAMAGE+tier*BOSS_BULLET_DAMAGE_STEP)*Math.pow(1.018,wave-1));
+  return Math.ceil((BOSS_BULLET_BASE_DAMAGE+tier*BOSS_BULLET_DAMAGE_STEP)*Math.pow(1.026,wave-1));
 }
 const BOSS_ARCHETYPES=[
   {id:'duelist',name:'SCARLET DUELIST',color:HOYO_UI.rose,shape:'hex',rgb:[255,59,98],hp:1.00,size:0,targetY:108,shot:1.00,move:'weave'},
@@ -1996,7 +1996,7 @@ function updateBoss(boss,slow=1){
   boss.shotTimer=(boss.shotTimer??60)-slow;
   if(boss.shotTimer<=0){
     fireBossPattern(boss);
-    boss.shotTimer=Math.max(28,(78-boss.tier*3)*(boss.shotRate||1));
+    boss.shotTimer=Math.max(20,(68-boss.tier*4)*(boss.shotRate||1));
   }
 }
 function updateEnemyBullets(){
@@ -2072,7 +2072,7 @@ function spawnBoss(){
   const type=bossArchetypeForWave(wave);
   const size=Math.min(72,42+tier*3+(type.size||0));
   const hpCurve=enemyHpCurve(wB);
-  const baseHp=Math.floor(hpCurve*(BOSS_HP_MULT+tier*2.5)*(type.hp||1));
+  const baseHp=Math.floor(hpCurve*(BOSS_HP_MULT+tier*3.5)*(type.hp||1));
   const x=W/2, y=-size*2;
   const scoreValue=Math.max(5000,Math.floor(baseHp*1.65+wave*900));
   const xpValue=Math.max(120,Math.floor(80+wave*18+Math.sqrt(baseHp)*2.8));
@@ -2108,17 +2108,17 @@ function spawnEnemy(){
   const scoreValue=Math.max(8,Math.floor((baseHp*.90+wave*18)*rewardMult*smallRewardScale));
   const orbValue=Math.max(1,Math.floor(1+Math.sqrt(baseHp)*rewardMult*smallRewardScale/5.6));
   const contactDamage=Math.ceil((hasCore?28:10)*(1+wB*.055)*Math.pow(ENEMY_CONTACT_EXP,wB));
-  const spd=(1.05+Math.random()*.6+wB*.11)*p.spdMult;
+  const spd=(1.08+Math.random()*.62+wB*.14)*p.spdMult;
   const x=size+10+Math.random()*(W-(size+10)*2);
   const rot=Math.random()*Math.PI*2;
   const rotSpd=(Math.random()<.5?-1:1)*(.006+Math.random()*.012);
   enemies.push({x,y:-size*2,vx:(Math.random()-.5)*.6,vy:spd,hp:baseHp,maxHp:baseHp,xpValue,scoreValue,orbValue,contactDamage,hasCore,shape,size,r:p.r,g:p.g,b:p.b,flash:0,rot,rotSpd,dead:false});
 }
 function enemySpawnInterval(){
-  return Math.max(42,132-wave*7);
+  return Math.max(34,118-wave*8);
 }
 function enemySpawnPackSize(){
-  return Math.min(9,1+Math.floor(wave/4)+Math.floor(wave/18));
+  return Math.min(11,1+Math.floor(wave/3)+Math.floor(wave/12));
 }
 function spawnEnemyPack(){
   const room=Math.max(0,MAX_ACTIVE_ENEMIES-enemies.length);
