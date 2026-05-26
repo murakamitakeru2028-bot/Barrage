@@ -95,7 +95,7 @@ const HOYO_UI = {
 };
 const UI_COPY = {
   nav:{
-    store:['ストア','マシン・コア・パーツ'],
+    store:['ストア','マシン・コア・ドローン'],
     warehouse:['倉庫','ロードアウト変更'],
     upgrade:['アップグレード','ベースステータス'],
     codex:['アーカイブ','アビリティデータ'],
@@ -265,6 +265,12 @@ const PART_DEFS = [
   { id:'zeroPointCore', name:'C-ゼロポイント炉', icon:'ZP', type:'coreBoost', cost:2500000, color:'#1ed6ff', mult:{hp:300,defense:250,attack:450,fireRate:120} },
   { id:'eventHorizonCore', name:'C-事象境界コア', icon:'EH', type:'coreBoost', cost:750000000, color:'#eef7ff', mult:{hp:120000,defense:90000,attack:180000,fireRate:20000} },
 ];
+const DRONE_DEFS = [
+  { id:'spark', name:'D-01 スパーク', icon:'SP', role:'近距離支援機', cost:450, color:'#66ccff', mult:{count:1,damage:1.00} },
+  { id:'lumen', name:'D-04 ルーメン', icon:'LM', role:'高出力支援機', cost:4200, color:'#9cff5e', mult:{count:1,damage:1.35} },
+  { id:'vector', name:'D-11 ベクター', icon:'VC', role:'追尾支援機', cost:36000, color:'#b8a7ff', mult:{count:1,damage:1.85} },
+  { id:'aurora', name:'D-99 オーロラ', icon:'AU', role:'最上位支援機', cost:420000, color:'#eef7ff', mult:{count:2,damage:2.65} },
+];
 const PART_EFFECTS = {
   cannon:'3射ごとに超高威力ランス弾',
   barrel:'5射ごとにサイドニードル',
@@ -292,6 +298,7 @@ const PART_EFFECTS = {
 const SHIP_BY_ID = Object.fromEntries(SHIP_DEFS.map(d=>[d.id,d]));
 const CORE_BY_ID = Object.fromEntries(CORE_DEFS.map(d=>[d.id,d]));
 const PART_BY_ID = Object.fromEntries(PART_DEFS.map(d=>[d.id,d]));
+const DRONE_BY_ID = Object.fromEntries(DRONE_DEFS.map(d=>[d.id,d]));
 const BASIC_STAT_BY_ID = Object.fromEntries(BASIC_STAT_DEFS.map(d=>[d.id,d]));
 const LOADOUT_STAT_IDS = ['hp','defense','attack','fireRate'];
 const TAU = Math.PI * 2;
@@ -386,7 +393,9 @@ function freshMeta(settings={...DEFAULT_SETTINGS}){
     ownedShips:{coreOnly:true},
     ownedCores:{basic:true},
     ownedParts:{},
+    ownedDrones:{},
     coreLevels:{basic:0},
+    droneLevels:{},
     mountedParts:{},
     grants:{[DEMO_GRANT_KEY]:true},
     highScore:{score:0,wave:1},
@@ -397,8 +406,8 @@ function freshMeta(settings={...DEFAULT_SETTINGS}){
 }
 let meta = freshMeta();
 let homeState = 'home'; // 'home' | 'store' | 'warehouse' | 'upgrade' | 'settings' | 'codex'
-let storeTab = 'ship';   // 'ship' | 'core' | 'part'
-let storePages = { ship:0, core:0, part:0 };
+let storeTab = 'ship';   // 'ship' | 'core' | 'part' | 'drone'
+let storePages = { ship:0, core:0, part:0, drone:0 };
 let warehouseTab = 'ship'; // 'ship' | 'turret' | 'armor' | 'drone' | 'coreBoost'
 let codexTab = 'special';
 let codexPage = 0;
@@ -507,8 +516,21 @@ function fireRateReadout(){
   const boost=fireCompressionBoost();
   return boost>1.01 ? `${shots}/s x${boost.toFixed(boost>=10?0:1)}` : `${shots}/s`;
 }
+const ownedDroneDefs = () => DRONE_DEFS.filter(d=>meta.ownedDrones?.[d.id]);
+const purchasedDroneCount = () => ownedDroneDefs().reduce((sum,d)=>sum+(d.mult.count||1),0);
+const droneLevel = id => Math.max(0,Number(meta.droneLevels?.[id])||0);
+const droneUpgradeCost = id => {
+  const d=DRONE_BY_ID[id];
+  if(!d) return Infinity;
+  return Math.floor(Math.max(120,d.cost*.55)*Math.pow(1.55,droneLevel(id)));
+};
+function purchasedDroneDamageMult(){
+  const owned=ownedDroneDefs();
+  if(owned.length===0) return 1;
+  return owned.reduce((mult,d)=>mult + Math.max(0,(d.mult.damage||1)-1) + droneLevel(d.id)*0.18,1);
+}
 const passiveShieldBonus = () => (activeShipDef().id==='guardian'?3:0) + (hasMountedPart('plate')?2:0) + (hasMountedPart('aegis')?3:0);
-const supportDroneCount = () => Math.min(10, specialLevels.supportDrone + (activeShipDef().id==='carrier'?3:0) + (hasMountedPart('droneBay')?2:0) + (hasMountedPart('swarmLink')?3:0));
+const supportDroneCount = () => Math.min(10, specialLevels.supportDrone + purchasedDroneCount() + (activeShipDef().id==='carrier'?3:0) + (hasMountedPart('droneBay')?2:0) + (hasMountedPart('swarmLink')?3:0));
 const interceptorCount = () => Math.min(10, specialLevels.interceptor + (hasMountedPart('bitLink')?2:0));
 const shieldMax = () => (specialLevels.energyShield>0 ? 1+Math.floor((specialLevels.energyShield-1)/3) : 0) + passiveShieldBonus();
 const stasisRadius = () => 72 + specialLevels.stasisAura*10;
@@ -625,7 +647,9 @@ function loadMeta(){
         meta.ownedShips={coreOnly:true,...(saved.ownedShips||{})};
         meta.ownedCores={basic:true,...(saved.ownedCores||{})};
         meta.ownedParts={...(saved.ownedParts||{})};
+        meta.ownedDrones={...(saved.ownedDrones||{})};
         meta.coreLevels={basic:0,...(saved.coreLevels||{})};
+        meta.droneLevels={...(saved.droneLevels||{})};
         meta.mountedParts={...(saved.mountedParts||{})};
         meta.grants={...(saved.grants||{})};
         meta.highScore={...(saved.highScore||{})};
@@ -665,7 +689,7 @@ function resetSaveData(){
   normalizeSettings();
   normalizeMounts();
   storeTab='ship';
-  storePages={ship:0,core:0,part:0};
+  storePages={ship:0,core:0,part:0,drone:0};
   warehouseTab='ship';
   codexTab='special';
   codexPage=0;
@@ -1041,6 +1065,85 @@ function requestPartPurchase(id){
     desc:'空きスロットがあれば自動セットされます。'
   });
 }
+function buyDrone(id){
+  const drone=DRONE_BY_ID[id];
+  if(!drone||meta.ownedDrones[id]) return;
+  if(meta.tokens<drone.cost){
+    clearPendingStorePurchase();
+    addFloat(W/2,156,`トークン ${drone.cost} 必要`,'#b8a7ff',11);
+    shake(3);
+    return;
+  }
+  meta.tokens-=drone.cost;
+  meta.ownedDrones[id]=true;
+  meta.droneLevels[id]=0;
+  clearPendingStorePurchase();
+  saveMeta();
+  burst(W/2,170,drone.color,16);
+  addFloat(W/2,156,`${drone.icon} ${drone.name} 起動`,drone.color,11);
+}
+function requestDronePurchase(id){
+  const drone=DRONE_BY_ID[id];
+  if(!drone) return;
+  if(meta.ownedDrones[id]){
+    requestDroneUpgrade(id);
+    return;
+  }
+  if(meta.tokens<drone.cost){
+    clearPendingStorePurchase();
+    addFloat(W/2,156,`トークン ${drone.cost} 必要`,'#b8a7ff',11);
+    shake(3);
+    return;
+  }
+  setPendingStorePurchase({
+    kind:'drone',
+    id,
+    tab:'drone',
+    icon:drone.icon,
+    color:drone.color,
+    cost:drone.cost,
+    title:`${drone.name} を購入`,
+    desc:'戦闘中に支援ドローンとして自動射撃します。'
+  });
+}
+function upgradeDrone(id){
+  const drone=DRONE_BY_ID[id];
+  if(!drone||!meta.ownedDrones[id]) return;
+  const cost=droneUpgradeCost(id);
+  if(meta.tokens<cost){
+    clearPendingStorePurchase();
+    addFloat(W/2,156,`トークン ${cost} 必要`,'#b8a7ff',11);
+    shake(3);
+    return;
+  }
+  meta.tokens-=cost;
+  meta.droneLevels[id]=droneLevel(id)+1;
+  clearPendingStorePurchase();
+  saveMeta();
+  burst(W/2,170,drone.color,16);
+  addFloat(W/2,156,`${drone.icon} Lv.${meta.droneLevels[id]}`,drone.color,11);
+}
+function requestDroneUpgrade(id){
+  const drone=DRONE_BY_ID[id];
+  if(!drone||!meta.ownedDrones[id]) return;
+  const cost=droneUpgradeCost(id);
+  if(meta.tokens<cost){
+    clearPendingStorePurchase();
+    addFloat(W/2,156,`トークン ${cost} 必要`,'#b8a7ff',11);
+    shake(3);
+    return;
+  }
+  setPendingStorePurchase({
+    kind:'droneUpgrade',
+    id,
+    tab:'drone',
+    icon:drone.icon,
+    color:drone.color,
+    cost,
+    title:`${drone.name} を強化`,
+    desc:`Lv.${droneLevel(id)} > Lv.${droneLevel(id)+1} / 火力 +18%`
+  });
+}
 function confirmStorePurchase(){
   const action=pendingStorePurchase;
   if(!action) return;
@@ -1048,6 +1151,8 @@ function confirmStorePurchase(){
   else if(action.kind==='core') buyOrMountCore(action.id);
   else if(action.kind==='coreUpgrade') upgradeMountedCore();
   else if(action.kind==='part') buyPart(action.id);
+  else if(action.kind==='drone') buyDrone(action.id);
+  else if(action.kind==='droneUpgrade') upgradeDrone(action.id);
 }
 function toggleMountPart(id){
   const part=PART_BY_ID[id];
@@ -1468,10 +1573,11 @@ function updateSupportUnits(){
     const n=drones;
     if(droneTimer>=Math.max(10,34-n*2)){
       droneTimer=0;
+      const droneScale=.42*purchasedDroneDamageMult();
       for(let i=0;i<n;i++){
         const a=frame*.028+i*TAU/n;
         const x=player.x+Math.cos(a)*32, y=player.y+Math.sin(a)*32;
-        fireAtTarget(x,y,nearestEnemy(x,y,null,260),.42,'drone');
+        fireAtTarget(x,y,nearestEnemy(x,y,null,260),droneScale,'drone');
       }
     }
   }
@@ -3824,7 +3930,7 @@ const HOME_NAV_BTNS=[
 ];
 const HOME_NAV={x:24,y:432,w:162,h:54,gapX:18,gapY:10};
 const HOME_NAV_VIEW=[
-  {id:'store',label:'ストア',sub:'パーツ / コア',color:'#00f0ff'},
+  {id:'store',label:'ストア',sub:'機体 / コア / ドローン',color:'#00f0ff'},
   {id:'warehouse',label:'倉庫',sub:'ロードアウト',color:'#b8a7ff'},
   {id:'upgrade',label:'アップグレード',sub:'ベースステータス',color:'#cc00ff'},
   {id:'codex',label:'アーカイブ',sub:'アビリティデータ',color:'#88aaff'},
@@ -3997,7 +4103,7 @@ function drawTabRow(tabs,labels,current,y,h=28){
   for(let i=0;i<tabs.length;i++){
     const tx=10+i*tabW, active=current===tabs[i];
     const color=active?HOYO_UI.gold:HOYO_UI.blue;
-    const label=({ship:'機体',core:'コア',part:'パーツ',special:'能力',basic:'基礎'}[tabs[i]]) || labels[tabs[i]] || tabs[i].toUpperCase();
+    const label=({ship:'機体',core:'コア',part:'パーツ',drone:'ドローン',special:'能力',basic:'基礎'}[tabs[i]]) || labels[tabs[i]] || tabs[i].toUpperCase();
     ctx.save();
     cutPanel(tx,y,tabW-4,h,9);
     ctx.fillStyle=active?color:'rgba(238,247,255,.060)';
@@ -4072,11 +4178,14 @@ function drawCraftInCard(x,y,w,h,shipId,coreId){
 }
 
 // ── ストア画面 ──
-const STORE_PAGE_SIZE={ship:8,core:6,part:8};
+const STORE_TABS=['ship','core','part','drone'];
+const STORE_LABELS={ship:'SHIP',core:'CORE',part:'PART',drone:'DRONE'};
+const STORE_PAGE_SIZE={ship:8,core:6,part:8,drone:8};
 const STORE_PAGER={y:522,w:78,h:20,gap:18};
 function storeDefs(tab=storeTab){
   if(tab==='ship') return SHIP_DEFS;
   if(tab==='core') return CORE_DEFS;
+  if(tab==='drone') return DRONE_DEFS;
   return PART_DEFS;
 }
 function storePageCount(tab=storeTab){
@@ -4197,7 +4306,7 @@ function drawStorePurchaseConfirmPanel(){
   ctx.fillStyle=HOYO_UI.muted;
   ctx.fillText('キャンセル',cancel.x+cancel.w/2,cancel.y+cancel.h/2+1);
   ctx.fillStyle=meta.tokens>=action.cost?HOYO_UI.gold:HOYO_UI.faint;
-  ctx.fillText(action.kind==='coreUpgrade'?'強化する':'購入する',buy.x+buy.w/2,buy.y+buy.h/2+1);
+  ctx.fillText(action.kind.endsWith('Upgrade')?'強化する':'購入する',buy.x+buy.w/2,buy.y+buy.h/2+1);
   ctx.restore();
 }
 function drawStoreCoreCard(i,core,startY){
@@ -4243,11 +4352,30 @@ function drawStorePartCard(i,part,startY){
   ctx.textAlign='right';ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
   ctx.fillText(owned?'倉庫':partSlotStatus(part),cx+cw-8,cy+38);
 }
+function drawStoreDroneCard(i,drone,startY){
+  const cw=(W-36)/2,ch=86,gap=8,col=i%2,row=Math.floor(i/2);
+  const cx=14+col*(cw+8),cy=startY+row*(ch+gap);
+  const owned=!!meta.ownedDrones[drone.id], lv=droneLevel(drone.id), cost=owned?droneUpgradeCost(drone.id):drone.cost;
+  drawCutPanel(cx,cy,cw,ch,drone.color,owned);
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  drawStatusTag(cx+8,cy+8,32,22,drone.icon,drone.color,owned);
+  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=h2r(drone.color,.9);
+  fillFitText(`${drone.role} / ${drone.mult.count||1}機`,cx+46,cy+17,cw-92);
+  ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
+  fillFitText(drone.name,cx+10,cy+39,cw-20);
+  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
+  fillFitText(`火力 x${(drone.mult.damage+lv*.18).toFixed(2)} / 全ドローン火力 ${fmtMult(purchasedDroneDamageMult())}`,cx+10,cy+57,cw-20);
+  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=drone.color;
+  ctx.fillText(owned?`Lv.${lv}  次 +18%`:'購入で自動射撃',cx+10,cy+72);
+  if(isPendingStorePurchase(owned?'droneUpgrade':'drone',drone.id)) drawStatusTag(cx+cw-70,cy+7,60,17,'確認中',HOYO_UI.rose,true);
+  else if(owned) drawTokenAmount(cx+cw-8,cy+16,cost,'right',8);
+  else drawTokenAmount(cx+cw-8,cy+16,cost,'right',8);
+}
 function drawStoreScreen(){
   drawBg();ctx.save();
   drawSubBackdrop(.78);
   drawSubHeader('ストア');
-  drawTabRow(['ship','core','part'],{ship:'SHIP',core:'CORE',part:'PART'},storeTab,62);
+  drawTabRow(STORE_TABS,STORE_LABELS,storeTab,62);
   const cy=102;
   if(storeTab==='ship'){
     const items=visibleStoreDefs('ship');
@@ -4264,9 +4392,21 @@ function drawStoreScreen(){
     const items=visibleStoreDefs('core');
     for(let i=0;i<items.length;i++) drawStoreCoreCard(i,items[i],cy+58);
   }else{
+    if(storeTab==='drone'){
+      const ownedCount=purchasedDroneCount(), power=purchasedDroneDamageMult();
+      drawCutPanel(14,cy,W-28,56,HOYO_UI.blue,ownedCount>0);
+      ctx.textAlign='left';ctx.textBaseline='middle';
+      ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.blue;
+      ctx.fillText(`支援ドローン ${ownedCount}機 / 火力 ${fmtMult(power)}`,26,cy+18);
+      ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
+      ctx.fillText('購入したドローンはバトル中に自動射撃します。',26,cy+38);
+      const items=visibleStoreDefs('drone');
+      for(let i=0;i<items.length;i++) drawStoreDroneCard(i,items[i],cy+66);
+    }else{
     drawLoadoutPanel(14,cy,W-28,72);
     const items=visibleStoreDefs('part');
     for(let i=0;i<items.length;i++) drawStorePartCard(i,items[i],cy+74);
+    }
   }
   drawStorePager(storeTab);
   drawStorePurchaseConfirmPanel();
@@ -4285,7 +4425,7 @@ function hitTwoColCard(cx,cy,count,startY,ch,gap=8){
 }
 function handleStoreClick(cx,cy){
   if(hitBackBtn(cx,cy)){clearPendingStorePurchase();homeState='home';return;}
-  const tab=hitTabRow(cx,cy,['ship','core','part'],62);
+  const tab=hitTabRow(cx,cy,STORE_TABS,62);
   if(tab){clearPendingStorePurchase();storeTab=tab;normalizeStorePage(storeTab);return;}
   if(handleStorePager(cx,cy,storeTab)) return;
   const cy0=102;
@@ -4316,6 +4456,10 @@ function handleStoreClick(cx,cy){
     const items=visibleStoreDefs('core');
     const idx=hitTwoColCard(cx,cy,items.length,cy0+58,92,8);
     if(idx>=0) requestCorePurchase(items[idx].id);
+  }else if(storeTab==='drone'){
+    const items=visibleStoreDefs('drone');
+    const idx=hitTwoColCard(cx,cy,items.length,cy0+66,86,8);
+    if(idx>=0) requestDronePurchase(items[idx].id);
   }else{
     const items=visibleStoreDefs('part');
     const idx=hitTwoColCard(cx,cy,items.length,cy0+74,80,8);
