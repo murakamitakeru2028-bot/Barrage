@@ -10,12 +10,12 @@ const REGEN_STEP    = 0.5;
 const SHIELD_DELAY  = 300;
 const MAX_SPECIAL_TYPES = 5;
 const REROLL_COST  = 20;
-const TOKEN_SCORE_UNIT = 10;
+const TOKEN_SCORE_UNIT = 30;
 const DEMO_START_TOKENS = 1000;
 const DEMO_GRANT_KEY = 'demo-start-tokens-1000-v1';
-const RUN_TOKEN_COIN_MULT = 5;
-const RUN_TOKEN_WAVE_BONUS = 80;
-const RUN_TOKEN_TIME_BONUS = 4;
+const RUN_TOKEN_COIN_MULT = 2;
+const RUN_TOKEN_WAVE_BONUS = 25;
+const RUN_TOKEN_TIME_BONUS = 1;
 const BODY_STAT_GROWTH = 1.05;
 const MAX_PARTICLES = 120;
 const MAX_EP_ORBS   = 42;
@@ -175,40 +175,55 @@ const SHIP_DEFS = [
   { id:'coreOnly', name:'NU-00 ネイキッド', icon:'C0', role:'裸核フレーム', cost:0, color:'#1ed6ff', slots:{turret:0,armor:0,drone:0,coreBoost:0}, mult:{hp:.85,defense:.9,attack:1,fireRate:1.05} },
   { id:'standard', name:'AF-01 アーク', icon:'AF', role:'汎用フレーム', cost:120, color:'#1ed6ff', slots:{turret:1,armor:1,drone:1,coreBoost:1}, mult:{hp:2.0,defense:1.55,attack:2.2,fireRate:1.45} },
   { id:'striker',  name:'VX-03 レイザー', icon:'VX', role:'強襲砲撃型', cost:700, color:'#ff3b62', slots:{turret:2,armor:0,drone:1,coreBoost:1}, mult:{hp:2.7,defense:1.85,attack:12.0,fireRate:2.4} },
+  { id:'sniper',   name:'SR-05 ロングレイ', icon:'SR', role:'長射程狙撃型', cost:1200, color:'#eef7ff', slots:{turret:2,armor:1,drone:0,coreBoost:1}, mult:{hp:3.4,defense:2.0,attack:28.0,fireRate:1.25} },
   { id:'guardian', name:'BG-12 バルワーク', icon:'BG', role:'重装防壁型', cost:1800, color:'#82d7ff', slots:{turret:1,armor:2,drone:0,coreBoost:1}, mult:{hp:9.0,defense:8.0,attack:8.0,fireRate:1.7} },
+  { id:'mirage',   name:'EX-09 ミラージュ', icon:'EX', role:'高速回避型', cost:2800, color:'#36f39b', slots:{turret:1,armor:0,drone:2,coreBoost:2}, mult:{hp:5.0,defense:3.5,attack:30.0,fireRate:4.2} },
   { id:'carrier',  name:'DR-07 ハイヴ', icon:'DR', role:'ドローン母機', cost:5000, color:'#b8a7ff', slots:{turret:0,armor:1,drone:2,coreBoost:1}, mult:{hp:14.0,defense:8.0,attack:100.0,fireRate:3.2} },
 ];
 const CORE_DEFS = [
   { id:'basic',   name:'C-0 シード', icon:'C0', role:'標準コア', cost:0,  color:'#1ed6ff', mult:{hp:1,defense:1,attack:1,fireRate:1} },
   { id:'assault', name:'C-A ブレイズ', icon:'CA', role:'火力コア', cost:350,  color:'#ff3b62', mult:{hp:1.05,defense:1.0,attack:4.0,fireRate:1.35} },
   { id:'reactor', name:'C-R パルス', icon:'CR', role:'高速反応コア', cost:750, color:'#b8a7ff', mult:{hp:1.15,defense:1.1,attack:1.8,fireRate:4.0} },
+  { id:'sentinel', name:'C-S センチネル', icon:'CS', role:'防衛コア', cost:1200, color:'#82d7ff', mult:{hp:2.8,defense:4.2,attack:1.4,fireRate:1.25} },
+  { id:'nova',     name:'C-N ノヴァ', icon:'CN', role:'爆発火力コア', cost:2200, color:'#ff7a3d', mult:{hp:1.4,defense:1.2,attack:8.0,fireRate:1.7} },
+  { id:'quantum',  name:'C-Q クオンタム', icon:'CQ', role:'高機動コア', cost:3200, color:'#36f39b', mult:{hp:1.8,defense:1.5,attack:4.5,fireRate:5.5} },
 ];
 const SHIP_EFFECTS = {
   coreOnly:'開始SP +1 / 当たり判定小',
   standard:'WAVE更新時に耐久を10%回復',
   striker:'4射ごとに高威力ランス弾',
+  sniper:'射程 +40% / 6射ごとにレール弾',
   guardian:'シールド +3 / 重装甲',
+  mirage:'会心率 +10% / 当たり判定小',
   carrier:'支援ドローン +3 / 最終火力特化'
 };
 const PART_DEFS = [
   { id:'cannon',   name:'T-ランス砲台', icon:'AT', type:'turret',    cost:160, color:'#ff3b62', mult:{attack:3.2} },
   { id:'barrel',   name:'T-クイック砲身', icon:'FR', type:'turret',    cost:180, color:'#1ed6ff', mult:{fireRate:2.6} },
+  { id:'railgun',  name:'T-レールガン', icon:'RG', type:'turret',    cost:760, color:'#eef7ff', mult:{attack:6.0,fireRate:.85} },
   { id:'plate',    name:'A-ミラー装甲', icon:'AR', type:'armor',     cost:220, color:'#82d7ff', mult:{defense:2.8} },
   { id:'frame',    name:'A-バイタル骨格', icon:'HP', type:'armor',     cost:260, color:'#ff6b93', mult:{hp:2.5} },
+  { id:'aegis',    name:'A-イージス装甲', icon:'AG', type:'armor',     cost:840, color:'#82d7ff', mult:{hp:1.8,defense:4.5} },
   { id:'droneBay', name:'D-ドローンベイ', icon:'DR', type:'drone',   cost:420, color:'#9cff5e', mult:{attack:1.8,fireRate:1.8} },
   { id:'bitLink',  name:'D-ビットリンク', icon:'BT', type:'drone',     cost:520, color:'#eef7ff', mult:{fireRate:2.2} },
+  { id:'swarmLink', name:'D-スウォームリンク', icon:'SW', type:'drone', cost:980, color:'#36f39b', mult:{attack:2.4,fireRate:2.4} },
   { id:'coreLink', name:'C-コアリンク', icon:'LK', type:'coreBoost', cost:900, color:'#b96cff', mult:{hp:1.65,defense:1.65,attack:1.65,fireRate:1.65} },
   { id:'overclock', name:'C-オーバークロック', icon:'OC', type:'coreBoost', cost:1200, color:'#b8a7ff', mult:{attack:2.4,fireRate:2.4} },
+  { id:'rangeExt', name:'C-レンジエクステンダ', icon:'RE', type:'coreBoost', cost:1400, color:'#1ed6ff', mult:{attack:1.4,fireRate:1.4} },
 ];
 const PART_EFFECTS = {
   cannon:'3射ごとに超高威力ランス弾',
   barrel:'5射ごとにサイドニードル',
+  railgun:'6射ごとに貫通レール弾',
   plate:'シールド +2',
   frame:'自動修復 +3/s',
+  aegis:'シールド +3',
   droneBay:'支援ドローン +2',
   bitLink:'迎撃ビット +2',
+  swarmLink:'支援ドローン +3',
   coreLink:'経験値 +50%',
-  overclock:'会心率 +15%'
+  overclock:'会心率 +15%',
+  rangeExt:'射程 +35%'
 };
 const SHIP_BY_ID = Object.fromEntries(SHIP_DEFS.map(d=>[d.id,d]));
 const CORE_BY_ID = Object.fromEntries(CORE_DEFS.map(d=>[d.id,d]));
@@ -222,12 +237,16 @@ const SHORT_STAT_LABELS={hp:'HP',defense:'AR',attack:'AT',fireRate:'FR'};
 const PART_INFO={
   cannon:{tier:'RARE',desc:'単発火力を強化。'},
   barrel:{tier:'RARE',desc:'射撃サイクルを短縮。'},
+  railgun:{tier:'EPIC',desc:'低速だが重い直線火力。'},
   plate:{tier:'RARE',desc:'被ダメージを軽減。'},
   frame:{tier:'RARE',desc:'最大耐久を上昇。'},
+  aegis:{tier:'EPIC',desc:'防壁と装甲を大幅強化。'},
   droneBay:{tier:'EPIC',desc:'攻撃と連射を補助。'},
   bitLink:{tier:'EPIC',desc:'高連射を安定化。'},
+  swarmLink:{tier:'EPIC',desc:'支援ユニット数を増やす。'},
   coreLink:{tier:'EPIC',desc:'全システムを底上げ。'},
   overclock:{tier:'EPIC',desc:'攻撃と連射を過励起。'},
+  rangeExt:{tier:'EPIC',desc:'射程と命中余裕を伸ばす。'},
 };
 const SLOT_ORDER=['turret','armor','drone','coreBoost'];
 const SPECIAL_DEFS = [
@@ -372,11 +391,11 @@ const adrenalinePower = () => specialLevels.adrenaline * .25 * (1-hpRatio());
 const synergyMult = () => 1 + Math.max(0, statMult('bulletSpeed')-1) * specialLevels.statSynergy * .35;
 const fireRate  = () => Math.max(1, 22 / (statMult('fireRate') * bodyMult('fireRate')));
 const bulletSpd = () => 9 * statMult('bulletSpeed');
-const arrowRange = () => BASE_ARROW_RANGE * statMult('range');
+const arrowRange = () => BASE_ARROW_RANGE * statMult('range') * (activeShipDef().id==='sniper' ? 1.40 : 1) * (hasMountedPart('rangeExt') ? 1.35 : 1);
 const damage    = () => (10 + wave*2) * statMult('damage') * bodyMult('attack') * (1 + specialLevels.powerShot*0.30) * (1+adrenalinePower()) * synergyMult();
 const xpMult    = () => statMult('xpMult') * (hasMountedPart('coreLink') ? 1.50 : 1);
 const moveSpeed = () => 3.7 * statMult('speed');
-const critChance  = () => Math.min(1, effectiveStatLevel('critChance') * CRIT_STEP + (hasMountedPart('overclock') ? .15 : 0));
+const critChance  = () => Math.min(1, effectiveStatLevel('critChance') * CRIT_STEP + (hasMountedPart('overclock') ? .15 : 0) + (activeShipDef().id==='mirage' ? .10 : 0));
 const doubleCritChance = () => Math.min(1, Math.max(0, effectiveStatLevel('critChance')-20) * CRIT_STEP);
 const critDamage  = () => CRIT_BASE_DAMAGE * statMult('critDamage');
 const regenPerSec = () => effectiveStatLevel('regen') * REGEN_STEP + (hasMountedPart('frame') ? 3 : 0);
@@ -391,14 +410,14 @@ const homingStr = () => specialLevels.homing * 0.13;
 const pierce    = () => specialLevels.piercing;
 const multiShotFireDelay = () => 1 + specialLevels.multiShot * MULTISHOT_FIRE_DELAY_STEP;
 const fireInterval = () => Math.max(1, fireRate() * multiShotFireDelay() / ((1+adrenalinePower()) * gatlingFireMult()));
-const passiveShieldBonus = () => (activeShipDef().id==='guardian'?3:0) + (hasMountedPart('plate')?2:0);
-const supportDroneCount = () => Math.min(10, specialLevels.supportDrone + (activeShipDef().id==='carrier'?3:0) + (hasMountedPart('droneBay')?2:0));
+const passiveShieldBonus = () => (activeShipDef().id==='guardian'?3:0) + (hasMountedPart('plate')?2:0) + (hasMountedPart('aegis')?3:0);
+const supportDroneCount = () => Math.min(10, specialLevels.supportDrone + (activeShipDef().id==='carrier'?3:0) + (hasMountedPart('droneBay')?2:0) + (hasMountedPart('swarmLink')?3:0));
 const interceptorCount = () => Math.min(10, specialLevels.interceptor + (hasMountedPart('bitLink')?2:0));
 const shieldMax = () => (specialLevels.energyShield>0 ? 1+Math.floor((specialLevels.energyShield-1)/3) : 0) + passiveShieldBonus();
 const stasisRadius = () => 72 + specialLevels.stasisAura*10;
 const stasisMult = () => Math.max(.35, 1-specialLevels.stasisAura*.07);
 const incomingDamage = amount => Math.max(1, Math.ceil(amount / bodyMult('defense')));
-const playerHitRadius = () => activeShipDef().id==='coreOnly' ? 9 : 12;
+const playerHitRadius = () => activeShipDef().id==='coreOnly' ? 9 : (activeShipDef().id==='mirage' ? 10 : 12);
 const fmtMult   = v => `x${v>=10 ? v.toFixed(1) : v.toFixed(2)}`;
 const basicGainText = (id, lv=statLevels[id]) => {
   if(id==='regen') return `+${REGEN_STEP.toFixed(1)}/s`;
@@ -1074,8 +1093,12 @@ function drawCraft(x,y,s=1,overrideShipId=null,overrideCoreId=null){
     ctx.lineWidth=2;
     if(ship.id==='striker'){
       poly([[0,-28],[24,18],[7,10],[0,26],[-7,10],[-24,18]]);
+    }else if(ship.id==='sniper'){
+      poly([[0,-34],[12,-10],[25,12],[8,9],[0,30],[-8,9],[-25,12],[-12,-10]]);
     }else if(ship.id==='guardian'){
       poly([[0,-22],[24,-4],[20,22],[0,30],[-20,22],[-24,-4]]);
+    }else if(ship.id==='mirage'){
+      poly([[0,-30],[20,-2],[29,15],[9,8],[0,28],[-9,8],[-29,15],[-20,-2]]);
     }else if(ship.id==='carrier'){
       poly([[0,-24],[28,4],[18,18],[8,12],[0,28],[-8,12],[-18,18],[-28,4]]);
     }else{
@@ -1224,20 +1247,24 @@ function spawnArrow(x,y,angle,opts={}){
   const life=opts.life??240;
   const range=opts.range??(opts.life ? speed*life : arrowRange());
   const sizeScale=opts.sizeScale??1;
-  arrows.push({x,y,prevX:x,prevY:y,vx,vy,speed,pierced:0,pw,ricocheted:0,split:opts.split??false,dist:0,range,life,damageScale:opts.damageScale??1,sizeScale,hitRadius:opts.hitRadius??(4*sizeScale),kind:opts.kind??'main'});
+  arrows.push({x,y,prevX:x,prevY:y,vx,vy,speed,pierced:0,pierceBonus:opts.pierceBonus??0,pw,ricocheted:0,split:opts.split??false,dist:0,range,life,damageScale:opts.damageScale??1,sizeScale,hitRadius:opts.hitRadius??(4*sizeScale),kind:opts.kind??'main'});
 }
 function fireArrows(){
   shotSeq++;
   const n=arrowCnt(), sp=n===1?0:Math.min(.7,.15*n);
   const cx=player.x, cy=player.y-player.size;
+  const shipId=activeShipDef().id;
   const sizeScale=gatlingBulletScale();
   const scale=multiShotDamageScale(n)*gatlingDamageScale();
   for(let i=0;i<n;i++){
     const off=n===1?0:(i/(n-1)-.5)*sp;
     spawnArrow(cx,cy,off,{damageScale:scale,sizeScale,hitRadius:4*sizeScale});
   }
-  if(activeShipDef().id==='striker'&&shotSeq%4===0){
+  if(shipId==='striker'&&shotSeq%4===0){
     spawnArrow(cx,cy,0,{damageScale:scale*3.00,sizeScale:1.45,hitRadius:6.5,kind:'lance'});
+  }
+  if((shipId==='sniper'||hasMountedPart('railgun'))&&shotSeq%6===0){
+    spawnArrow(cx,cy,0,{damageScale:scale*(shipId==='sniper'?4.20:3.40),sizeScale:1.62,hitRadius:7.0,kind:'rail',pierceBonus:3});
   }
   if(hasMountedPart('cannon')&&shotSeq%3===0){
     spawnArrow(cx,cy,0,{damageScale:scale*2.40,sizeScale:1.42,hitRadius:6.2,kind:'lance'});
@@ -1315,6 +1342,8 @@ function drawArrows(){
             ? {core:'#ffffff',main:'#c8d8ff',soft:'200,216,255'}
             : a.kind==='lance'
               ? {core:'#eef7ff',main:'#ff3b62',soft:'255,59,98'}
+              : a.kind==='rail'
+                ? {core:'#ffffff',main:'#eef7ff',soft:'238,247,255'}
               : a.kind==='needle'
                 ? {core:'#eef7ff',main:'#b8a7ff',soft:'184,167,255'}
                 : {core:'#e8fbff',main:'#00f0ff',soft:'0,240,255'};
@@ -2425,7 +2454,7 @@ function killEnemy(e){
   if(idx<0) return;
   e.dead=true;
   const pts=e.scoreValue ?? (Math.floor(e.maxHp*.5)+wave*5);
-  const coinGain=3+Math.floor(wave/2)+Math.floor(Math.sqrt(e.maxHp)/45);
+  const coinGain=1+Math.floor(wave/4)+Math.floor(Math.sqrt(e.maxHp)/120);
   score+=pts;
   coins+=coinGain;
   addXp(e.xpValue ?? Math.floor(10+wave*3+Math.sqrt(e.maxHp)*2.2));
@@ -2506,7 +2535,8 @@ function checkCollisions(){
         else playSfx('hit');
         const bounced=ricochetLv>0&&a.ricocheted<ricochetLv&&redirectArrowToEnemy(a,e);
         if(bounced){rem=true;break;}
-        if(pc===0||a.pierced>=pc){arrows.splice(ai,1);rem=true;}
+        const maxPierce=pc+(a.pierceBonus||0);
+        if(maxPierce===0||a.pierced>=maxPierce){arrows.splice(ai,1);rem=true;}
         else a.pierced++;
       }
     }
@@ -3504,7 +3534,7 @@ function drawStoreScreen(){
     for(let i=0;i<CORE_DEFS.length;i++) drawStoreCoreCard(i,CORE_DEFS[i],cy+58);
   }else{
     drawLoadoutPanel(14,cy,W-28,72);
-    for(let i=0;i<PART_DEFS.length;i++) drawStorePartCard(i,PART_DEFS[i],cy+84);
+    for(let i=0;i<PART_DEFS.length;i++) drawStorePartCard(i,PART_DEFS[i],cy+74);
   }
   ctx.restore();
 }
@@ -3532,7 +3562,7 @@ function handleStoreClick(cx,cy){
     const idx=hitTwoColCard(cx,cy,CORE_DEFS.length,cy0+58,92,8);
     if(idx>=0) buyOrMountCore(CORE_DEFS[idx].id);
   }else{
-    const idx=hitTwoColCard(cx,cy,PART_DEFS.length,cy0+84,80,8);
+    const idx=hitTwoColCard(cx,cy,PART_DEFS.length,cy0+74,80,8);
     if(idx>=0) buyPart(PART_DEFS[idx].id);
   }
 }
