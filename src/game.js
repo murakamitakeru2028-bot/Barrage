@@ -432,6 +432,7 @@ let codexPage = 0;
 let pauseView = 'menu';
 let resetConfirmFrames = 0;
 let pendingStorePurchase = null;
+let pendingInventorySale = null;
 let uiViewOpenedAt = 0, uiStoreTabAt = 0, uiWarehouseTabAt = 0, uiConfirmAt = 0;
 let accountState = { profile:null, ready:false, loading:false, message:'' };
 let googleIdentityReady = false, googleIdentityLoading = false, googleIdentityPromise = null, googleIdentityInitPromise = null;
@@ -499,7 +500,8 @@ const homeUpgradeCost = id => {
   const lv=meta.homeUpgrades[id] || 0;
   return lv===0 ? 30 : Math.floor(60 * Math.pow(1.42, lv-1));
 };
-const coreUpgradeCost = () => Math.floor(80 * Math.pow(1.38, selectedCoreLevel()));
+const coreUpgradeCostAtLevel = lv => Math.floor(80 * Math.pow(1.38, lv));
+const coreUpgradeCost = () => coreUpgradeCostAtLevel(selectedCoreLevel());
 const hpRatio   = () => maxHp>0 ? hp/maxHp : 0;
 const adrenalinePower = () => specialLevels.adrenaline * .25 * (1-hpRatio());
 const synergyMult = () => 1 + Math.max(0, statMult('bulletSpeed')-1) * specialLevels.statSynergy * .35;
@@ -540,10 +542,13 @@ function fireRateReadout(){
 const ownedDroneDefs = () => DRONE_DEFS.filter(d=>meta.ownedDrones?.[d.id]);
 const purchasedDroneCount = () => ownedDroneDefs().reduce((sum,d)=>sum+(d.mult.count||1),0);
 const droneLevel = id => Math.max(0,Number(meta.droneLevels?.[id])||0);
-const droneUpgradeCost = id => {
+const droneUpgradeCostAtLevel = (id,lv) => {
   const d=DRONE_BY_ID[id];
   if(!d) return Infinity;
-  return Math.floor(Math.max(120,d.cost*.55)*Math.pow(1.55,droneLevel(id)));
+  return Math.floor(Math.max(120,d.cost*.55)*Math.pow(1.55,lv));
+};
+const droneUpgradeCost = id => {
+  return droneUpgradeCostAtLevel(id,droneLevel(id));
 };
 function purchasedDroneDamageMult(){
   const owned=ownedDroneDefs();
@@ -1173,7 +1178,11 @@ function partMountedShip(partId){
 function clearPendingStorePurchase(){
   pendingStorePurchase=null;
 }
+function clearPendingInventorySale(){
+  pendingInventorySale=null;
+}
 function setPendingStorePurchase(action){
+  clearPendingInventorySale();
   pendingStorePurchase=action;
   uiConfirmAt=uiNow();
   addFloat(W/2,156,`${action.title}しますか？`,action.color,11);
@@ -1181,6 +1190,100 @@ function setPendingStorePurchase(action){
 }
 function isPendingStorePurchase(kind,id=null){
   return pendingStorePurchase?.kind===kind && (id===null || pendingStorePurchase.id===id);
+}
+function sumCoreUpgradeInvestment(id){
+  const lv=Math.max(0,Number(meta.coreLevels?.[id])||0);
+  let total=0;
+  for(let i=0;i<lv;i++) total+=coreUpgradeCostAtLevel(i);
+  return total;
+}
+function sumDroneUpgradeInvestment(id){
+  const lv=droneLevel(id);
+  let total=0;
+  for(let i=0;i<lv;i++) total+=droneUpgradeCostAtLevel(id,i);
+  return total;
+}
+function inventorySaleDef(kind,id){
+  if(kind==='ship') return SHIP_BY_ID[id];
+  if(kind==='core') return CORE_BY_ID[id];
+  if(kind==='part') return PART_BY_ID[id];
+  if(kind==='drone') return DRONE_BY_ID[id];
+  return null;
+}
+function inventoryInvestment(kind,id){
+  const d=inventorySaleDef(kind,id);
+  if(!d) return 0;
+  if(kind==='core') return (d.cost||0)+sumCoreUpgradeInvestment(id);
+  if(kind==='drone') return (d.cost||0)+sumDroneUpgradeInvestment(id);
+  return d.cost||0;
+}
+function inventorySaleValue(kind,id){
+  return Math.floor(inventoryInvestment(kind,id)*.8);
+}
+function canSellInventory(kind,id){
+  if(kind==='ship') return id!=='coreOnly'&&!!meta.ownedShips[id]&&inventorySaleValue(kind,id)>0;
+  if(kind==='core') return id!=='basic'&&!!meta.ownedCores[id]&&inventorySaleValue(kind,id)>0;
+  if(kind==='part') return !!meta.ownedParts[id]&&inventorySaleValue(kind,id)>0;
+  if(kind==='drone') return !!meta.ownedDrones[id]&&inventorySaleValue(kind,id)>0;
+  return false;
+}
+function setPendingInventorySale(kind,id,source){
+  const d=inventorySaleDef(kind,id);
+  if(!d||!canSellInventory(kind,id)) return false;
+  clearPendingStorePurchase();
+  pendingInventorySale={
+    kind,id,source,
+    icon:d.icon||'SL',
+    color:d.color||HOYO_UI.rose,
+    title:kind==='drone'?d.name:displayName(kind,d),
+    value:inventorySaleValue(kind,id),
+    invested:inventoryInvestment(kind,id)
+  };
+  uiConfirmAt=uiNow();
+  addFloat(W/2,156,`${pendingInventorySale.title} を売却？`,pendingInventorySale.color,11);
+  playSfx('select');
+  return true;
+}
+function removePartFromAllMounts(id){
+  for(const shipId of Object.keys(meta.mountedParts||{})){
+    const mount=meta.mountedParts[shipId]||{};
+    for(const type of SLOT_ORDER) mount[type]=(mount[type]||[]).filter(pid=>pid!==id);
+  }
+}
+function sellInventoryItem(kind,id){
+  if(!canSellInventory(kind,id)){
+    clearPendingInventorySale();
+    shake(3);
+    return;
+  }
+  const d=inventorySaleDef(kind,id);
+  const value=inventorySaleValue(kind,id);
+  if(kind==='ship'){
+    delete meta.ownedShips[id];
+    delete meta.mountedParts[id];
+    if(meta.selectedShip===id) meta.selectedShip='coreOnly';
+    meta.ownedShips.coreOnly=true;
+  }else if(kind==='core'){
+    delete meta.ownedCores[id];
+    delete meta.coreLevels[id];
+    if(meta.selectedCore===id) meta.selectedCore='basic';
+    meta.ownedCores.basic=true;
+    meta.coreLevels.basic=meta.coreLevels.basic||0;
+  }else if(kind==='part'){
+    delete meta.ownedParts[id];
+    removePartFromAllMounts(id);
+  }else if(kind==='drone'){
+    delete meta.ownedDrones[id];
+    delete meta.droneLevels[id];
+  }
+  meta.tokens+=value;
+  normalizeMounts();
+  clearPendingInventorySale();
+  invalidateLoadoutCache();
+  saveMeta();
+  burst(W/2,170,d.color||HOYO_UI.gold,14);
+  addFloat(W/2,156,`売却 +${formatCompactNumber(value)} トークン`,HOYO_UI.gold,11);
+  playSfx('upgrade');
 }
 function buyOrSelectShip(id){
   const ship=SHIP_BY_ID[id];
@@ -1501,6 +1604,8 @@ function uiProgress(start,dur=.34,delay=0){
 }
 function setHomeState(next){
   if(homeState===next) return;
+  clearPendingStorePurchase();
+  clearPendingInventorySale();
   homeState=next;
   uiViewOpenedAt=uiNow();
   if(next==='store') uiStoreTabAt=uiViewOpenedAt;
@@ -4888,12 +4993,14 @@ function handleStorePager(cx,cy,tab=storeTab){
   const left={x:W/2-p.w-p.gap/2,y:p.y,w:p.w,h:p.h}, right={x:W/2+p.gap/2,y:p.y,w:p.w,h:p.h};
   if(cx>=left.x&&cx<=left.x+left.w&&storePages[tab]>0){
     clearPendingStorePurchase();
+    clearPendingInventorySale();
     storePages[tab]--;
     playSfx('select');
     return true;
   }
   if(cx>=right.x&&cx<=right.x+right.w&&storePages[tab]<pages-1){
     clearPendingStorePurchase();
+    clearPendingInventorySale();
     storePages[tab]++;
     playSfx('select');
     return true;
@@ -5017,6 +5124,7 @@ function drawStoreShipCard(i,ship,startY){
   else if(owned) drawStatusTag(cx+cw-76,cy+7,66,17,'セレクト',HOYO_UI.jade,false);
   else if(isPendingStorePurchase('ship',ship.id)) drawStatusTag(cx+cw-76,cy+7,66,17,'確認中',HOYO_UI.rose,true);
   else drawTokenAmount(cx+cw-9,cy+16,ship.cost,'right',8);
+  if(owned) drawSellButton(cx,cy,cw,ch,'ship',ship.id);
 }
 function storePurchaseConfirmPanelRect(){
   return {x:14,y:546,w:W-28,h:104};
@@ -5027,6 +5135,81 @@ function storePurchaseConfirmButtonRect(kind){
   return kind==='cancel'
     ? {x:p.x+18,y:by,w:bw,h:34}
     : {x:p.x+18+bw+gap,y:by,w:bw,h:34};
+}
+function cardSellButtonRect(x,y,w,h){
+  return {x:x+w-58,y:y+h-23,w:48,h:17};
+}
+function rectHit(cx,cy,r){
+  return cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h;
+}
+function drawSellButton(x,y,w,h,kind,id){
+  if(!canSellInventory(kind,id)) return;
+  const r=cardSellButtonRect(x,y,w,h);
+  drawStatusTag(r.x,r.y,r.w,r.h,isPendingSale(kind,id)?'確認中':'売却',HOYO_UI.rose,isPendingSale(kind,id));
+}
+function isPendingSale(kind,id){
+  return pendingInventorySale?.kind===kind&&pendingInventorySale?.id===id;
+}
+function inventorySaleConfirmButtonRect(kind){
+  return storePurchaseConfirmButtonRect(kind);
+}
+function inventoryKindLabel(kind){
+  return {ship:'機体',core:'コア',part:'パーツ',drone:'ドローン'}[kind] || 'アイテム';
+}
+function drawInventorySaleConfirmPanel(source){
+  const action=pendingInventorySale;
+  if(!action || action.source!==source) return;
+  const p=storePurchaseConfirmPanelRect();
+  const appear=uiProgress(uiConfirmAt||uiViewOpenedAt,.24);
+  ctx.save();
+  ctx.fillStyle=`rgba(5,6,7,${.40+.28*appear})`;
+  ctx.fillRect(0,p.y-10,W,H-p.y+10);
+  ctx.globalAlpha*=.35+.65*appear;
+  ctx.translate(0,(1-appear)*18);
+  drawCutPanel(p.x,p.y,p.w,p.h,HOYO_UI.rose,true);
+  drawItemCardChrome(p.x,p.y,p.w,p.h,action.color,true,action.icon);
+  drawUiSweep(p.x,p.y,p.w,p.h,HOYO_UI.rose,.70,70);
+  drawStatusTag(p.x+14,p.y+14,48,28,action.icon,action.color,true);
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.font=`900 14px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
+  fillFitText(`${action.title} を売却`,p.x+74,p.y+20,p.w-150);
+  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
+  ctx.fillText(`${inventoryKindLabel(action.kind)} / 投資額の80%を返却`,p.x+74,p.y+40);
+  drawTokenAmount(p.x+p.w-16,p.y+28,action.value,'right',9);
+  ctx.textAlign='right';
+  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
+  ctx.fillText(`投資 ${formatCompactNumber(action.invested)}`,p.x+p.w-16,p.y+48);
+  const cancel=inventorySaleConfirmButtonRect('cancel');
+  const sell=inventorySaleConfirmButtonRect('buy');
+  drawCutPanel(cancel.x,cancel.y,cancel.w,cancel.h,HOYO_UI.faint,false);
+  drawCutPanel(sell.x,sell.y,sell.w,sell.h,HOYO_UI.rose,true);
+  ctx.font=`900 13px ${UI_FONT}`;ctx.textAlign='center';
+  ctx.fillStyle=HOYO_UI.muted;
+  ctx.fillText('キャンセル',cancel.x+cancel.w/2,cancel.y+cancel.h/2+1);
+  ctx.fillStyle=HOYO_UI.rose;
+  ctx.fillText('売却する',sell.x+sell.w/2,sell.y+sell.h/2+1);
+  ctx.restore();
+}
+function handleInventorySaleConfirm(cx,cy,source){
+  const action=pendingInventorySale;
+  if(!action || action.source!==source) return false;
+  const cancel=inventorySaleConfirmButtonRect('cancel');
+  const sell=inventorySaleConfirmButtonRect('buy');
+  if(rectHit(cx,cy,cancel)){
+    clearPendingInventorySale();
+    playSfx('denied');
+    return true;
+  }
+  if(rectHit(cx,cy,sell)){
+    sellInventoryItem(action.kind,action.id);
+    return true;
+  }
+  const p=storePurchaseConfirmPanelRect();
+  if(cy>=p.y-10){
+    clearPendingInventorySale();
+    return true;
+  }
+  return false;
 }
 function drawStorePurchaseConfirmPanel(){
   const action=pendingStorePurchase;
@@ -5083,6 +5266,7 @@ function drawStoreCoreCard(i,core,startY){
   else if(owned) drawStatusTag(cx+cw/2-32,cy+70,64,17,'セット',HOYO_UI.jade,false);
   else if(isPendingStorePurchase('core',core.id)) drawStatusTag(cx+cw/2-32,cy+70,64,17,'確認中',HOYO_UI.rose,true);
   else drawTokenAmount(cx+cw/2,cy+79,core.cost,'center',8);
+  if(owned) drawSellButton(cx,cy,cw,ch,'core',core.id);
 }
 function drawStorePartCard(i,part,startY){
   const cw=(W-36)/2,ch=80,gap=8,col=i%2,row=Math.floor(i/2);
@@ -5106,6 +5290,7 @@ function drawStorePartCard(i,part,startY){
   else if(owned) drawStatusTag(cx+cw-70,cy+7,60,17,partSlotStatus(part),HOYO_UI.jade,false);
   else if(isPendingStorePurchase('part',part.id)) drawStatusTag(cx+cw-70,cy+7,60,17,'確認中',HOYO_UI.rose,true);
   else drawTokenAmount(cx+cw-8,cy+16,part.cost,'right',8);
+  if(owned) drawSellButton(cx,cy,cw,ch,'part',part.id);
   ctx.textAlign='right';ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
   ctx.fillText(owned?'ガレージ':partSlotStatus(part),cx+cw-8,cy+38);
 }
@@ -5128,6 +5313,7 @@ function drawStoreDroneCard(i,drone,startY){
   if(isPendingStorePurchase(owned?'droneUpgrade':'drone',drone.id)) drawStatusTag(cx+cw-70,cy+7,60,17,'確認中',HOYO_UI.rose,true);
   else if(owned) drawTokenAmount(cx+cw-8,cy+16,cost,'right',8);
   else drawTokenAmount(cx+cw-8,cy+16,cost,'right',8);
+  if(owned) drawSellButton(cx,cy,cw,ch,'drone',drone.id);
 }
 function drawStoreScreen(){
   drawBg();ctx.save();
@@ -5172,25 +5358,30 @@ function drawStoreScreen(){
   }
   drawStorePager(storeTab);
   drawStorePurchaseConfirmPanel();
+  drawInventorySaleConfirmPanel('store');
   ctx.restore();
 }
 const WAREHOUSE_TABS=['ship','custom','turret','armor','drone','coreBoost'];
 const WAREHOUSE_TAB_LABELS={ship:'機体',custom:'カスタム',turret:'砲台',armor:'装甲',drone:'ドローン',coreBoost:'コア'};
-function hitTwoColCard(cx,cy,count,startY,ch,gap=8){
+function twoColCardRect(i,startY,ch,gap=8){
   const cw=(W-36)/2;
+  const col=i%2,row=Math.floor(i/2);
+  return {x:14+col*(cw+8),y:startY+row*(ch+gap),w:cw,h:ch};
+}
+function hitTwoColCard(cx,cy,count,startY,ch,gap=8){
   for(let i=0;i<count;i++){
-    const col=i%2,row=Math.floor(i/2);
-    const x=14+col*(cw+8),y=startY+row*(ch+gap);
-    if(cx>=x&&cx<=x+cw&&cy>=y&&cy<=y+ch) return i;
+    const r=twoColCardRect(i,startY,ch,gap);
+    if(rectHit(cx,cy,r)) return i;
   }
   return -1;
 }
 function handleStoreClick(cx,cy){
   if(hitBackBtn(cx,cy)){clearPendingStorePurchase();setHomeState('home');return;}
   const tab=hitTabRow(cx,cy,STORE_TABS,STORE_TAB_Y);
-  if(tab){clearPendingStorePurchase();storeTab=tab;normalizeStorePage(storeTab);uiStoreTabAt=uiNow();return;}
+  if(tab){clearPendingStorePurchase();clearPendingInventorySale();storeTab=tab;normalizeStorePage(storeTab);uiStoreTabAt=uiNow();return;}
   if(handleStorePager(cx,cy,storeTab)) return;
   const cy0=STORE_CONTENT_Y;
+  if(handleInventorySaleConfirm(cx,cy,'store')) return;
   if(pendingStorePurchase&&pendingStorePurchase.tab===storeTab){
     const cancel=storePurchaseConfirmButtonRect('cancel');
     const buy=storePurchaseConfirmButtonRect('buy');
@@ -5212,20 +5403,36 @@ function handleStoreClick(cx,cy){
   if(storeTab==='ship'){
     const items=visibleStoreDefs('ship');
     const idx=hitTwoColCard(cx,cy,items.length,cy0,92,8);
-    if(idx>=0) requestShipPurchase(items[idx].id);
+    if(idx>=0){
+      const r=twoColCardRect(idx,cy0,92,8);
+      if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('ship',items[idx].id,'store')) return;
+      requestShipPurchase(items[idx].id);
+    }
   }else if(storeTab==='core'){
     if(cx>=14&&cx<=W-14&&cy>=cy0&&cy<=cy0+46){requestCoreUpgrade();return;}
     const items=visibleStoreDefs('core');
     const idx=hitTwoColCard(cx,cy,items.length,cy0+58,92,8);
-    if(idx>=0) requestCorePurchase(items[idx].id);
+    if(idx>=0){
+      const r=twoColCardRect(idx,cy0+58,92,8);
+      if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('core',items[idx].id,'store')) return;
+      requestCorePurchase(items[idx].id);
+    }
   }else if(storeTab==='drone'){
     const items=visibleStoreDefs('drone');
     const idx=hitTwoColCard(cx,cy,items.length,cy0+66,86,8);
-    if(idx>=0) requestDronePurchase(items[idx].id);
+    if(idx>=0){
+      const r=twoColCardRect(idx,cy0+66,86,8);
+      if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('drone',items[idx].id,'store')) return;
+      requestDronePurchase(items[idx].id);
+    }
   }else{
     const items=visibleStoreDefs('part');
     const idx=hitTwoColCard(cx,cy,items.length,cy0+64,80,8);
-    if(idx>=0) requestPartPurchase(items[idx].id);
+    if(idx>=0){
+      const r=twoColCardRect(idx,cy0+64,80,8);
+      if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('part',items[idx].id,'store')) return;
+      requestPartPurchase(items[idx].id);
+    }
   }
 }
 
@@ -5260,6 +5467,7 @@ function drawWarehouseShipCard(i,ship,startY){
   fillFitText(shipEffectText(ship),x+cw/2,y+75,cw-16);
   ctx.fillStyle=sel?HOYO_UI.gold:HOYO_UI.muted;
   ctx.fillText(sel?'セレクト中':'タップでセレクト',x+cw/2,y+90);
+  drawSellButton(x,y,cw,ch,'ship',ship.id);
 }
 function drawWarehousePartCard(i,part,startY,ship){
   const cw=(W-36)/2,ch=82,gap=8,col=i%2,row=Math.floor(i/2);
@@ -5286,6 +5494,7 @@ function drawWarehousePartCard(i,part,startY,ship){
   else if(onOther) drawStatusTag(x+cw-68,y+7,58,17,'他機体',HOYO_UI.gold,false);
   else if(limit<=0) drawStatusTag(x+cw-68,y+7,58,17,'枠なし',HOYO_UI.faint,false);
   else drawStatusTag(x+cw-68,y+7,58,17,cur<limit?'セット':'満杯',cur<limit?HOYO_UI.jade:HOYO_UI.muted,false);
+  drawSellButton(x,y,cw,ch,'part',part.id);
 }
 function warehouseSlotColor(type){
   return {turret:HOYO_UI.rose,armor:HOYO_UI.blue,drone:HOYO_UI.jade,coreBoost:HOYO_UI.gold}[type] || HOYO_UI.gold;
@@ -5358,20 +5567,25 @@ function drawWarehouseScreen(){
     }
     for(let i=0;i<owned.length;i++) drawUiEntrance(i+1,animStart,()=>drawWarehousePartCard(i,owned[i],listY,ship));
   }
+  drawInventorySaleConfirmPanel('warehouse');
   ctx.restore();
 }
 function handleWarehouseClick(cx,cy){
   if(hitBackBtn(cx,cy)){setHomeState('home');return;}
   const tab=hitTabRow(cx,cy,WAREHOUSE_TABS,WAREHOUSE_TAB_Y,30);
-  if(tab){warehouseTab=tab;uiWarehouseTabAt=uiNow();return;}
+  if(tab){clearPendingInventorySale();warehouseTab=tab;uiWarehouseTabAt=uiNow();return;}
   const startY=WAREHOUSE_CONTENT_Y;
+  if(handleInventorySaleConfirm(cx,cy,'warehouse')) return;
   if(warehouseTab==='ship'){
     const owned=SHIP_DEFS.filter(s=>meta.ownedShips[s.id]);
     const cw=(W-36)/2,ch=98,gap=8;
     for(let i=0;i<owned.length;i++){
-      const col=i%2,row=Math.floor(i/2);
-      const x=14+col*(cw+8),y=startY+row*(ch+gap);
-      if(cx>=x&&cx<=x+cw&&cy>=y&&cy<=y+ch){buyOrSelectShip(owned[i].id);return;}
+      const r=twoColCardRect(i,startY,ch,gap);
+      if(rectHit(cx,cy,r)){
+        if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('ship',owned[i].id,'warehouse')) return;
+        buyOrSelectShip(owned[i].id);
+        return;
+      }
     }
   }else if(warehouseTab==='custom'){
     const listY=startY+48;
@@ -5388,9 +5602,12 @@ function handleWarehouseClick(cx,cy){
     const listY=startY+50;
     const cw=(W-36)/2,ch=82,gap=8;
     for(let i=0;i<owned.length;i++){
-      const col=i%2,row=Math.floor(i/2);
-      const x=14+col*(cw+8),y=listY+row*(ch+gap);
-      if(cx>=x&&cx<=x+cw&&cy>=y&&cy<=y+ch){toggleMountPart(owned[i].id);return;}
+      const r=twoColCardRect(i,listY,ch,gap);
+      if(rectHit(cx,cy,r)){
+        if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('part',owned[i].id,'warehouse')) return;
+        toggleMountPart(owned[i].id);
+        return;
+      }
     }
   }
 }
