@@ -16,6 +16,7 @@ const DEMO_GRANT_KEY = 'demo-start-tokens-1000-v1';
 const RUN_TOKEN_COIN_MULT = 2;
 const RUN_TOKEN_WAVE_BONUS = 25;
 const RUN_TOKEN_TIME_BONUS = 1;
+const RUN_TOKEN_PAYOUT_DIVISOR = 100;
 const BODY_STAT_GROWTH = 1.05;
 const MAX_PARTICLES = 120;
 const MAX_EP_ORBS   = 42;
@@ -27,7 +28,18 @@ const WAVE_DURATION_FRAMES = FPS * 30;
 const ENEMY_HP_BASE = 58;
 const ENEMY_HP_LINEAR = 32;
 const ENEMY_HP_QUAD = 2.8;
-const ENEMY_HP_EXP = 1.035;
+const ENEMY_HP_EXP = 1.052;
+const ENEMY_HP_LATE_START = 18;
+const ENEMY_HP_LATE_EXP = 1.045;
+const ENEMY_HP_BRUTAL_START = 55;
+const ENEMY_HP_BRUTAL_EXP = 1.075;
+const ENEMY_CONTACT_EXP = 1.012;
+const BOSS_WAVE_INTERVAL = 10;
+const BOSS_HP_MULT = 18;
+const BOSS_CONTACT_MULT = 4;
+const BOSS_BULLET_BASE_DAMAGE = 34;
+const BOSS_BULLET_DAMAGE_STEP = 9;
+const MAX_ENEMY_BULLETS = 190;
 const DAMAGE_XP_RATE = 0.032;
 const MULTISHOT_DAMAGE_EXP = 0.34;
 const MULTISHOT_FIRE_DELAY_STEP = 0.07;
@@ -41,6 +53,7 @@ const BASE_ARROW_RANGE = 255;
 const HUD_T         = 32;   // 上部HUD高さ
 const HUD_B         = 132;  // 下部HUD高さ
 const PLAYER_Y      = H - HUD_B - 48;
+const RESET_CONFIRM_FRAMES = FPS * 3;
 const DEFAULT_SETTINGS = {
   touchControl:'buttons',
   sound:true,
@@ -294,33 +307,38 @@ const keys = {};
 let statLevels    = { fireRate:0, bulletSpeed:0, damage:0, range:0, hp:0, xpMult:0, speed:0, critChance:0, critDamage:0, regen:0 };
 let specialLevels = makeSpecialLevels();
 
-let arrows=[], enemies=[], particles=[];
+let arrows=[], enemies=[], enemyBullets=[], particles=[];
 let epOrbs=[], floatTexts=[];
 let pendingSpecials=[];
 let upgradeZones=[];
 let bgStars=[], bgLines=[], bgBeams=[];
 let player = { x:W/2, y:PLAYER_Y, prevX:W/2, prevY:PLAYER_Y, size:14 };
 let loadoutCache = null;
-let meta = {
-  tokens:DEMO_START_TOKENS,
-  upgrades:{ hp:0, defense:0, attack:0, fireRate:0 },
-  homeUpgrades:{ fireRate:0, bulletSpeed:0, damage:0, range:0, hp:0, xpMult:0, speed:0, critChance:0, critDamage:0, regen:0 },
-  selectedShip:'coreOnly',
-  selectedCore:'basic',
-  ownedShips:{coreOnly:true},
-  ownedCores:{basic:true},
-  ownedParts:{},
-  coreLevels:{basic:0},
-  mountedParts:{},
-  grants:{[DEMO_GRANT_KEY]:true},
-  settings:{ ...DEFAULT_SETTINGS }
-};
+function freshMeta(settings={...DEFAULT_SETTINGS}){
+  return {
+    tokens:DEMO_START_TOKENS,
+    upgrades:{ hp:0, defense:0, attack:0, fireRate:0 },
+    homeUpgrades:{ fireRate:0, bulletSpeed:0, damage:0, range:0, hp:0, xpMult:0, speed:0, critChance:0, critDamage:0, regen:0 },
+    selectedShip:'coreOnly',
+    selectedCore:'basic',
+    ownedShips:{coreOnly:true},
+    ownedCores:{basic:true},
+    ownedParts:{},
+    coreLevels:{basic:0},
+    mountedParts:{},
+    grants:{[DEMO_GRANT_KEY]:true},
+    settings:{...DEFAULT_SETTINGS,...settings}
+  };
+}
+let meta = freshMeta();
 let homeState = 'home'; // 'home' | 'store' | 'warehouse' | 'upgrade' | 'settings' | 'codex'
 let storeTab = 'ship';   // 'ship' | 'core' | 'part'
 let warehouseTab = 'ship'; // 'ship' | 'turret' | 'armor' | 'drone' | 'coreBoost'
 let codexTab = 'special';
 let codexPage = 0;
 let pauseView = 'menu';
+let resetConfirmFrames = 0;
+let pendingShipPurchaseId = null;
 
 // ─────────────────────────────────────
 //  ステータス計算
@@ -419,6 +437,27 @@ const stasisMult = () => Math.max(.35, 1-specialLevels.stasisAura*.07);
 const incomingDamage = amount => Math.max(1, Math.ceil(amount / bodyMult('defense')));
 const playerHitRadius = () => activeShipDef().id==='coreOnly' ? 9 : (activeShipDef().id==='mirage' ? 10 : 12);
 const fmtMult   = v => `x${v>=10 ? v.toFixed(1) : v.toFixed(2)}`;
+function formatCompactNumber(value){
+  const raw=String(value).trim();
+  const sign=raw.startsWith('+')?'+':(raw.startsWith('-')?'-':'');
+  const body=sign?raw.slice(1):raw;
+  const num=Number(body);
+  if(!Number.isFinite(num)) return raw;
+  const abs=Math.abs(num);
+  if(abs<1000) return `${sign}${Math.round(abs).toLocaleString()}`;
+  const units=[
+    {v:1e15,s:'P'},
+    {v:1e12,s:'T'},
+    {v:1e9,s:'G'},
+    {v:1e6,s:'M'},
+    {v:1e3,s:'K'},
+  ];
+  const unit=units.find(u=>abs>=u.v);
+  const scaled=abs/unit.v;
+  const digits=scaled>=100?0:(scaled>=10?1:2);
+  return `${sign}${scaled.toFixed(digits).replace(/\.0+$|(\.\d*[1-9])0+$/,'$1')}${unit.s}`;
+}
+const hpText = () => `${formatCompactNumber(hp)}/${formatCompactNumber(maxHp)}`;
 const basicGainText = (id, lv=statLevels[id]) => {
   if(id==='regen') return `+${REGEN_STEP.toFixed(1)}/s`;
   if(id==='critChance'&&lv>=20) return '二重+5%';
@@ -491,6 +530,24 @@ function loadMeta(){
 function saveMeta(){
   invalidateLoadoutCache();
   try{localStorage.setItem('barrage-meta',JSON.stringify(meta));}catch(e){}
+}
+function resetSaveData(){
+  const keepSettings={...DEFAULT_SETTINGS,...(meta.settings||{})};
+  meta=freshMeta(keepSettings);
+  normalizeSettings();
+  normalizeMounts();
+  storeTab='ship';
+  warehouseTab='ship';
+  codexTab='special';
+  codexPage=0;
+  pendingShipPurchaseId=null;
+  saveMeta();
+  stopTouchMove();
+  resetConfirmFrames=0;
+  shake(4);
+  burst(W/2,560,HOYO_UI.rose,18);
+  addFloat(W/2,532,'セーブデータを初期化しました',HOYO_UI.rose,12);
+  playSfx('upgrade');
 }
 function normalizeSettings(){
   meta.settings={...DEFAULT_SETTINGS,...(meta.settings||{})};
@@ -595,7 +652,8 @@ function calculateTokenPayout(){
   const coinBonus=coins*RUN_TOKEN_COIN_MULT;
   const waveBonus=Math.max(0,wave-1)*RUN_TOKEN_WAVE_BONUS;
   const timeBonus=Math.floor((frame/FPS)*RUN_TOKEN_TIME_BONUS);
-  return Math.max(0,scoreBonus+coinBonus+waveBonus+timeBonus);
+  const rawGain=scoreBonus+coinBonus+waveBonus+timeBonus;
+  return Math.max(0,Math.floor(rawGain/RUN_TOKEN_PAYOUT_DIVISOR));
 }
 function awardTokens(){
   const gain=calculateTokenPayout();
@@ -667,10 +725,12 @@ function buyOrSelectShip(id){
     meta.selectedShip=id;
     normalizeMounts();
     saveMeta();
-  addFloat(W/2,156,`${ship.icon} ${displayName('ship',ship)} セレクト`,ship.color,11);
+    pendingShipPurchaseId=null;
+    addFloat(W/2,156,`${ship.icon} ${displayName('ship',ship)} セレクト`,ship.color,11);
     return;
   }
   if(meta.tokens<ship.cost){
+    pendingShipPurchaseId=null;
     addFloat(W/2,156,`トークン ${ship.cost} 必要`,'#b8a7ff',11);
     shake(3);
     return;
@@ -679,9 +739,32 @@ function buyOrSelectShip(id){
   meta.ownedShips[id]=true;
   meta.selectedShip=id;
   normalizeMounts();
+  pendingShipPurchaseId=null;
   saveMeta();
   burst(W/2,170,ship.color,16);
   addFloat(W/2,156,`${ship.icon} ${displayName('ship',ship)} ゲット`,ship.color,11);
+}
+function requestShipPurchase(id){
+  const ship=SHIP_BY_ID[id];
+  if(!ship) return;
+  if(meta.ownedShips[id]){
+    buyOrSelectShip(id);
+    return;
+  }
+  if(meta.tokens<ship.cost){
+    pendingShipPurchaseId=null;
+    addFloat(W/2,156,`トークン ${ship.cost} 必要`,'#b8a7ff',11);
+    shake(3);
+    return;
+  }
+  pendingShipPurchaseId=id;
+  addFloat(W/2,156,`${displayName('ship',ship)} を購入しますか？`,ship.color,11);
+  playSfx('select');
+}
+function confirmShipPurchase(){
+  const ship=SHIP_BY_ID[pendingShipPurchaseId];
+  if(!ship) return;
+  buyOrSelectShip(ship.id);
 }
 function buyOrMountCore(id){
   const core=CORE_BY_ID[id];
@@ -911,6 +994,7 @@ function startNextWave(){
     hp=Math.min(maxHp,hp+heal);
     addFloat(player.x,player.y-38,`AUTO REPAIR +${heal}`,HOYO_UI.jade,11);
   }
+  if(wave%BOSS_WAVE_INTERVAL===0) spawnBoss();
   addFloat(W/2,86,`WAVE ${wave} 開始`,HOYO_UI.rose,13);
   playSfx('special');
 }
@@ -1370,6 +1454,95 @@ function drawArrows(){
     ctx.fill();
   }
 }
+function bossBulletDamage(tier){
+  return Math.ceil((BOSS_BULLET_BASE_DAMAGE+tier*BOSS_BULLET_DAMAGE_STEP)*Math.pow(1.018,wave-1));
+}
+function spawnEnemyBullet(x,y,angle,speed,damage,size=5,color=HOYO_UI.rose,kind='aimed'){
+  if(enemyBullets.length>=MAX_ENEMY_BULLETS) enemyBullets.shift();
+  enemyBullets.push({
+    x,y,prevX:x,prevY:y,
+    vx:Math.cos(angle)*speed,
+    vy:Math.sin(angle)*speed,
+    speed,damage,size,color,kind,
+    life:260
+  });
+}
+function fireBossPattern(boss){
+  const tier=boss.tier || bossTierForWave();
+  const dx=player.x-boss.x, dy=player.y-boss.y;
+  const base=Math.atan2(dy,dx);
+  const count=Math.min(13,3+Math.floor(tier/2));
+  const spread=Math.min(.82,.18+tier*.035);
+  const speed=2.1+tier*.13;
+  const dmg=bossBulletDamage(tier);
+  for(let i=0;i<count;i++){
+    const off=count===1?0:(i/(count-1)-.5)*spread;
+    spawnEnemyBullet(boss.x,boss.y+boss.size*.55,base+off,speed,dmg,5.2,HOYO_UI.rose,'aimed');
+  }
+  boss.volley=(boss.volley||0)+1;
+  if(boss.volley%4===0){
+    const n=Math.min(28,12+tier*2);
+    const rot=frame*.035+boss.phase;
+    for(let i=0;i<n;i++){
+      const a=rot+i*TAU/n;
+      spawnEnemyBullet(boss.x,boss.y,a,1.55+tier*.07,Math.ceil(dmg*.72),4.4,HOYO_UI.gold,'ring');
+    }
+    shake(4);
+  }
+  playSfx('shot');
+}
+function updateBoss(boss,slow=1){
+  const homeX=W/2+Math.sin(frame*.018+boss.phase)*Math.min(94,54+boss.tier*7);
+  boss.x+=(homeX-boss.x)*.022*slow;
+  if(boss.y<boss.targetY) boss.y+=boss.vy*slow;
+  else boss.y+=Math.sin(frame*.045+boss.phase)*.18*slow;
+  boss.rot+=boss.rotSpd*slow;
+  if(boss.y<34) return;
+  boss.shotTimer=(boss.shotTimer??60)-slow;
+  if(boss.shotTimer<=0){
+    fireBossPattern(boss);
+    boss.shotTimer=Math.max(22,68-boss.tier*4);
+  }
+}
+function updateEnemyBullets(){
+  for(let i=enemyBullets.length-1;i>=0;i--){
+    const b=enemyBullets[i];
+    b.prevX=b.x;
+    b.prevY=b.y;
+    b.x+=b.vx;
+    b.y+=b.vy;
+    b.life--;
+    if(b.life<=0||b.x<-30||b.x>W+30||b.y<-40||b.y>H+44) enemyBullets.splice(i,1);
+  }
+}
+function drawEnemyBullets(){
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  for(const b of enemyBullets){
+    const col=b.color||HOYO_UI.rose;
+    ctx.strokeStyle=h2r(col,.36);
+    ctx.lineWidth=Math.max(1.2,b.size*.55);
+    ctx.beginPath();
+    ctx.moveTo(b.prevX,b.prevY);
+    ctx.lineTo(b.x,b.y);
+    ctx.stroke();
+    ctx.shadowColor=col;
+    ctx.shadowBlur=10;
+    ctx.fillStyle=col;
+    if(b.kind==='ring'){
+      ctx.beginPath();
+      ctx.arc(b.x,b.y,b.size,0,TAU);
+      ctx.fill();
+    }else{
+      ctx.save();
+      ctx.translate(b.x,b.y);
+      ctx.rotate(Math.atan2(b.vy,b.vx)+Math.PI/4);
+      ctx.fillRect(-b.size*.62,-b.size*.62,b.size*1.24,b.size*1.24);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
 
 // ─────────────────────────────────────
 //  敵
@@ -1381,13 +1554,43 @@ const SHAPE_PROPS={
   hex:    { hpMult:1.6, spdMult:.8,  sizeAdj:4,  rewardMult:1.28, r:160,g:60, b:220 },
   circle: { hpMult:.7,  spdMult:1.1, sizeAdj:-3, rewardMult:.76, r:220,g:160,b:40  },
 };
+function enemyHpCurve(wB){
+  const base=ENEMY_HP_BASE+wB*ENEMY_HP_LINEAR+wB*wB*ENEMY_HP_QUAD;
+  const early=Math.pow(ENEMY_HP_EXP,wB);
+  const late=Math.pow(ENEMY_HP_LATE_EXP,Math.max(0,wB-ENEMY_HP_LATE_START));
+  const brutal=Math.pow(ENEMY_HP_BRUTAL_EXP,Math.max(0,wB-ENEMY_HP_BRUTAL_START));
+  return base*early*late*brutal;
+}
+function bossTierForWave(w=wave){
+  return Math.max(1,Math.floor(w/BOSS_WAVE_INTERVAL));
+}
+function spawnBoss(){
+  const wB=wave-1, tier=bossTierForWave();
+  const size=Math.min(66,42+tier*3);
+  const hpCurve=enemyHpCurve(wB);
+  const baseHp=Math.floor(hpCurve*(BOSS_HP_MULT+tier*2.5));
+  const x=W/2, y=-size*2;
+  const scoreValue=Math.max(5000,Math.floor(baseHp*1.65+wave*900));
+  const xpValue=Math.max(120,Math.floor(80+wave*18+Math.sqrt(baseHp)*2.8));
+  const orbValue=Math.max(18,Math.floor(14+tier*4+Math.sqrt(baseHp)/80));
+  const contactDamage=Math.ceil((88+tier*22)*Math.pow(ENEMY_CONTACT_EXP,wB)*BOSS_CONTACT_MULT);
+  enemies.push({
+    x,y,vx:0,vy:.82,hp:baseHp,maxHp:baseHp,xpValue,scoreValue,orbValue,contactDamage,
+    hasCore:true,shape:'hex',size,r:255,g:59,b:98,flash:0,rot:0,rotSpd:.014,dead:false,
+    boss:true,bossWave:wave,tier,targetY:108,phase:Math.random()*TAU,shotTimer:80,volley:0
+  });
+  waveBanner=150;
+  shake(9);
+  addFloat(W/2,112,`BOSS WAVE ${wave}`,HOYO_UI.rose,16);
+  playSfx('dead');
+}
 function spawnEnemy(){
   const wB=wave-1;
   const shape=SHAPES[Math.floor(Math.random()*SHAPES.length)];
   const p=SHAPE_PROPS[shape];
   const base=12+Math.random()*14;
   const size=Math.floor(base*(1+p.sizeAdj*.1));
-  const hpCurve=(ENEMY_HP_BASE+wB*ENEMY_HP_LINEAR+wB*wB*ENEMY_HP_QUAD)*Math.pow(ENEMY_HP_EXP,wB);
+  const hpCurve=enemyHpCurve(wB);
   const sizeScale=Math.max(.55,Math.min(1.75,size/20));
   const hpSizeMult=Math.pow(sizeScale,1.55);
   const rewardMult=p.rewardMult*Math.pow(sizeScale,1.05);
@@ -1398,12 +1601,36 @@ function spawnEnemy(){
   const xpValue=Math.max(1,Math.floor((7+wave*2.4+Math.sqrt(baseHp)*1.45)*rewardMult*smallRewardScale));
   const scoreValue=Math.max(8,Math.floor((baseHp*.90+wave*18)*rewardMult*smallRewardScale));
   const orbValue=Math.max(1,Math.floor(1+Math.sqrt(baseHp)*rewardMult*smallRewardScale/5.6));
-  const contactDamage=Math.ceil((hasCore?28:10)*(1+wB*.055));
+  const contactDamage=Math.ceil((hasCore?28:10)*(1+wB*.055)*Math.pow(ENEMY_CONTACT_EXP,wB));
   const spd=(1.05+Math.random()*.6+wB*.11)*p.spdMult;
   const x=size+10+Math.random()*(W-(size+10)*2);
   const rot=Math.random()*Math.PI*2;
   const rotSpd=(Math.random()<.5?-1:1)*(.006+Math.random()*.012);
   enemies.push({x,y:-size*2,vx:(Math.random()-.5)*.6,vy:spd,hp:baseHp,maxHp:baseHp,xpValue,scoreValue,orbValue,contactDamage,hasCore,shape,size,r:p.r,g:p.g,b:p.b,flash:0,rot,rotSpd,dead:false});
+}
+function drawBossHpBar(e){
+  const pct=Math.max(0,Math.min(1,e.hp/e.maxHp));
+  const x=28,y=58,w=W-56,h=10;
+  ctx.save();
+  ctx.fillStyle='rgba(5,6,7,.82)';
+  ctx.fillRect(x,y,w,h);
+  const g=ctx.createLinearGradient(x,y,x+w,y);
+  g.addColorStop(0,HOYO_UI.rose);
+  g.addColorStop(.55,HOYO_UI.gold);
+  g.addColorStop(1,'#eef7ff');
+  ctx.fillStyle=g;
+  ctx.fillRect(x,y,w*pct,h);
+  ctx.strokeStyle=h2r(HOYO_UI.rose,.74);
+  ctx.lineWidth=1.2;
+  ctx.strokeRect(x-.5,y-.5,w+1,h+1);
+  ctx.font=`900 10px ${UI_FONT}`;
+  ctx.textAlign='center';
+  ctx.textBaseline='bottom';
+  ctx.fillStyle=HOYO_UI.text;
+  ctx.shadowColor=HOYO_UI.rose;
+  ctx.shadowBlur=5;
+  ctx.fillText(`BOSS  WAVE ${e.bossWave}`,W/2,y-4);
+  ctx.restore();
 }
 function drawEnemy(e){
   const{x,y,size,shape,r,g,b,hp,maxHp,flash,rot=0}=e;
@@ -1422,6 +1649,29 @@ function drawEnemy(e){
   const bodyInner=hasCore?Math.max(10,size*.48):0;
   const spokeFrom=hasCore?bodyInner:0;
   ctx.shadowBlur=fl?14:(hasCore?6:2);
+
+  if(e.boss){
+    const pulse=.62+Math.sin(frame*.075+e.phase)*.38;
+    ctx.save();
+    ctx.shadowColor=HOYO_UI.rose;
+    ctx.shadowBlur=24;
+    ctx.strokeStyle=h2r(HOYO_UI.rose,.32+pulse*.28);
+    ctx.lineWidth=2.4;
+    ctx.beginPath();
+    ctx.arc(0,0,size+9+pulse*5,0,TAU);
+    ctx.stroke();
+    ctx.rotate(-rot+frame*.013);
+    ctx.strokeStyle=h2r(HOYO_UI.gold,.30);
+    ctx.lineWidth=1.4;
+    for(let i=0;i<8;i++){
+      const a=i*TAU/8;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a)*(size+15),Math.sin(a)*(size+15));
+      ctx.lineTo(Math.cos(a+TAU/16)*(size+24),Math.sin(a+TAU/16)*(size+24));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   if(shape==='circle'){
     ctx.beginPath();ctx.arc(0,0,size,0,Math.PI*2);ctx.fill();ctx.stroke();
@@ -1484,6 +1734,7 @@ function drawEnemy(e){
     ctx.fillRect(coreR*.25,coreY-coreR*1.1,coreR*.62,1);
   }
   ctx.restore();
+  if(e.boss) drawBossHpBar(e);
   if(e.flash>0) e.flash--;
 }
 
@@ -2071,6 +2322,7 @@ function drawFrozenPlayScene(){
     drawEnemy(e);
     e.flash=flash;
   }
+  drawEnemyBullets();
   drawEpOrbs();
   drawStasisAura();
   drawSupportUnits();
@@ -2435,7 +2687,7 @@ function handleSpecialClick(e){
 function addXp(amount){
   const gained=Math.floor(amount*xpMult());
   xp+=gained;
-  addFloat(player.x,player.y-20,`+${gained} XP`,'#00dd77',10);
+  addFloat(player.x,player.y-20,`+${formatCompactNumber(gained)} XP`,'#00dd77',10);
   if(xp>=xpThresh()) triggerSpecial();
 }
 function addDamageXp(amount){
@@ -2458,7 +2710,7 @@ function killEnemy(e){
   score+=pts;
   coins+=coinGain;
   addXp(e.xpValue ?? Math.floor(10+wave*3+Math.sqrt(e.maxHp)*2.2));
-  addFloat(e.x,e.y-10,`+${pts}  +${coinGain}トークン`,'#e8e8f0',11);
+  addFloat(e.x,e.y-10,`+${formatCompactNumber(pts)}  +${formatCompactNumber(coinGain)}トークン`,'#e8e8f0',11);
   burst(e.x,e.y,`rgb(${e.r},${e.g},${e.b})`,14);
   playSfx('kill');
   spawnEpOrbs(e.x,e.y,e.orbValue ?? (3+Math.floor(e.maxHp/22)));
@@ -2544,14 +2796,32 @@ function checkCollisions(){
   if(invincible>0){invincible--;}
   else{
     const playerR=playerHitRadius();
+    let damaged=false;
     for(const e of enemies){
       const hitR=e.size+playerR;
       if(distSq(player.x,player.y,e.x,e.y)<hitR*hitR){
-        if(blockWithShield()) break;
+        if(blockWithShield()){damaged=true;break;}
         hp-=incomingDamage(e.contactDamage ?? 26); invincible=80;
         shake(8); burst(player.x,player.y,'#ff2d78',12);
         if(hp<=0){hp=0; endGame(); return;}
+        damaged=true;
         break;
+      }
+    }
+    if(!damaged){
+      for(let i=enemyBullets.length-1;i>=0;i--){
+        const b=enemyBullets[i];
+        const hitR=playerR+(b.size||5);
+        if(distSq(player.x,player.y,b.x,b.y)<hitR*hitR){
+          enemyBullets.splice(i,1);
+          if(blockWithShield()) break;
+          hp-=incomingDamage(b.damage ?? BOSS_BULLET_BASE_DAMAGE);
+          invincible=76;
+          shake(7);
+          burst(player.x,player.y,b.color||HOYO_UI.rose,12);
+          if(hp<=0){hp=0; endGame(); return;}
+          break;
+        }
       }
     }
   }
@@ -2612,7 +2882,7 @@ function drawHUD(){
   ctx.fillText('スコア',W-bx,topY+5);
   ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
   ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(`${score.toLocaleString()}  トークン ${coins}`,W-bx,topY+17);
+  ctx.fillText(`${formatCompactNumber(score)}  トークン ${formatCompactNumber(coins)}`,W-bx,topY+17);
 
   // ── 下部グラデーションオーバーレイ ──
   ctx.fillStyle=hudBottomGradient; ctx.fillRect(0,H-HUD_B-18,W,HUD_B+18);
@@ -2635,8 +2905,8 @@ function drawHUD(){
     ctx.textAlign='right';ctx.fillStyle=HOYO_UI.muted;
     ctx.fillText(valueText,barX+barW-6,y+h/2);
   }
-  drawMeter(hpY,hpH,'HP',`${hp}/${maxHp}`,hp/maxHp,'#b94564','#f0a0b2');
-  drawMeter(xpY,xpH,'XP',`Lv.${xpLevel}  ${xp}/${xpThresh()}`,Math.min(1,xp/xpThresh()),'#6f9f8e','#cfe8c0');
+  drawMeter(hpY,hpH,'HP',hpText(),hp/maxHp,'#b94564','#f0a0b2');
+  drawMeter(xpY,xpH,'XP',`Lv.${formatCompactNumber(xpLevel)}  ${formatCompactNumber(xp)}/${formatCompactNumber(xpThresh())}`,Math.min(1,xp/xpThresh()),'#6f9f8e','#cfe8c0');
 
   const chipY=H-74, chipH=22, chipGap=6, chipW=(bw-chipGap*2)/3;
   const chips=[
@@ -2721,9 +2991,9 @@ function drawHUDZZZ(){
   ctx.shadowBlur=4;
   ctx.font=`900 15px ${UI_FONT}`;
   ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText(fitText(score.toLocaleString(),64),counterX+counterW-10,counterY+13);
+  ctx.fillText(fitText(formatCompactNumber(score),64),counterX+counterW-10,counterY+13);
   ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText(fitText(coins.toLocaleString(),64),counterX+counterW-10,counterY+31);
+  ctx.fillText(fitText(formatCompactNumber(coins),64),counterX+counterW-10,counterY+31);
   ctx.shadowBlur=0;
 
   ctx.fillStyle='rgba(5,6,7,.92)';ctx.fillRect(0,H-HUD_B-20,W,HUD_B+20);
@@ -2738,13 +3008,13 @@ function drawHUDZZZ(){
     ctx.fillStyle=HOYO_UI.text;ctx.fillText(label,bx+10,y+h/2+1);
     ctx.textAlign='right';ctx.fillStyle=HOYO_UI.muted;ctx.fillText(value,bx+bw-10,y+h/2+1);
   };
-  meter(H-119,17,'HP',`${hp}/${maxHp}`,hp/maxHp,HOYO_UI.rose,'#ffb3a5');
-  meter(H-94,14,'XP',`Lv.${xpLevel}  ${xp}/${xpThresh()}`,Math.min(1,xp/xpThresh()),HOYO_UI.jade,'#d6ff69');
+  meter(H-119,17,'HP',hpText(),hp/maxHp,HOYO_UI.rose,'#ffb3a5');
+  meter(H-94,14,'XP',`Lv.${formatCompactNumber(xpLevel)}  ${formatCompactNumber(xp)}/${formatCompactNumber(xpThresh())}`,Math.min(1,xp/xpThresh()),HOYO_UI.jade,'#d6ff69');
 
   const chips=[
-    {label:'LV',value:xpLevel.toLocaleString(),color:HOYO_UI.jade},
-    {label:'トークン',value:coins.toLocaleString(),color:HOYO_UI.gold},
-    {label:'SP',value:skillPoints.toLocaleString(),color:HOYO_UI.blue},
+    {label:'LV',value:formatCompactNumber(xpLevel),color:HOYO_UI.jade},
+    {label:'トークン',value:formatCompactNumber(coins),color:HOYO_UI.gold},
+    {label:'SP',value:formatCompactNumber(skillPoints),color:HOYO_UI.blue},
   ];
   const chipY=H-67, chipGap=7, chipW=(bw-chipGap*2)/3;
   for(let i=0;i<chips.length;i++){
@@ -2911,7 +3181,7 @@ function drawPauseMenu(){
   ctx.fillStyle='rgba(232,232,240,.44)';
   ctx.fillText('PAUSE MENU',p.panelX+24,p.panelY+74);
   const chipY=p.panelY+43;
-  const chips=[`WAVE ${wave}`,`SCORE ${score.toLocaleString()}`];
+  const chips=[`WAVE ${wave}`,`SCORE ${formatCompactNumber(score)}`];
   ctx.textAlign='right';
   for(let i=0;i<chips.length;i++){
     const w=i===0?74:112, x=p.panelX+p.panelW-18-w, y=chipY+i*24;
@@ -2960,11 +3230,11 @@ function drawPauseMenuZZZ(){
   const title=pauseView==='settings'?'オプション':(pauseView==='stats'?'ステータス':'バトルメニュー');
   ctx.fillText(title,p.panelX+20,p.panelY+65);
   ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(`WAVE ${wave} / スコア ${score.toLocaleString()}`,p.panelX+22,p.panelY+88);
+  ctx.fillText(`WAVE ${wave} / スコア ${formatCompactNumber(score)}`,p.panelX+22,p.panelY+88);
 
   if(pauseView==='stats'){
     const stats=[
-      ['HP',`${hp}/${maxHp}`,HOYO_UI.rose],
+      ['HP',hpText(),HOYO_UI.rose],
       ['連射',fmtMult(statMult('fireRate')*bodyMult('fireRate')),HOYO_UI.blue],
       ['攻撃',fmtMult(statMult('damage')*bodyMult('attack')),HOYO_UI.gold],
       ['速度',fmtMult(statMult('speed')),HOYO_UI.jade],
@@ -3142,7 +3412,7 @@ function drawTokenAmount(x,y,value,align='right',size=10){
   ctx.save();
   ctx.font=`bold ${size}px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif`;
   ctx.textBaseline='middle';
-  const text=String(value);
+  const text=formatCompactNumber(value);
   const tw=ctx.measureText(text).width;
   const r=Math.max(6,size*.78);
   const gap=r*.45;
@@ -3166,6 +3436,22 @@ function drawTokenAmount(x,y,value,align='right',size=10){
   ctx.shadowColor='#00aaff';
   ctx.shadowBlur=3;
   ctx.fillText(text,tx,y);
+  ctx.restore();
+}
+function drawHomeTokenBadge(){
+  const x=238,y=12,w=138,h=42;
+  ctx.save();
+  drawCutPanel(x,y,w,h,HOYO_UI.gold,false);
+  ctx.fillStyle='rgba(238,247,255,.060)';
+  cutPanel(x+5,y+5,w-10,h-10,8);ctx.fill();
+  ctx.fillStyle=h2r(HOYO_UI.gold,.76);
+  ctx.fillRect(x+9,y+9,3,h-18);
+  ctx.textAlign='left';
+  ctx.textBaseline='middle';
+  ctx.font=`900 9px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.muted;
+  ctx.fillText('TOKEN',x+18,y+14);
+  drawTokenAmount(x+w-12,y+29,meta.tokens,'right',15);
   ctx.restore();
 }
 
@@ -3471,7 +3757,45 @@ function drawStoreShipCard(i,ship,startY){
   fillFitText(shipEffectText(ship),cx+10,cy+85,cw-20);
   if(sel) drawStatusTag(cx+cw-86,cy+7,76,17,'セレクト中',HOYO_UI.gold,true);
   else if(owned) drawStatusTag(cx+cw-76,cy+7,66,17,'セレクト',HOYO_UI.jade,false);
+  else if(pendingShipPurchaseId===ship.id) drawStatusTag(cx+cw-76,cy+7,66,17,'確認中',HOYO_UI.rose,true);
   else drawTokenAmount(cx+cw-9,cy+16,ship.cost,'right',8);
+}
+function shipPurchaseConfirmPanelRect(){
+  return {x:14,y:546,w:W-28,h:104};
+}
+function shipPurchaseConfirmButtonRect(kind){
+  const p=shipPurchaseConfirmPanelRect();
+  const gap=10, bw=(p.w-36-gap)/2, by=p.y+58;
+  return kind==='cancel'
+    ? {x:p.x+18,y:by,w:bw,h:34}
+    : {x:p.x+18+bw+gap,y:by,w:bw,h:34};
+}
+function drawShipPurchaseConfirmPanel(){
+  const ship=SHIP_BY_ID[pendingShipPurchaseId];
+  if(!ship || meta.ownedShips[ship.id] || storeTab!=='ship') return;
+  const p=shipPurchaseConfirmPanelRect();
+  ctx.save();
+  ctx.fillStyle='rgba(5,6,7,.68)';
+  ctx.fillRect(0,p.y-10,W,H-p.y+10);
+  drawCutPanel(p.x,p.y,p.w,p.h,ship.color,true);
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  drawStatusTag(p.x+14,p.y+14,48,28,ship.icon,ship.color,true);
+  ctx.font=`900 14px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
+  fillFitText(`${displayName('ship',ship)} を購入`,p.x+74,p.y+20,p.w-150);
+  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
+  ctx.fillText('購入するとすぐセレクトされます。',p.x+74,p.y+40);
+  drawTokenAmount(p.x+p.w-16,p.y+28,ship.cost,'right',9);
+
+  const cancel=shipPurchaseConfirmButtonRect('cancel');
+  const buy=shipPurchaseConfirmButtonRect('buy');
+  drawCutPanel(cancel.x,cancel.y,cancel.w,cancel.h,HOYO_UI.faint,false);
+  drawCutPanel(buy.x,buy.y,buy.w,buy.h,meta.tokens>=ship.cost?HOYO_UI.gold:HOYO_UI.faint,true);
+  ctx.font=`900 13px ${UI_FONT}`;ctx.textAlign='center';
+  ctx.fillStyle=HOYO_UI.muted;
+  ctx.fillText('キャンセル',cancel.x+cancel.w/2,cancel.y+cancel.h/2+1);
+  ctx.fillStyle=meta.tokens>=ship.cost?HOYO_UI.gold:HOYO_UI.faint;
+  ctx.fillText('購入する',buy.x+buy.w/2,buy.y+buy.h/2+1);
+  ctx.restore();
 }
 function drawStoreCoreCard(i,core,startY){
   const cw=(W-36)/2,ch=92,gap=8,col=i%2,row=Math.floor(i/2);
@@ -3522,6 +3846,7 @@ function drawStoreScreen(){
   const cy=102;
   if(storeTab==='ship'){
     for(let i=0;i<SHIP_DEFS.length;i++) drawStoreShipCard(i,SHIP_DEFS[i],cy);
+    drawShipPurchaseConfirmPanel();
   }else if(storeTab==='core'){
     const core=selectedCoreDef(),lv=selectedCoreLevel(),uc=coreUpgradeCost(),can=meta.tokens>=uc;
     drawCutPanel(14,cy,W-28,46,can?HOYO_UI.gold:core.color,can);
@@ -3550,13 +3875,26 @@ function hitTwoColCard(cx,cy,count,startY,ch,gap=8){
   return -1;
 }
 function handleStoreClick(cx,cy){
-  if(hitBackBtn(cx,cy)){homeState='home';return;}
+  if(hitBackBtn(cx,cy)){pendingShipPurchaseId=null;homeState='home';return;}
   const tab=hitTabRow(cx,cy,['ship','core','part'],62);
-  if(tab){storeTab=tab;return;}
+  if(tab){pendingShipPurchaseId=null;storeTab=tab;return;}
   const cy0=102;
   if(storeTab==='ship'){
+    if(pendingShipPurchaseId){
+      const cancel=shipPurchaseConfirmButtonRect('cancel');
+      const buy=shipPurchaseConfirmButtonRect('buy');
+      if(cx>=cancel.x&&cx<=cancel.x+cancel.w&&cy>=cancel.y&&cy<=cancel.y+cancel.h){
+        pendingShipPurchaseId=null;
+        playSfx('denied');
+        return;
+      }
+      if(cx>=buy.x&&cx<=buy.x+buy.w&&cy>=buy.y&&cy<=buy.y+buy.h){
+        confirmShipPurchase();
+        return;
+      }
+    }
     const idx=hitTwoColCard(cx,cy,SHIP_DEFS.length,cy0,92,8);
-    if(idx>=0) buyOrSelectShip(SHIP_DEFS[idx].id);
+    if(idx>=0) requestShipPurchase(SHIP_DEFS[idx].id);
   }else if(storeTab==='core'){
     if(cx>=14&&cx<=W-14&&cy>=cy0&&cy<=cy0+46){upgradeMountedCore();return;}
     const idx=hitTwoColCard(cx,cy,CORE_DEFS.length,cy0+58,92,8);
@@ -3836,8 +4174,41 @@ function handleAudioSettingsClick(cx,cy,startY=318){
   }
   return false;
 }
+function resetDataButtonRect(){
+  return {x:24,y:552,w:W-48,h:54};
+}
+function drawResetDataButton(){
+  const b=resetDataButtonRect();
+  const confirming=resetConfirmFrames>0;
+  drawSectionLabel('セーブデータ',24,b.y-20,HOYO_UI.rose);
+  drawCutPanel(b.x,b.y,b.w,b.h,HOYO_UI.rose,confirming);
+  drawStatusTag(b.x+12,b.y+14,56,26,confirming?'確認':'RESET',HOYO_UI.rose,confirming);
+  ctx.textAlign='left';
+  ctx.textBaseline='middle';
+  ctx.font=`900 14px ${UI_FONT}`;
+  ctx.fillStyle=confirming?HOYO_UI.rose:HOYO_UI.text;
+  ctx.fillText(confirming?'もう一度タップで初期化':'データ初期化',b.x+82,b.y+19);
+  ctx.font=`bold 11px ${UI_FONT}`;
+  ctx.fillStyle=confirming?HOYO_UI.text:HOYO_UI.muted;
+  ctx.fillText(confirming?'この操作は取り消せません。':'トークン・機体・強化を初期状態に戻します。',b.x+82,b.y+38);
+}
+function hitResetDataButton(cx,cy){
+  const b=resetDataButtonRect();
+  return cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h;
+}
+function handleResetDataClick(){
+  if(resetConfirmFrames>0){
+    resetSaveData();
+    return;
+  }
+  resetConfirmFrames=RESET_CONFIRM_FRAMES;
+  shake(2);
+  addFloat(W/2,532,'もう一度タップで初期化',HOYO_UI.rose,11);
+  playSfx('select');
+}
 function drawSettingsScreen(){
   drawBg();ctx.save();
+  if(resetConfirmFrames>0) resetConfirmFrames--;
   drawSubBackdrop(.80);
   drawSubHeader('オプション');
   ctx.textAlign='left';ctx.textBaseline='middle';
@@ -3860,20 +4231,23 @@ function drawSettingsScreen(){
     ctx.textAlign='left';
   }
   drawAudioSettingsRows();
+  drawResetDataButton();
   ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
   ctx.textAlign='center';
   ctx.fillText('BGMファイルは public/audio に配置できます。',W/2,516);
   ctx.restore();
 }
 function handleSettingsClick(cx,cy){
-  if(hitBackBtn(cx,cy)){homeState='home';return;}
+  if(hitBackBtn(cx,cy)){resetConfirmFrames=0;homeState='home';return;}
   const bx=24, by=110, bw=W-48, bh=70, gap=12;
   const modes=['buttons','stick'];
+  if(hitResetDataButton(cx,cy)){handleResetDataClick();return;}
   for(let i=0;i<modes.length;i++){
     const y=by+i*(bh+gap);
-    if(cx>=bx&&cx<=bx+bw&&cy>=y&&cy<=y+bh){setTouchControlMode(modes[i]);return;}
+    if(cx>=bx&&cx<=bx+bw&&cy>=y&&cy<=y+bh){resetConfirmFrames=0;setTouchControlMode(modes[i]);return;}
   }
-  if(handleAudioSettingsClick(cx,cy)) return;
+  if(handleAudioSettingsClick(cx,cy)){resetConfirmFrames=0;return;}
+  resetConfirmFrames=0;
 }
 
 // ── ホーム画面 ──
@@ -4041,9 +4415,7 @@ function drawHomeScreenV3(){
   drawSubBackdrop(.54);
 
   drawBarrageLogo(0,0,1);
-  ctx.fillStyle='rgba(238,247,255,.055)';
-  cutPanel(264,16,104,24,8);ctx.fill();
-  drawTokenAmount(W-16,31,meta.tokens,'right',10);
+  drawHomeTokenBadge();
 
   const ship=selectedShipDef(), core=selectedCoreDef();
   const hx=14, hy=78, hw=W-28, hh=276;
@@ -4140,7 +4512,7 @@ function drawGameOver(){
   ctx.shadowColor='#ff2d78'; ctx.shadowBlur=12; ctx.fillStyle='#ff2d78';
   ctx.fillText('GAME OVER',W/2,H/2-74); ctx.shadowBlur=0;
   ctx.font='14px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif'; ctx.fillStyle='#c8c8e0';
-  ctx.fillText(`SCORE   ${score.toLocaleString()}`,W/2,H/2+6);
+  ctx.fillText(`SCORE   ${formatCompactNumber(score)}`,W/2,H/2+6);
   ctx.fillText(`WAVE    ${wave}`,W/2,H/2+30);
   ctx.globalAlpha=tokensEarned>0?1:.45;
   drawTokenAmount(W/2,H/2+54,`+${tokensEarned}`,'center',14);
@@ -4160,7 +4532,7 @@ function startGame(){
   state='play'; score=0; coins=0; wave=1; frame=0; hp=100; maxHp=100;
   maxHp=Math.ceil(100*bodyMult('hp')); hp=maxHp;
   xp=0; xpLevel=0; hitXpBank=0; tokensEarned=0; invincible=0; skillPoints=loadout.ship.id==='coreOnly'?2:1; fireTimer=0; regenBank=0; shield=0; shieldCooldown=0; droneTimer=0; bitTimer=0; shotSeq=0; waveBanner=0; waveFrame=0;
-  arrows=[];enemies=[];particles=[];epOrbs=[];floatTexts=[];pendingSpecials=[];upgradeZones=[];
+  arrows=[];enemies=[];enemyBullets=[];particles=[];epOrbs=[];floatTexts=[];pendingSpecials=[];upgradeZones=[];
   statLevels   ={fireRate:0,bulletSpeed:0,damage:0,range:0,hp:0,xpMult:0,speed:0,critChance:0,critDamage:0,regen:0};
   specialLevels=makeSpecialLevels();
   player.x=W/2; player.y=PLAYER_Y; player.prevX=player.x; player.prevY=player.y;
@@ -4181,7 +4553,7 @@ function returnHome(){
   pauseView='menu';
   stopTouchMove();
   activePointerId=null;
-  arrows=[];enemies=[];epOrbs=[];upgradeZones=[];pendingSpecials=[];
+  arrows=[];enemies=[];enemyBullets=[];epOrbs=[];upgradeZones=[];pendingSpecials=[];
   pauseBgm();
 }
 function canShowInstallAction(){
@@ -4390,6 +4762,7 @@ function loop(){
   if(state==='dead'){
     drawBg();
     drawArrows();for(const e of enemies)drawEnemy(e);
+    drawEnemyBullets();
     drawEpOrbs();drawStasisAura();drawSupportUnits();drawShield();drawPlayer();drawParticles();drawFloatTexts();
     drawGameOver();return;
   }
@@ -4397,6 +4770,7 @@ function loop(){
     drawBg();
     drawArrows();
     for(const e of enemies)drawEnemy(e);
+    drawEnemyBullets();
     drawEpOrbs();
     drawStasisAura();
     drawSupportUnits();
@@ -4457,7 +4831,7 @@ function loop(){
 
   // ゲートタイマー
   // 更新
-  updateSupportUnits();updateShield();updateArrows();updateEpOrbs();updateParticles();updateFloatTexts();
+  updateSupportUnits();updateShield();updateArrows();updateEnemyBullets();updateEpOrbs();updateParticles();updateFloatTexts();
   const stasisActive=specialLevels.stasisAura>0;
   const stasisR=stasisActive?stasisRadius():0;
   const stasisR2=stasisR*stasisR;
@@ -4465,9 +4839,12 @@ function loop(){
   for(let i=enemies.length-1;i>=0;i--){
     const e=enemies[i];
     const slow=stasisActive&&distSq(player.x,player.y,e.x,e.y)<stasisR2?stasisSlow:1;
-    e.x+=e.vx*slow;e.y+=e.vy*slow;
-    e.rot+=e.rotSpd*slow;
-    if(e.y>H+e.size*2) enemies.splice(i,1);
+    if(e.boss) updateBoss(e,slow);
+    else{
+      e.x+=e.vx*slow;e.y+=e.vy*slow;
+      e.rot+=e.rotSpd*slow;
+      if(e.y>H+e.size*2) enemies.splice(i,1);
+    }
   }
   checkCollisions();
 
@@ -4477,6 +4854,7 @@ function loop(){
   drawBg();
   drawArrows();
   for(const e of enemies)drawEnemy(e);
+  drawEnemyBullets();
   drawEpOrbs();
   drawStasisAura();
   drawSupportUnits();
