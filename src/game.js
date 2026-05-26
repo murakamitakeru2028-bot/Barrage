@@ -16,6 +16,8 @@ const DEMO_GRANT_KEY = 'demo-start-tokens-1000-v1';
 const SAVE_RESET_VERSION = 'global-reset-2026-05-26-v1';
 const SAVE_KEY = 'barrage-meta';
 const GOOGLE_PROFILE_KEY = 'barrage-google-profile';
+const RANKING_KEY = 'barrage-ranking-v1';
+const RANKING_LIMIT = 50;
 const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 const GOOGLE_CLIENT_ID = String(globalThis.BARRAGE_GOOGLE_CLIENT_ID || '').trim();
 const RUN_TOKEN_COIN_MULT = 1;
@@ -104,6 +106,7 @@ const UI_COPY = {
     warehouse:['ガレージ','ロードアウト確認'],
     upgrade:['アップグレード','ベースステータス'],
     codex:['アーカイブ','アビリティデータ'],
+    ranking:['ランキング','ハイスコア記録'],
     settings:['オプション','操作とサウンド']
   },
   ship:{coreOnly:'NU-00 ネイキッド',standard:'AF-01 アーク',striker:'VX-03 レイザー',guardian:'BG-12 バルワーク',carrier:'DR-07 ハイヴ'},
@@ -410,7 +413,7 @@ function freshMeta(settings={...DEFAULT_SETTINGS}){
   };
 }
 let meta = freshMeta();
-let homeState = 'home'; // 'home' | 'store' | 'warehouse' | 'upgrade' | 'settings' | 'codex'
+let homeState = 'home'; // 'home' | 'store' | 'warehouse' | 'upgrade' | 'settings' | 'codex' | 'ranking'
 let storeTab = 'ship';   // 'ship' | 'core' | 'part' | 'drone'
 let storePages = { ship:0, core:0, part:0, drone:0 };
 let warehouseTab = 'ship'; // 'ship' | 'custom' | 'turret' | 'armor' | 'drone' | 'coreBoost'
@@ -641,7 +644,10 @@ function recordRunHighScore(){
     meta.highScore={score:currentScore,wave:currentWave};
     changed=true;
   }
-  if(changed) saveMeta();
+  if(changed){
+    saveMeta();
+    upsertRankingEntry();
+  }
   return changed;
 }
 const hasGoogleClientId = () => !!(GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.includes('YOUR_'));
@@ -681,6 +687,7 @@ function normalizeGoogleProfile(payload){
     sub:String(payload.sub),
     email:String(payload.email||''),
     name:String(payload.name||payload.email||'Google User'),
+    gameName:sanitizePlayerName(payload.given_name||payload.name||payload.email||'PLAYER'),
     picture:String(payload.picture||''),
     linkedAt:Date.now()
   };
@@ -770,6 +777,7 @@ function handleGoogleCredential(response){
     const payload=decodeGoogleJwtPayload(response?.credential);
     const profile=normalizeGoogleProfile(payload);
     if(!profile) throw new Error('invalid profile');
+    if(accountState.profile?.sub===profile.sub && accountState.profile.gameName) profile.gameName=accountState.profile.gameName;
     const previousMeta=meta;
     saveMeta();
     const key=googleAccountSaveKey(profile.sub);
@@ -779,6 +787,7 @@ function handleGoogleCredential(response){
     persistAccountSession();
     if(!hasAccountSave) localStorage.setItem(key,JSON.stringify(previousMeta));
     loadMeta();
+    upsertRankingEntry(true);
     addFloat(W/2,286,`${profile.name} とリンク`,HOYO_UI.jade,11);
     playSfx('upgrade');
   }catch(e){
@@ -796,6 +805,96 @@ function signOutGoogle(){
   try{globalThis.google?.accounts?.id?.disableAutoSelect?.();}catch(e){}
   loadMeta();
   addFloat(W/2,286,`${name} からログアウト`,HOYO_UI.gold,11);
+  playSfx('select');
+}
+function sanitizePlayerName(name){
+  const cleaned=String(name||'').replace(/[\u0000-\u001f\u007f]/g,'').replace(/\s+/g,' ').trim();
+  const chars=Array.from(cleaned);
+  return (chars.length?chars.slice(0,14).join(''):'PLAYER');
+}
+function currentPlayerName(){
+  return sanitizePlayerName(accountState.profile?.gameName || accountState.profile?.name || 'GUEST');
+}
+function rankingPlayerId(){
+  return accountState.profile?.sub ? `google:${accountState.profile.sub}` : 'local:guest';
+}
+function loadRankingEntries(){
+  try{
+    const raw=localStorage.getItem(RANKING_KEY);
+    const rows=JSON.parse(raw||'[]');
+    if(!Array.isArray(rows)) return [];
+    return rows.filter(r=>r&&r.id&&Number.isFinite(Number(r.score))).map(r=>({
+      id:String(r.id),
+      name:sanitizePlayerName(r.name||'PLAYER'),
+      score:Math.max(0,Math.floor(Number(r.score)||0)),
+      wave:Math.max(1,Math.floor(Number(r.wave)||1)),
+      ship:String(r.ship||''),
+      core:String(r.core||''),
+      linked:!!r.linked,
+      updatedAt:Number(r.updatedAt)||0
+    }));
+  }catch(e){
+    return [];
+  }
+}
+function saveRankingEntries(entries){
+  try{localStorage.setItem(RANKING_KEY,JSON.stringify(entries.slice(0,RANKING_LIMIT)));}catch(e){}
+}
+function sortRankingEntries(entries){
+  return entries.sort((a,b)=>(b.score-a.score)||(b.wave-a.wave)||(b.updatedAt-a.updatedAt));
+}
+function currentRankingEntry(){
+  normalizeHighScore();
+  return {
+    id:rankingPlayerId(),
+    name:currentPlayerName(),
+    score:Math.max(0,Math.floor(Number(meta.highScore?.score)||0)),
+    wave:Math.max(1,Math.floor(Number(meta.highScore?.wave)||Number(meta.bestWave)||1)),
+    ship:meta.selectedShip,
+    core:meta.selectedCore,
+    linked:!!accountState.profile?.sub,
+    updatedAt:Date.now()
+  };
+}
+function upsertRankingEntry(forceName=false){
+  const entry=currentRankingEntry();
+  if(entry.score<=0 && entry.wave<=1) return;
+  const entries=loadRankingEntries();
+  const idx=entries.findIndex(r=>r.id===entry.id);
+  if(idx>=0){
+    const old=entries[idx];
+    const better=entry.score>old.score || (entry.score===old.score&&entry.wave>old.wave);
+    if(forceName || better){
+      entries[idx]=better ? entry : {...old,name:entry.name,linked:entry.linked,ship:entry.ship,core:entry.core,updatedAt:Date.now()};
+    }
+  }else{
+    entries.push(entry);
+  }
+  saveRankingEntries(sortRankingEntries(entries));
+}
+function rankingRows(){
+  const entries=loadRankingEntries();
+  const current=currentRankingEntry();
+  const idx=entries.findIndex(r=>r.id===current.id);
+  if(current.score>0 || current.wave>1){
+    if(idx>=0) entries[idx]={...entries[idx],name:current.name,linked:current.linked};
+    else entries.push(current);
+  }
+  return sortRankingEntries(entries).slice(0,10);
+}
+function setGameUserName(){
+  if(!accountState.profile){
+    startGoogleSignIn();
+    return;
+  }
+  const current=currentPlayerName();
+  const next=window.prompt('ゲーム内ユーザーネーム',current);
+  if(next===null) return;
+  const name=sanitizePlayerName(next);
+  accountState.profile={...accountState.profile,gameName:name};
+  persistAccountSession();
+  upsertRankingEntry(true);
+  addFloat(W/2,286,`${name} に変更`,HOYO_UI.jade,11);
   playSfx('select');
 }
 function loadMeta(){
@@ -4202,6 +4301,7 @@ const HOME_NAV_BTNS=[
   {id:'warehouse',label:'ガレージ',color:'#b8a7ff'},
   {id:'upgrade',label:'アップグレード',color:'#cc00ff'},
   {id:'codex',label:'アーカイブ',color:'#88aaff'},
+  {id:'ranking',label:'ランキング',color:'#36f39b'},
   {id:'settings',label:'オプション',color:'#00dd77'},
 ];
 const HOME_NAV={x:24,y:432,w:162,h:54,gapX:18,gapY:10};
@@ -4210,6 +4310,7 @@ const HOME_NAV_VIEW=[
   {id:'warehouse',label:'ガレージ',sub:'カスタム確認',color:'#b8a7ff'},
   {id:'upgrade',label:'アップグレード',sub:'ベースステータス',color:'#cc00ff'},
   {id:'codex',label:'アーカイブ',sub:'アビリティデータ',color:'#88aaff'},
+  {id:'ranking',label:'ランキング',sub:'ハイスコア記録',color:'#36f39b'},
   {id:'settings',label:'オプション',sub:'操作とサウンド',color:'#00dd77'},
 ];
 const CODEX={startY:102,rowH:58,pageSize:7,pagerY:624,btnW:88,btnH:30};
@@ -4217,12 +4318,12 @@ HOME_TABS.forEach(t=>{ t.label=UI_COPY.nav[t.id]?.[0] || t.label; });
 HOME_NAV_BTNS.forEach(b=>{
   const copy=UI_COPY.nav[b.id];
   if(copy) b.label=copy[0].toUpperCase();
-  b.color={store:HOYO_UI.blue,warehouse:HOYO_UI.gold,upgrade:HOYO_UI.rose,codex:'#9cff5e',settings:HOYO_UI.jade}[b.id] || b.color;
+  b.color={store:HOYO_UI.blue,warehouse:HOYO_UI.gold,upgrade:HOYO_UI.rose,codex:'#9cff5e',ranking:HOYO_UI.jade,settings:HOYO_UI.blue}[b.id] || b.color;
 });
 HOME_NAV_VIEW.forEach(b=>{
   const copy=UI_COPY.nav[b.id];
   if(copy){ b.label=copy[0].toUpperCase(); b.sub=copy[1]; }
-  b.color={store:HOYO_UI.blue,warehouse:HOYO_UI.gold,upgrade:HOYO_UI.rose,codex:'#9cff5e',settings:HOYO_UI.jade}[b.id] || b.color;
+  b.color={store:HOYO_UI.blue,warehouse:HOYO_UI.gold,upgrade:HOYO_UI.rose,codex:'#9cff5e',ranking:HOYO_UI.jade,settings:HOYO_UI.blue}[b.id] || b.color;
 });
 function drawHomeGridCard(i,color,title,value,metaText,owned=false,selected=false){
   const col=i%2,row=Math.floor(i/2);
@@ -4348,7 +4449,7 @@ function hitTabRow(cx,cy,tabs,y,h=28){
 }
 function hitBackBtn(cx,cy){ return cx>=BACK_BTN.x&&cx<=BACK_BTN.x+BACK_BTN.w&&cy>=BACK_BTN.y&&cy<=BACK_BTN.y+BACK_BTN.h; }
 function drawSubHeader(title,tokenVisible=true){
-  title={store:'ストア',warehouse:'ガレージ',upgrade:'アップグレード',codex:'アーカイブ',settings:'オプション'}[homeState] || title;
+  title={store:'ストア',warehouse:'ガレージ',upgrade:'アップグレード',codex:'アーカイブ',ranking:'ランキング',settings:'オプション'}[homeState] || title;
   ctx.save();
   ctx.fillStyle='rgba(4,5,5,.94)';ctx.fillRect(0,0,W,58);
   ctx.fillStyle='rgba(184,167,255,.92)';
@@ -5152,18 +5253,109 @@ function handleCodexClick(cx,cy){
   }
 }
 
+// ── ランキング画面 ──
+function rankingAccountRect(){
+  return {x:14,y:74,w:W-28,h:70};
+}
+function drawRankingAccountCard(){
+  const r=rankingAccountRect();
+  const linked=!!accountState.profile;
+  const color=linked?HOYO_UI.jade:HOYO_UI.gold;
+  drawCutPanel(r.x,r.y,r.w,r.h,color,linked);
+  drawItemCardChrome(r.x,r.y,r.w,r.h,color,linked,linked?'ID':'GUEST');
+  drawStatusTag(r.x+14,r.y+14,62,26,linked?'GOOGLE':'GUEST',color,linked);
+  ctx.textAlign='left';
+  ctx.textBaseline='middle';
+  ctx.font=`900 16px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.text;
+  fillFitText(currentPlayerName(),r.x+90,r.y+24,r.w-178);
+  ctx.font=`bold 11px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.muted;
+  const sub=linked?'タップでユーザーネーム変更':'Googleログインでハイスコアをアカウントに紐づけ';
+  fillFitText(sub,r.x+90,r.y+48,r.w-108);
+  ctx.textAlign='right';
+  ctx.font=`900 10px ${UI_FONT}`;
+  ctx.fillStyle=color;
+  ctx.fillText(`BEST WAVE ${formatCompactNumber(highScoreWave())}`,r.x+r.w-16,r.y+22);
+  ctx.fillStyle=HOYO_UI.gold;
+  ctx.fillText(`SCORE ${formatCompactNumber(meta.highScore.score)}`,r.x+r.w-16,r.y+46);
+}
+function drawRankingRow(row,rank,y,me=false){
+  const h=42,x=14,w=W-28;
+  const color=rank===1?HOYO_UI.gold:(me?HOYO_UI.jade:HOYO_UI.blue);
+  drawCutPanel(x,y,w,h,color,me||rank<=3);
+  drawItemCardChrome(x,y,w,h,color,me||rank<=3,String(rank));
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.font=`900 15px ${UI_FONT}`;
+  ctx.fillStyle=rank<=3?color:HOYO_UI.muted;
+  ctx.fillText(`#${rank}`,x+28,y+h/2+1);
+  ctx.textAlign='left';
+  ctx.font=`900 13px ${UI_FONT}`;
+  ctx.fillStyle=me?HOYO_UI.jade:HOYO_UI.text;
+  fillFitText(row.name,x+58,y+15,132);
+  ctx.font=`bold 10px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.muted;
+  fillFitText(`${row.linked?'Google':'Local'} / ${displayName('ship',SHIP_BY_ID[row.ship]||selectedShipDef())}`,x+58,y+31,150);
+  ctx.textAlign='right';
+  ctx.font=`900 15px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.gold;
+  ctx.fillText(formatCompactNumber(row.score),x+w-18,y+15);
+  ctx.font=`900 10px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.muted;
+  ctx.fillText(`WAVE ${formatCompactNumber(row.wave)}`,x+w-18,y+31);
+}
+function drawRankingScreen(){
+  drawBg();
+  ctx.save();
+  drawSubBackdrop(.80);
+  drawSubHeader('ランキング');
+  drawRankingAccountCard();
+  drawSectionLabel('ハイスコアランキング',24,166,HOYO_UI.gold);
+  const rows=rankingRows();
+  const meId=rankingPlayerId();
+  const top=184;
+  if(rows.length===0){
+    drawCutPanel(14,top,W-28,82,HOYO_UI.blue,false);
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.font=`900 14px ${UI_FONT}`;
+    ctx.fillStyle=HOYO_UI.muted;
+    ctx.fillText('まだランキング記録がありません',W/2,top+42);
+  }
+  for(let i=0;i<Math.min(rows.length,9);i++){
+    drawRankingRow(rows[i],i+1,top+i*47,rows[i].id===meId);
+  }
+  ctx.textAlign='center';
+  ctx.font=`bold 10px ${UI_FONT}`;
+  ctx.fillStyle=HOYO_UI.faint;
+  ctx.fillText('現在はこの端末内ランキングです。オンライン同期にはランキングAPIを追加します。',W/2,644);
+  ctx.restore();
+}
+function handleRankingClick(cx,cy){
+  if(hitBackBtn(cx,cy)){setHomeState('home');return;}
+  const r=rankingAccountRect();
+  if(cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h){
+    accountState.profile?setGameUserName():startGoogleSignIn();
+  }
+}
+
 // ── 設定画面 ──
 const ACCOUNT_SECTION_Y = 284;
 const AUDIO_SECTION_Y = 374;
 function accountLinkRect(){
   return {x:24,y:ACCOUNT_SECTION_Y,w:W-48,h:62};
 }
+function accountLogoutRect(){
+  const r=accountLinkRect();
+  return {x:r.x+r.w-74,y:r.y+36,w:58,h:18};
+}
 function drawAccountLinkCard(){
   const r=accountLinkRect();
   const profile=accountState.profile;
   const ready=hasGoogleClientId();
   const color=profile?HOYO_UI.jade:(ready?HOYO_UI.gold:HOYO_UI.rose);
-  const title=profile?profile.name:(accountState.loading?'ログイン準備中':(ready?'Googleでログイン':'Google Client ID 未設定'));
+  const title=profile?currentPlayerName():(accountState.loading?'ログイン準備中':(ready?'Googleでログイン':'Google Client ID 未設定'));
   drawSectionLabel('アカウント連携',24,r.y-20,color);
   drawCutPanel(r.x,r.y,r.w,r.h,color,!!profile);
   drawStatusTag(r.x+12,r.y+14,58,26,profile?'LINK':'GOOGLE',color,!!profile);
@@ -5175,17 +5367,25 @@ function drawAccountLinkCard(){
   ctx.font=`bold 11px ${UI_FONT}`;
   ctx.fillStyle=HOYO_UI.muted;
   const desc=profile
-    ? `${profile.email || 'Googleアカウント'} / タップでログアウト`
+    ? `${profile.email || 'Googleアカウント'} / タップで名前変更`
     : (ready?'この端末のセーブをGoogleアカウントに紐づけます':'index.html の BARRAGE_GOOGLE_CLIENT_ID を設定してください');
   fillFitText(desc,r.x+82,r.y+39,r.w-104);
   ctx.textAlign='right';
   ctx.font=`900 10px ${UI_FONT}`;
   ctx.fillStyle=color;
-  ctx.fillText(profile?'ACCOUNT SAVE':(accountState.loading?'LOADING':(ready?'SIGN IN':'SETUP')),r.x+r.w-16,r.y+18);
+  ctx.fillText(profile?'PLAYER NAME':(accountState.loading?'LOADING':(ready?'SIGN IN':'SETUP')),r.x+r.w-16,r.y+18);
+  if(profile){
+    const out=accountLogoutRect();
+    drawStatusTag(out.x,out.y,out.w,out.h,'LOGOUT',HOYO_UI.rose,false);
+  }
 }
 function hitAccountLink(cx,cy){
   const r=accountLinkRect();
   return cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h;
+}
+function hitAccountLogout(cx,cy){
+  const r=accountLogoutRect();
+  return accountState.profile&&cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h;
 }
 function audioSettingsRows(startY=318){
   return [
@@ -5299,7 +5499,8 @@ function handleSettingsClick(cx,cy){
   const bx=24, by=110, bw=W-48, bh=70, gap=12;
   const modes=['buttons','stick'];
   if(hitResetDataButton(cx,cy)){handleResetDataClick();return;}
-  if(hitAccountLink(cx,cy)){resetConfirmFrames=0;startGoogleSignIn();return;}
+  if(hitAccountLogout(cx,cy)){resetConfirmFrames=0;signOutGoogle();return;}
+  if(hitAccountLink(cx,cy)){resetConfirmFrames=0;accountState.profile?setGameUserName():startGoogleSignIn();return;}
   for(let i=0;i<modes.length;i++){
     const y=by+i*(bh+gap);
     if(cx>=bx&&cx<=bx+bw&&cy>=y&&cy<=y+bh){resetConfirmFrames=0;setTouchControlMode(modes[i]);return;}
@@ -5561,6 +5762,7 @@ function drawStartScreen(){
   if(homeState==='warehouse'){drawWarehouseScreen();return;}
   if(homeState==='upgrade'){drawUpgradeScreen();return;}
   if(homeState==='codex'){drawCodexScreen();return;}
+  if(homeState==='ranking'){drawRankingScreen();return;}
   if(homeState==='settings'){drawSettingsScreen();return;}
   drawHomeScreenV3();
 }
@@ -5730,6 +5932,7 @@ function handleCanvasAction(cx,cy){
     if(homeState==='warehouse'){handleWarehouseClick(cx,cy);return true;}
     if(homeState==='upgrade'){handleUpgradeClick(cx,cy);return true;}
     if(homeState==='codex'){handleCodexClick(cx,cy);return true;}
+    if(homeState==='ranking'){handleRankingClick(cx,cy);return true;}
     if(homeState==='settings'){handleSettingsClick(cx,cy);return true;}
     if(handleHomeClick(cx,cy)) return true;
   }
