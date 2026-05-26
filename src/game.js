@@ -408,12 +408,13 @@ let meta = freshMeta();
 let homeState = 'home'; // 'home' | 'store' | 'warehouse' | 'upgrade' | 'settings' | 'codex'
 let storeTab = 'ship';   // 'ship' | 'core' | 'part' | 'drone'
 let storePages = { ship:0, core:0, part:0, drone:0 };
-let warehouseTab = 'ship'; // 'ship' | 'turret' | 'armor' | 'drone' | 'coreBoost'
+let warehouseTab = 'ship'; // 'ship' | 'custom' | 'turret' | 'armor' | 'drone' | 'coreBoost'
 let codexTab = 'special';
 let codexPage = 0;
 let pauseView = 'menu';
 let resetConfirmFrames = 0;
 let pendingStorePurchase = null;
+let uiViewOpenedAt = 0, uiStoreTabAt = 0, uiWarehouseTabAt = 0, uiConfirmAt = 0;
 
 // ─────────────────────────────────────
 //  ステータス計算
@@ -877,6 +878,7 @@ function clearPendingStorePurchase(){
 }
 function setPendingStorePurchase(action){
   pendingStorePurchase=action;
+  uiConfirmAt=uiNow();
   addFloat(W/2,156,`${action.title}しますか？`,action.color,11);
   playSfx('select');
 }
@@ -1193,6 +1195,44 @@ function h2r(hex,a){
   const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
   return `rgba(${r},${g},${b},${a})`;
 }
+const uiNow = () => (globalThis.performance?.now?.() ?? Date.now()) * .001;
+const clamp01 = v => Math.max(0,Math.min(1,v));
+const easeOutCubic = t => 1 - Math.pow(1-clamp01(t),3);
+const alphaColor = (color,a) => String(color).startsWith('#') ? h2r(color,a) : color;
+function uiProgress(start,dur=.34,delay=0){
+  return easeOutCubic((uiNow()-start-delay)/dur);
+}
+function setHomeState(next){
+  if(homeState===next) return;
+  homeState=next;
+  uiViewOpenedAt=uiNow();
+  if(next==='store') uiStoreTabAt=uiViewOpenedAt;
+  if(next==='warehouse') uiWarehouseTabAt=uiViewOpenedAt;
+}
+function drawUiSweep(x,y,w,h,accent=HOYO_UI.gold,strength=.55,offset=0){
+  if(w<=0||h<=0) return;
+  const t=uiNow();
+  const sx=x+((t*120+offset)%(w+96))-96;
+  ctx.save();
+  cutPanel(x,y,w,h,12);
+  ctx.clip();
+  ctx.globalCompositeOperation='lighter';
+  const g=ctx.createLinearGradient(sx,y,sx+88,y+h*.25);
+  g.addColorStop(0,'rgba(255,255,255,0)');
+  g.addColorStop(.48,alphaColor(accent,.20*strength));
+  g.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=g;
+  ctx.fillRect(sx,y-4,88,h+8);
+  ctx.restore();
+}
+function drawUiEntrance(index,start,fn,step=.045){
+  const p=uiProgress(start,.34,index*step);
+  ctx.save();
+  ctx.globalAlpha*=.35+.65*p;
+  ctx.translate(0,(1-p)*12);
+  fn();
+  ctx.restore();
+}
 function displayName(kind,itemOrId){
   const id=typeof itemOrId==='string'?itemOrId:itemOrId?.id;
   return UI_COPY[kind]?.[id] || itemOrId?.name || id || '';
@@ -1224,16 +1264,26 @@ function cutPanel(x,y,w,h,cut=12){
 function drawCutPanel(x,y,w,h,accent=HOYO_UI.gold,active=false){
   ctx.save();
   cutPanel(x,y,w,h,active?15:10);
-  ctx.fillStyle=active?h2r(accent,.18):'rgba(12,15,17,.94)';
+  ctx.fillStyle=active?alphaColor(accent,.18):'rgba(12,15,17,.94)';
   ctx.fill();
   cutPanel(x+1,y+1,w-2,h-2,active?14:9);
   ctx.fillStyle=active?'rgba(238,247,255,.070)':'rgba(238,247,255,.035)';
   ctx.fill();
 
-  ctx.strokeStyle=active?h2r(accent,.88):'rgba(238,247,255,.20)';
+  ctx.strokeStyle=active?alphaColor(accent,.88):'rgba(238,247,255,.20)';
   ctx.lineWidth=active?1.8:1.05;
   cutPanel(x,y,w,h,active?15:10);ctx.stroke();
-  ctx.fillStyle=h2r(accent,active?.95:.58);
+  if(active){
+    ctx.shadowColor=accent;
+    ctx.shadowBlur=6+Math.sin(uiNow()*4+x*.01)*2;
+    cutPanel(x+.5,y+.5,w-1,h-1,15);
+    ctx.strokeStyle=alphaColor(accent,.32);
+    ctx.lineWidth=1;
+    ctx.stroke();
+    ctx.shadowBlur=0;
+    drawUiSweep(x,y,w,h,accent,.7,x+y);
+  }
+  ctx.fillStyle=alphaColor(accent,active?.95:.58);
   ctx.fillRect(x+1,y+4,4,Math.max(14,h-8));
   ctx.fillRect(x+10,y+1,Math.min(38,w*.24),2);
   ctx.fillStyle='rgba(0,0,0,.36)';
@@ -4123,6 +4173,13 @@ function drawSubHeader(title,tokenVisible=true){
   ctx.fillStyle='rgba(4,5,5,.94)';ctx.fillRect(0,0,W,58);
   ctx.fillStyle='rgba(184,167,255,.92)';
   cutPanel(68,8,164,39,12);ctx.fill();
+  ctx.save();
+  cutPanel(68,8,164,39,12);ctx.clip();
+  ctx.globalCompositeOperation='lighter';
+  const headSweep=68+((uiNow()*84)%(164+56))-56;
+  ctx.fillStyle='rgba(238,247,255,.18)';
+  ctx.fillRect(headSweep,8,34,39);
+  ctx.restore();
   ctx.fillStyle='rgba(238,247,255,.055)';
   cutPanel(230,18,78,20,8);ctx.fill();
   ctx.strokeStyle='rgba(238,247,255,.16)';ctx.lineWidth=1;
@@ -4159,6 +4216,18 @@ function drawTabRow(tabs,labels,current,y,h=28){
     cutPanel(tx,y,tabW-4,h,9);ctx.stroke();
     ctx.fillStyle=active?HOYO_UI.ink:h2r(color,.55);
     ctx.fillRect(tx+2,y+2,4,h-4);
+    if(active){
+      ctx.save();
+      cutPanel(tx,y,tabW-4,h,9);
+      ctx.clip();
+      ctx.globalCompositeOperation='lighter';
+      const sweep=tx+((uiNow()*96+i*31)%(tabW+42))-42;
+      ctx.fillStyle=alphaColor(color,.22);
+      ctx.fillRect(sweep,y+2,26,h-4);
+      ctx.fillStyle=alphaColor(HOYO_UI.text,.30);
+      ctx.fillRect(tx+10,y+h-4,(tabW-24)*(0.66+Math.sin(uiNow()*3+i)*.12),2);
+      ctx.restore();
+    }
     ctx.font=`900 12px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle=active?HOYO_UI.ink:HOYO_UI.muted;
     ctx.fillText(label,tx+(tabW-4)/2,y+h/2+1);
@@ -4307,11 +4376,22 @@ function drawLoadoutPanel(x,y,w,h,ship=selectedShipDef()){
 function drawActiveShipPanel(x,y,w,h,label='使用中'){
   const ship=selectedShipDef(), core=selectedCoreDef();
   drawCutPanel(x,y,w,h,ship.color,true);
+  drawUiSweep(x,y,w,h,ship.color,.55,24);
   ctx.save();
   ctx.beginPath();
   ctx.rect(x+w-78,y+4,68,h-8);
   ctx.clip();
   drawCraft(x+w-42,y+h/2,0.30,ship.id,core.id);
+  const t=uiNow();
+  ctx.strokeStyle=alphaColor(ship.color,.55);
+  ctx.lineWidth=1.2;
+  ctx.beginPath();
+  ctx.arc(x+w-42,y+h/2,24,t*1.8,t*1.8+Math.PI*1.15);
+  ctx.stroke();
+  ctx.strokeStyle='rgba(238,247,255,.24)';
+  ctx.beginPath();
+  ctx.arc(x+w-42,y+h/2,30,-t*1.2,-t*1.2+Math.PI*.72);
+  ctx.stroke();
   ctx.restore();
   ctx.textAlign='left';
   ctx.textBaseline='middle';
@@ -4358,10 +4438,14 @@ function drawStorePurchaseConfirmPanel(){
   const action=pendingStorePurchase;
   if(!action || action.tab!==storeTab) return;
   const p=storePurchaseConfirmPanelRect();
+  const appear=uiProgress(uiConfirmAt||uiViewOpenedAt,.24);
   ctx.save();
-  ctx.fillStyle='rgba(5,6,7,.68)';
+  ctx.fillStyle=`rgba(5,6,7,${.40+.28*appear})`;
   ctx.fillRect(0,p.y-10,W,H-p.y+10);
+  ctx.globalAlpha*=.35+.65*appear;
+  ctx.translate(0,(1-appear)*18);
   drawCutPanel(p.x,p.y,p.w,p.h,action.color,true);
+  drawUiSweep(p.x,p.y,p.w,p.h,action.color,.75,70);
   ctx.textAlign='left';ctx.textBaseline='middle';
   drawStatusTag(p.x+14,p.y+14,48,28,action.icon,action.color,true);
   ctx.font=`900 14px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
@@ -4450,9 +4534,10 @@ function drawStoreScreen(){
   drawActiveShipPanel(14,STORE_ACTIVE_Y,W-28,56,'使用中');
   drawTabRow(STORE_TABS,STORE_LABELS,storeTab,STORE_TAB_Y);
   const cy=STORE_CONTENT_Y;
+  const animStart=Math.max(uiViewOpenedAt,uiStoreTabAt);
   if(storeTab==='ship'){
     const items=visibleStoreDefs('ship');
-    for(let i=0;i<items.length;i++) drawStoreShipCard(i,items[i],cy);
+    for(let i=0;i<items.length;i++) drawUiEntrance(i,animStart,()=>drawStoreShipCard(i,items[i],cy));
   }else if(storeTab==='core'){
     const core=selectedCoreDef(),lv=selectedCoreLevel(),uc=coreUpgradeCost(),can=meta.tokens>=uc;
     drawCutPanel(14,cy,W-28,46,can?HOYO_UI.gold:core.color,can);
@@ -4463,7 +4548,7 @@ function drawStoreScreen(){
     ctx.fillText(isPendingStorePurchase('coreUpgrade',core.id)?'強化確認中':(can?'コアアップ可能':'トークン不足'),26,cy+33);
     drawTokenAmount(W-22,cy+23,uc,'right',9);
     const items=visibleStoreDefs('core');
-    for(let i=0;i<items.length;i++) drawStoreCoreCard(i,items[i],cy+58);
+    for(let i=0;i<items.length;i++) drawUiEntrance(i+1,animStart,()=>drawStoreCoreCard(i,items[i],cy+58));
   }else{
     if(storeTab==='drone'){
       const ownedCount=purchasedDroneCount(), power=purchasedDroneDamageMult();
@@ -4474,11 +4559,11 @@ function drawStoreScreen(){
       ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
       ctx.fillText('購入したドローンはバトル中に自動射撃します。',26,cy+38);
       const items=visibleStoreDefs('drone');
-      for(let i=0;i<items.length;i++) drawStoreDroneCard(i,items[i],cy+66);
+      for(let i=0;i<items.length;i++) drawUiEntrance(i+1,animStart,()=>drawStoreDroneCard(i,items[i],cy+66));
     }else{
     drawLoadoutPanel(14,cy,W-28,62);
     const items=visibleStoreDefs('part');
-    for(let i=0;i<items.length;i++) drawStorePartCard(i,items[i],cy+64);
+    for(let i=0;i<items.length;i++) drawUiEntrance(i+1,animStart,()=>drawStorePartCard(i,items[i],cy+64));
     }
   }
   drawStorePager(storeTab);
@@ -4497,9 +4582,9 @@ function hitTwoColCard(cx,cy,count,startY,ch,gap=8){
   return -1;
 }
 function handleStoreClick(cx,cy){
-  if(hitBackBtn(cx,cy)){clearPendingStorePurchase();homeState='home';return;}
+  if(hitBackBtn(cx,cy)){clearPendingStorePurchase();setHomeState('home');return;}
   const tab=hitTabRow(cx,cy,STORE_TABS,STORE_TAB_Y);
-  if(tab){clearPendingStorePurchase();storeTab=tab;normalizeStorePage(storeTab);return;}
+  if(tab){clearPendingStorePurchase();storeTab=tab;normalizeStorePage(storeTab);uiStoreTabAt=uiNow();return;}
   if(handleStorePager(cx,cy,storeTab)) return;
   const cy0=STORE_CONTENT_Y;
   if(pendingStorePurchase&&pendingStorePurchase.tab===storeTab){
@@ -4625,7 +4710,8 @@ function drawWarehouseCustomView(startY){
   ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
   fillFitText(slotText(ship),26,startY+24,W-52);
   const listY=startY+48;
-  for(let i=0;i<SLOT_ORDER.length;i++) drawWarehouseCustomCard(i,SLOT_ORDER[i],listY,ship);
+  const animStart=Math.max(uiViewOpenedAt,uiWarehouseTabAt);
+  for(let i=0;i<SLOT_ORDER.length;i++) drawUiEntrance(i+1,animStart,()=>drawWarehouseCustomCard(i,SLOT_ORDER[i],listY,ship));
 }
 function drawWarehouseScreen(){
   drawBg();ctx.save();
@@ -4634,9 +4720,10 @@ function drawWarehouseScreen(){
   drawActiveShipPanel(14,WAREHOUSE_ACTIVE_Y,W-28,60,'使用中');
   drawTabRow(WAREHOUSE_TABS,WAREHOUSE_TAB_LABELS,warehouseTab,WAREHOUSE_TAB_Y,30);
   const startY=WAREHOUSE_CONTENT_Y;
+  const animStart=Math.max(uiViewOpenedAt,uiWarehouseTabAt);
   if(warehouseTab==='ship'){
     const owned=SHIP_DEFS.filter(s=>meta.ownedShips[s.id]);
-    for(let i=0;i<owned.length;i++) drawWarehouseShipCard(i,owned[i],startY);
+    for(let i=0;i<owned.length;i++) drawUiEntrance(i,animStart,()=>drawWarehouseShipCard(i,owned[i],startY));
   }else if(warehouseTab==='custom'){
     drawWarehouseCustomView(startY);
   }else{
@@ -4659,14 +4746,14 @@ function drawWarehouseScreen(){
       ctx.fillStyle=HOYO_UI.muted;ctx.font=`900 13px ${UI_FONT}`;
       ctx.fillText(`${WAREHOUSE_TAB_LABELS[type]}パーツなし / ストアでゲット`,W/2,listY+38);
     }
-    for(let i=0;i<owned.length;i++) drawWarehousePartCard(i,owned[i],listY,ship);
+    for(let i=0;i<owned.length;i++) drawUiEntrance(i+1,animStart,()=>drawWarehousePartCard(i,owned[i],listY,ship));
   }
   ctx.restore();
 }
 function handleWarehouseClick(cx,cy){
-  if(hitBackBtn(cx,cy)){homeState='home';return;}
+  if(hitBackBtn(cx,cy)){setHomeState('home');return;}
   const tab=hitTabRow(cx,cy,WAREHOUSE_TABS,WAREHOUSE_TAB_Y,30);
-  if(tab){warehouseTab=tab;return;}
+  if(tab){warehouseTab=tab;uiWarehouseTabAt=uiNow();return;}
   const startY=WAREHOUSE_CONTENT_Y;
   if(warehouseTab==='ship'){
     const owned=SHIP_DEFS.filter(s=>meta.ownedShips[s.id]);
@@ -4682,6 +4769,7 @@ function handleWarehouseClick(cx,cy){
       const y=listY+i*82;
       if(cx>=14&&cx<=W-14&&cy>=y&&cy<=y+74){
         warehouseTab=SLOT_ORDER[i];
+        uiWarehouseTabAt=uiNow();
         return;
       }
     }
@@ -4723,7 +4811,7 @@ function drawUpgradeScreen(){
   ctx.restore();
 }
 function handleUpgradeClick(cx,cy){
-  if(hitBackBtn(cx,cy)){homeState='home';return;}
+  if(hitBackBtn(cx,cy)){setHomeState('home');return;}
   const startY=76,cw=(W-36)/2,ch=64,gapY=8;
   for(let i=0;i<BASIC_STAT_DEFS.length;i++){
     const col=i%2,row=Math.floor(i/2);
@@ -4798,7 +4886,7 @@ function drawCodexScreen(){
   ctx.restore();
 }
 function handleCodexClick(cx,cy){
-  if(hitBackBtn(cx,cy)){homeState='home';return;}
+  if(hitBackBtn(cx,cy)){setHomeState('home');return;}
   const tab=hitTabRow(cx,cy,['special','basic'],58);
   if(tab){codexTab=tab;codexPage=0;return;}
   const py=CODEX.pagerY,leftX=W/2-CODEX.btnW-14,rightX=W/2+14,pages=codexPageCount();
@@ -4916,7 +5004,7 @@ function drawSettingsScreen(){
   ctx.restore();
 }
 function handleSettingsClick(cx,cy){
-  if(hitBackBtn(cx,cy)){resetConfirmFrames=0;homeState='home';return;}
+  if(hitBackBtn(cx,cy)){resetConfirmFrames=0;setHomeState('home');return;}
   const bx=24, by=110, bw=W-48, bh=70, gap=12;
   const modes=['buttons','stick'];
   if(hitResetDataButton(cx,cy)){handleResetDataClick();return;}
@@ -5240,7 +5328,7 @@ function returnHome(){
     awardTokens();
   }
   state='start';
-  homeState='home';
+  setHomeState('home');
   pauseView='menu';
   stopTouchMove();
   activePointerId=null;
@@ -5391,7 +5479,7 @@ function handleHomeClick(cx,cy){
   if(hitCheckpointStart(cx,cy)){startGame(highScoreCheckpointWave());return true;}
   if(hitBtn(cx,cy)){startGame();return true;}
   const nav=hitNavBtn(cx,cy);
-  if(nav){homeState=nav;return true;}
+  if(nav){setHomeState(nav);return true;}
   return false;
 }
 
