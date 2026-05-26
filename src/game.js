@@ -55,6 +55,9 @@ const SPLIT_DAMAGE_BASE = 0.62;
 const SPLIT_PARENT_RETENTION = 0.68;
 const UPGRADE_ZONE={w:110,h:96,vy:.92,missY:H+44};
 const BASE_ARROW_RANGE = 255;
+const DISTANCE_DAMAGE_FULL = 95;
+const DISTANCE_DAMAGE_MIN = 0.35;
+const ARROW_DESPAWN_MARGIN = 58;
 const HUD_T         = 32;   // 上部HUD高さ
 const HUD_B         = 132;  // 下部HUD高さ
 const PLAYER_Y      = H - HUD_B - 48;
@@ -103,7 +106,7 @@ const UI_COPY = {
   },
   partType:{turret:'砲台',armor:'装甲',drone:'ドローン',coreBoost:'コア'},
   stat:{
-    fireRate:'連射速度',bulletSpeed:'弾速',damage:'ダメージ',range:'射程距離',hp:'耐久',
+    fireRate:'連射速度',bulletSpeed:'弾速',damage:'ダメージ',range:'距離補正',hp:'耐久',
     xpMult:'経験値',speed:'機動力',critChance:'会心率',critDamage:'会心倍率',regen:'修復'
   },
   special:{
@@ -161,7 +164,7 @@ const BASIC_STAT_DEFS = [
   { id:'fireRate',    name:'連射速度', icon:'FR', color:'#1ed6ff' },
   { id:'bulletSpeed', name:'弾速',     icon:'>>', color:'#b8a7ff' },
   { id:'damage',      name:'ダメージ', icon:'DM', color:'#ff3b62' },
-  { id:'range',       name:'射程距離', icon:'RG', color:'#82d7ff' },
+  { id:'range',       name:'距離補正', icon:'RG', color:'#82d7ff' },
   { id:'hp',          name:'耐久',     icon:'HP', color:'#ff6b93' },
   { id:'xpMult',      name:'経験値',   icon:'XP', color:'#36f39b' },
   { id:'speed',       name:'機動力',   icon:'MV', color:'#1ed6ff' },
@@ -220,7 +223,7 @@ const SHIP_EFFECTS = {
   coreOnly:'開始SP +1 / 当たり判定小',
   standard:'WAVE更新時に耐久を10%回復',
   striker:'4射ごとに高威力ランス弾',
-  sniper:'射程 +40% / 6射ごとにレール弾',
+  sniper:'距離減衰軽減 +40% / 6射ごとにレール弾',
   guardian:'シールド +3 / 重装甲',
   mirage:'会心率 +10% / 当たり判定小',
   carrier:'支援ドローン +3 / 最終火力特化',
@@ -271,7 +274,7 @@ const PART_EFFECTS = {
   swarmLink:'支援ドローン +3',
   coreLink:'経験値 +50%',
   overclock:'会心率 +15%',
-  rangeExt:'射程 +35%',
+  rangeExt:'距離減衰軽減 +35%',
   plasmaArray:'高火力プラズマ連装砲',
   phaseCannon:'位相干渉で単発火力を増幅',
   singularityRail:'重力収束レールで超火力',
@@ -304,7 +307,7 @@ const PART_INFO={
   swarmLink:{tier:'EPIC',desc:'支援ユニット数を増やす。'},
   coreLink:{tier:'EPIC',desc:'全システムを底上げ。'},
   overclock:{tier:'EPIC',desc:'攻撃と連射を過励起。'},
-  rangeExt:{tier:'EPIC',desc:'射程と命中余裕を伸ばす。'},
+  rangeExt:{tier:'EPIC',desc:'遠距離のダメージ減衰を抑える。'},
   plasmaArray:{tier:'MYTH',desc:'上位砲台の入口。'},
   phaseCannon:{tier:'MYTH',desc:'火力を指数的に押し上げる。'},
   singularityRail:{tier:'RELIC',desc:'超重量の一点突破火力。'},
@@ -469,7 +472,13 @@ const adrenalinePower = () => specialLevels.adrenaline * .25 * (1-hpRatio());
 const synergyMult = () => 1 + Math.max(0, statMult('bulletSpeed')-1) * specialLevels.statSynergy * .35;
 const fireRate  = () => Math.max(1, 22 / (statMult('fireRate') * bodyMult('fireRate')));
 const bulletSpd = () => 9 * statMult('bulletSpeed');
-const arrowRange = () => BASE_ARROW_RANGE * statMult('range') * (activeShipDef().id==='sniper' ? 1.40 : 1) * (hasMountedPart('rangeExt') ? 1.35 : 1);
+const damageFalloffRange = () => BASE_ARROW_RANGE * statMult('range') * (activeShipDef().id==='sniper' ? 1.40 : 1) * (hasMountedPart('rangeExt') ? 1.35 : 1);
+function distanceDamageMult(target){
+  const d=Math.hypot((target?.x??player.x)-player.x,(target?.y??player.y)-player.y);
+  if(d<=DISTANCE_DAMAGE_FULL) return 1;
+  const t=Math.max(0,Math.min(1,(d-DISTANCE_DAMAGE_FULL)/damageFalloffRange()));
+  return DISTANCE_DAMAGE_MIN+(1-DISTANCE_DAMAGE_MIN)*(1-t);
+}
 const damage    = () => (10 + wave*2) * statMult('damage') * bodyMult('attack') * (1 + specialLevels.powerShot*0.30) * (1+adrenalinePower()) * synergyMult();
 const xpMult    = () => statMult('xpMult') * (hasMountedPart('coreLink') ? 1.50 : 1);
 const moveSpeed = () => 3.7 * statMult('speed');
@@ -521,7 +530,7 @@ const hpText = () => `${formatCompactNumber(hp)}/${formatCompactNumber(maxHp)}`;
 const basicGainText = (id, lv=statLevels[id]) => {
   if(id==='regen') return `+${REGEN_STEP.toFixed(1)}/s`;
   if(id==='critChance'&&lv>=20) return '二重+5%';
-  if(id==='range') return '+5% 射程';
+  if(id==='range') return '+5% 補正距離';
   return '+5%';
 };
 const critReadout = () => doubleCritChance()>0 ? `100% 二重${Math.round(doubleCritChance()*100)}%` : `${Math.round(critChance()*100)}%`;
@@ -535,7 +544,7 @@ function basicStatReadouts(){
     { id:'fireRate',    icon:'FR', label:'連射', value:`${(60/fireInterval()).toFixed(1)}/s`, color:'#00f0ff' },
     { id:'bulletSpeed', icon:'▶▶', label:'弾速', value:fmtMult(statMult('bulletSpeed')),      color:'#b8a7ff' },
     { id:'damage',      icon:'✦',  label:'威力', value:fmtMult(statMult('damage')),           color:'#ff6020' },
-    { id:'range',       icon:'RG', label:'射程距離', value:`${Math.round(arrowRange())}`,      color:'#88aaff' },
+    { id:'range',       icon:'RG', label:'距離補正', value:`${Math.round(damageFalloffRange())}`, color:'#88aaff' },
     { id:'speed',       icon:'⇄',  label:'移動', value:fmtMult(statMult('speed')),             color:'#66ccff' },
     { id:'critChance',  icon:'※',  label:'会心', value:critReadout(),                          color:'#b8a7ff' },
     { id:'critDamage',  icon:'✹',  label:'倍率', value:fmtMult(critDamage()),                  color:'#ff7040' },
@@ -806,6 +815,7 @@ function homeStatBonus(id){
   if(lv===0) return '未アップ';
   if(id==='regen') return `+${(lv*REGEN_STEP).toFixed(1)}HP/s`;
   if(id==='critChance') return `会心 +${(lv*CRIT_STEP*100).toFixed(0)}%`;
+  if(id==='range') return `補正距離 ×${Math.pow(BASIC_STAT_GROWTH,lv).toFixed(2)}`;
   return `×${Math.pow(BASIC_STAT_GROWTH,lv).toFixed(2)}`;
 }
 function normalizeMounts(){
@@ -1533,9 +1543,8 @@ function spawnArrow(x,y,angle,opts={}){
   const vy=opts.vy ?? -Math.cos(angle)*spd;
   const speed=opts.speed??Math.hypot(vx,vy);
   const life=opts.life??240;
-  const range=opts.range??(opts.life ? speed*life : arrowRange());
   const sizeScale=opts.sizeScale??1;
-  arrows.push({x,y,prevX:x,prevY:y,vx,vy,speed,pierced:0,pierceBonus:opts.pierceBonus??0,pw,ricocheted:0,split:opts.split??false,dist:0,range,life,damageScale:opts.damageScale??1,sizeScale,hitRadius:opts.hitRadius??(4*sizeScale),kind:opts.kind??'main'});
+  arrows.push({x,y,prevX:x,prevY:y,vx,vy,speed,pierced:0,pierceBonus:opts.pierceBonus??0,pw,ricocheted:0,split:opts.split??false,dist:0,life,damageScale:opts.damageScale??1,sizeScale,hitRadius:opts.hitRadius??(4*sizeScale),kind:opts.kind??'main'});
 }
 function fireArrows(){
   shotSeq++;
@@ -1573,7 +1582,7 @@ function splitArrow(a){
   for(let i=0;i<n;i++){
     const off=n===1?0:(i/(n-1)-.5)*spread;
     const sizeScale=Math.max(.55,(a.sizeScale??1)*.85);
-    spawnArrow(a.x,a.y,base+off,{kind:'split',split:true,damageScale:scale,sizeScale,hitRadius:3.2*sizeScale,life:72,range:Math.max(110,a.range*.38)});
+    spawnArrow(a.x,a.y,base+off,{kind:'split',split:true,damageScale:scale,sizeScale,hitRadius:3.2*sizeScale,life:120});
   }
   a.damageScale*=SPLIT_PARENT_RETENTION;
   burst(a.x,a.y,'#b8a7ff',5);
@@ -1615,7 +1624,7 @@ function updateArrows(){
       splitArrow(a);
       a.split=true;
     }
-    if(a.life<=0||a.dist>=a.range||a.y<-20||a.y>H+20||a.x<-20||a.x>W+20) arrows.splice(i,1);
+    if(a.life<=0||a.y<-ARROW_DESPAWN_MARGIN||a.y>H+ARROW_DESPAWN_MARGIN||a.x<-ARROW_DESPAWN_MARGIN||a.x>W+ARROW_DESPAWN_MARGIN) arrows.splice(i,1);
   }
 }
 function drawArrows(){
@@ -2137,6 +2146,7 @@ function basicSkillValue(id){
   if(id==='critChance') return critReadout();
   if(id==='critDamage') return fmtMult(critDamage());
   if(id==='hp') return fmtMult(maxHp/100);
+  if(id==='range') return `${Math.round(damageFalloffRange())}`;
   return fmtMult(statMult(id));
 }
 function applyBasicSkill(id){
@@ -2499,7 +2509,7 @@ function drawSkillTreeV2(){
   ctx.fillText('アップグレード',18,28);
   ctx.font=`bold 11px ${UI_FONT}`;
   ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('SPでベース能力をアップ。射程距離もここで強化できます。',18,55);
+  ctx.fillText('SPでベース能力をアップ。距離補正もここで強化できます。',18,55);
 
   drawCutPanel(W-162,12,70,28,skillPoints>0?HOYO_UI.gold:HOYO_UI.blue,skillPoints>0);
   drawCutPanel(W-84,12,66,28,HOYO_UI.blue,false);
@@ -3065,7 +3075,8 @@ function checkCollisions(){
       if(Math.abs(a.x-e.x)>hitR||Math.abs(a.y-e.y)>hitR) continue;
       if(distSq(a.x,a.y,e.x,e.y)<hitR*hitR){
         const critTier=rollCritTier(critC,doubleCritC);
-        const hitDmg=dmg*a.damageScale*Math.pow(critD,critTier);
+        const distanceMult=distanceDamageMult(e);
+        const hitDmg=dmg*a.damageScale*distanceMult*Math.pow(critD,critTier);
         const actualDmg=Math.max(0,Math.min(e.hp,hitDmg));
         e.hp-=hitDmg; e.flash=6;
         addDamageXp(actualDmg);
