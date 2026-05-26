@@ -96,7 +96,7 @@ const HOYO_UI = {
 const UI_COPY = {
   nav:{
     store:['ストア','マシン・コア・ドローン'],
-    warehouse:['倉庫','ロードアウト変更'],
+    warehouse:['ガレージ','ロードアウト確認'],
     upgrade:['アップグレード','ベースステータス'],
     codex:['アーカイブ','アビリティデータ'],
     settings:['オプション','操作とサウンド']
@@ -3962,14 +3962,14 @@ const INSTALL_BTN={x:W/2-80,y:H-72,w:160,h:34};
 const HOME_START_Y=366;
 const HOME_TABS=[
   { id:'store', label:'ストア' },
-  { id:'warehouse', label:'倉庫' },
+  { id:'warehouse', label:'ガレージ' },
   { id:'upgrade', label:'アップグレード' },
 ];
 const HOME_TAB={x:10,y:234,w:118,h:32,gap:6};
 const HOME_GRID={x:12,y:274,w:175,h:56,gapX:14,gapY:8};
 const HOME_NAV_BTNS=[
   {id:'store',label:'ストア',color:'#00f0ff'},
-  {id:'warehouse',label:'倉庫',color:'#b8a7ff'},
+  {id:'warehouse',label:'ガレージ',color:'#b8a7ff'},
   {id:'upgrade',label:'アップグレード',color:'#cc00ff'},
   {id:'codex',label:'アーカイブ',color:'#88aaff'},
   {id:'settings',label:'オプション',color:'#00dd77'},
@@ -3977,7 +3977,7 @@ const HOME_NAV_BTNS=[
 const HOME_NAV={x:24,y:432,w:162,h:54,gapX:18,gapY:10};
 const HOME_NAV_VIEW=[
   {id:'store',label:'ストア',sub:'機体 / コア / ドローン',color:'#00f0ff'},
-  {id:'warehouse',label:'倉庫',sub:'ロードアウト',color:'#b8a7ff'},
+  {id:'warehouse',label:'ガレージ',sub:'カスタム確認',color:'#b8a7ff'},
   {id:'upgrade',label:'アップグレード',sub:'ベースステータス',color:'#cc00ff'},
   {id:'codex',label:'アーカイブ',sub:'アビリティデータ',color:'#88aaff'},
   {id:'settings',label:'オプション',sub:'操作とサウンド',color:'#00dd77'},
@@ -4118,7 +4118,7 @@ function hitTabRow(cx,cy,tabs,y,h=28){
 }
 function hitBackBtn(cx,cy){ return cx>=BACK_BTN.x&&cx<=BACK_BTN.x+BACK_BTN.w&&cy>=BACK_BTN.y&&cy<=BACK_BTN.y+BACK_BTN.h; }
 function drawSubHeader(title,tokenVisible=true){
-  title={store:'ストア',warehouse:'倉庫',upgrade:'アップグレード',codex:'アーカイブ',settings:'オプション'}[homeState] || title;
+  title={store:'ストア',warehouse:'ガレージ',upgrade:'アップグレード',codex:'アーカイブ',settings:'オプション'}[homeState] || title;
   ctx.save();
   ctx.fillStyle='rgba(4,5,5,.94)';ctx.fillRect(0,0,W,58);
   ctx.fillStyle='rgba(184,167,255,.92)';
@@ -4226,8 +4226,14 @@ function drawCraftInCard(x,y,w,h,shipId,coreId){
 // ── ストア画面 ──
 const STORE_TABS=['ship','core','part','drone'];
 const STORE_LABELS={ship:'SHIP',core:'CORE',part:'PART',drone:'DRONE'};
-const STORE_PAGE_SIZE={ship:8,core:6,part:8,drone:8};
+const STORE_PAGE_SIZE={ship:6,core:4,part:6,drone:6};
 const STORE_PAGER={y:522,w:78,h:20,gap:18};
+const STORE_ACTIVE_Y=62;
+const STORE_TAB_Y=128;
+const STORE_CONTENT_Y=166;
+const WAREHOUSE_ACTIVE_Y=62;
+const WAREHOUSE_TAB_Y=132;
+const WAREHOUSE_CONTENT_Y=176;
 function storeDefs(tab=storeTab){
   if(tab==='ship') return SHIP_DEFS;
   if(tab==='core') return CORE_DEFS;
@@ -4297,6 +4303,26 @@ function drawLoadoutPanel(x,y,w,h,ship=selectedShipDef()){
   fillFitText(slotText(ship),x+14,y+50,w-28);
   ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.gold;
   fillFitText(`${shipEffectText(ship)} / ${loadoutText(ship.id)}`,x+14,y+h-12,w-28);
+}
+function drawActiveShipPanel(x,y,w,h,label='使用中'){
+  const ship=selectedShipDef(), core=selectedCoreDef();
+  drawCutPanel(x,y,w,h,ship.color,true);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x+w-78,y+4,68,h-8);
+  ctx.clip();
+  drawCraft(x+w-42,y+h/2,0.30,ship.id,core.id);
+  ctx.restore();
+  ctx.textAlign='left';
+  ctx.textBaseline='middle';
+  drawStatusTag(x+12,y+9,52,20,label,ship.color,true);
+  ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
+  fillFitText(displayName('ship',ship),x+74,y+20,w-164);
+  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
+  fillFitText(`${core.icon} ${displayName('core',core)} Lv.${selectedCoreLevel()} / ${slotText(ship)}`,x+14,y+40,w-104);
+  ctx.fillStyle=ship.color;
+  ctx.font=`900 10px ${UI_FONT}`;
+  fillFitText(loadoutText(ship.id),x+14,y+h-9,w-104);
 }
 function drawStoreShipCard(i,ship,startY){
   const cw=(W-36)/2,ch=92,gap=8,col=i%2,row=Math.floor(i/2);
@@ -4396,7 +4422,7 @@ function drawStorePartCard(i,part,startY){
   else if(isPendingStorePurchase('part',part.id)) drawStatusTag(cx+cw-70,cy+7,60,17,'確認中',HOYO_UI.rose,true);
   else drawTokenAmount(cx+cw-8,cy+16,part.cost,'right',8);
   ctx.textAlign='right';ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
-  ctx.fillText(owned?'倉庫':partSlotStatus(part),cx+cw-8,cy+38);
+  ctx.fillText(owned?'ガレージ':partSlotStatus(part),cx+cw-8,cy+38);
 }
 function drawStoreDroneCard(i,drone,startY){
   const cw=(W-36)/2,ch=86,gap=8,col=i%2,row=Math.floor(i/2);
@@ -4421,8 +4447,9 @@ function drawStoreScreen(){
   drawBg();ctx.save();
   drawSubBackdrop(.78);
   drawSubHeader('ストア');
-  drawTabRow(STORE_TABS,STORE_LABELS,storeTab,62);
-  const cy=102;
+  drawActiveShipPanel(14,STORE_ACTIVE_Y,W-28,56,'使用中');
+  drawTabRow(STORE_TABS,STORE_LABELS,storeTab,STORE_TAB_Y);
+  const cy=STORE_CONTENT_Y;
   if(storeTab==='ship'){
     const items=visibleStoreDefs('ship');
     for(let i=0;i<items.length;i++) drawStoreShipCard(i,items[i],cy);
@@ -4449,17 +4476,17 @@ function drawStoreScreen(){
       const items=visibleStoreDefs('drone');
       for(let i=0;i<items.length;i++) drawStoreDroneCard(i,items[i],cy+66);
     }else{
-    drawLoadoutPanel(14,cy,W-28,72);
+    drawLoadoutPanel(14,cy,W-28,62);
     const items=visibleStoreDefs('part');
-    for(let i=0;i<items.length;i++) drawStorePartCard(i,items[i],cy+74);
+    for(let i=0;i<items.length;i++) drawStorePartCard(i,items[i],cy+64);
     }
   }
   drawStorePager(storeTab);
   drawStorePurchaseConfirmPanel();
   ctx.restore();
 }
-const WAREHOUSE_TABS=['ship','turret','armor','drone','coreBoost'];
-const WAREHOUSE_TAB_LABELS={ship:'機体',turret:'砲台',armor:'装甲',drone:'ドローン',coreBoost:'コア拡張'};
+const WAREHOUSE_TABS=['ship','custom','turret','armor','drone','coreBoost'];
+const WAREHOUSE_TAB_LABELS={ship:'機体',custom:'カスタム',turret:'砲台',armor:'装甲',drone:'ドローン',coreBoost:'コア'};
 function hitTwoColCard(cx,cy,count,startY,ch,gap=8){
   const cw=(W-36)/2;
   for(let i=0;i<count;i++){
@@ -4471,10 +4498,10 @@ function hitTwoColCard(cx,cy,count,startY,ch,gap=8){
 }
 function handleStoreClick(cx,cy){
   if(hitBackBtn(cx,cy)){clearPendingStorePurchase();homeState='home';return;}
-  const tab=hitTabRow(cx,cy,STORE_TABS,62);
+  const tab=hitTabRow(cx,cy,STORE_TABS,STORE_TAB_Y);
   if(tab){clearPendingStorePurchase();storeTab=tab;normalizeStorePage(storeTab);return;}
   if(handleStorePager(cx,cy,storeTab)) return;
-  const cy0=102;
+  const cy0=STORE_CONTENT_Y;
   if(pendingStorePurchase&&pendingStorePurchase.tab===storeTab){
     const cancel=storePurchaseConfirmButtonRect('cancel');
     const buy=storePurchaseConfirmButtonRect('buy');
@@ -4508,12 +4535,12 @@ function handleStoreClick(cx,cy){
     if(idx>=0) requestDronePurchase(items[idx].id);
   }else{
     const items=visibleStoreDefs('part');
-    const idx=hitTwoColCard(cx,cy,items.length,cy0+74,80,8);
+    const idx=hitTwoColCard(cx,cy,items.length,cy0+64,80,8);
     if(idx>=0) requestPartPurchase(items[idx].id);
   }
 }
 
-// ── 倉庫画面 ──
+// ── ガレージ画面 ──
 function drawWarehouseCorePanel(x,y,w,h){
   const core=selectedCoreDef(),lv=selectedCoreLevel();
   drawCutPanel(x,y,w,h,core.color,true);
@@ -4568,16 +4595,50 @@ function drawWarehousePartCard(i,part,startY,ship){
   else if(limit<=0) drawStatusTag(x+cw-68,y+7,58,17,'枠なし',HOYO_UI.faint,false);
   else drawStatusTag(x+cw-68,y+7,58,17,cur<limit?'セット':'満杯',cur<limit?HOYO_UI.jade:HOYO_UI.muted,false);
 }
+function warehouseSlotColor(type){
+  return {turret:HOYO_UI.rose,armor:HOYO_UI.blue,drone:HOYO_UI.jade,coreBoost:HOYO_UI.gold}[type] || HOYO_UI.gold;
+}
+function drawWarehouseCustomCard(i,type,startY,ship){
+  const x=14,y=startY+i*82,w=W-28,h=74;
+  const color=warehouseSlotColor(type);
+  const ids=(mountedForShip(ship.id)[type]||[]).filter(id=>PART_BY_ID[id]);
+  const limit=ship.slots[type]||0;
+  const names=ids.map(id=>displayName('part',PART_BY_ID[id])).join(' / ');
+  drawCutPanel(x,y,w,h,color,ids.length>0);
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  drawStatusTag(x+10,y+10,58,22,WAREHOUSE_TAB_LABELS[type],color,ids.length>0);
+  ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
+  fillFitText(ids.length?names:'未装着',x+80,y+22,w-166);
+  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
+  fillFitText(ids.length?ids.map(id=>multText(PART_BY_ID[id].mult,true)).join('  '):'このスロットは空です',x+16,y+48,w-32);
+  ctx.textAlign='right';
+  ctx.font=`900 11px ${UI_FONT}`;ctx.fillStyle=limit>0?color:HOYO_UI.faint;
+  ctx.fillText(`${ids.length}/${limit}`,x+w-18,y+21);
+  drawStatusTag(x+w-74,y+42,58,18,limit>0?'変更':'枠なし',limit>0?color:HOYO_UI.faint,false);
+}
+function drawWarehouseCustomView(startY){
+  const ship=selectedShipDef();
+  drawCutPanel(14,startY-10,W-28,42,ship.color,false);
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=ship.color;
+  fillFitText(`${displayName('ship',ship)}  カスタム`,26,startY+6,W-112);
+  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
+  fillFitText(slotText(ship),26,startY+24,W-52);
+  const listY=startY+48;
+  for(let i=0;i<SLOT_ORDER.length;i++) drawWarehouseCustomCard(i,SLOT_ORDER[i],listY,ship);
+}
 function drawWarehouseScreen(){
   drawBg();ctx.save();
   drawSubBackdrop(.78);
-  drawSubHeader('倉庫',false);
-  drawWarehouseCorePanel(14,62,W-28,60);
-  drawTabRow(WAREHOUSE_TABS,WAREHOUSE_TAB_LABELS,warehouseTab,132,30);
-  const startY=176;
+  drawSubHeader('ガレージ',false);
+  drawActiveShipPanel(14,WAREHOUSE_ACTIVE_Y,W-28,60,'使用中');
+  drawTabRow(WAREHOUSE_TABS,WAREHOUSE_TAB_LABELS,warehouseTab,WAREHOUSE_TAB_Y,30);
+  const startY=WAREHOUSE_CONTENT_Y;
   if(warehouseTab==='ship'){
     const owned=SHIP_DEFS.filter(s=>meta.ownedShips[s.id]);
     for(let i=0;i<owned.length;i++) drawWarehouseShipCard(i,owned[i],startY);
+  }else if(warehouseTab==='custom'){
+    drawWarehouseCustomView(startY);
   }else{
     const ship=selectedShipDef();
     const type=warehouseTab;
@@ -4604,9 +4665,9 @@ function drawWarehouseScreen(){
 }
 function handleWarehouseClick(cx,cy){
   if(hitBackBtn(cx,cy)){homeState='home';return;}
-  const tab=hitTabRow(cx,cy,WAREHOUSE_TABS,132,30);
+  const tab=hitTabRow(cx,cy,WAREHOUSE_TABS,WAREHOUSE_TAB_Y,30);
   if(tab){warehouseTab=tab;return;}
-  const startY=176;
+  const startY=WAREHOUSE_CONTENT_Y;
   if(warehouseTab==='ship'){
     const owned=SHIP_DEFS.filter(s=>meta.ownedShips[s.id]);
     const cw=(W-36)/2,ch=98,gap=8;
@@ -4614,6 +4675,15 @@ function handleWarehouseClick(cx,cy){
       const col=i%2,row=Math.floor(i/2);
       const x=14+col*(cw+8),y=startY+row*(ch+gap);
       if(cx>=x&&cx<=x+cw&&cy>=y&&cy<=y+ch){buyOrSelectShip(owned[i].id);return;}
+    }
+  }else if(warehouseTab==='custom'){
+    const listY=startY+48;
+    for(let i=0;i<SLOT_ORDER.length;i++){
+      const y=listY+i*82;
+      if(cx>=14&&cx<=W-14&&cy>=y&&cy<=y+74){
+        warehouseTab=SLOT_ORDER[i];
+        return;
+      }
     }
   }else{
     const owned=PART_DEFS.filter(p=>p.type===warehouseTab&&meta.ownedParts[p.id]);
