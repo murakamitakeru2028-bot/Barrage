@@ -43,7 +43,7 @@ const BOSS_HP_MULT = 18;
 const BOSS_CONTACT_MULT = 4;
 const BOSS_BULLET_BASE_DAMAGE = 34;
 const BOSS_BULLET_DAMAGE_STEP = 9;
-const MAX_ENEMY_BULLETS = 130;
+const MAX_ENEMY_BULLETS = 82;
 const DAMAGE_XP_RATE = 0.032;
 const MULTISHOT_DAMAGE_EXP = 0.34;
 const MULTISHOT_FIRE_DELAY_STEP = 0.07;
@@ -1666,7 +1666,7 @@ function spawnEnemyBullet(x,y,angle,speed,damage,size=5,color=HOYO_UI.rose,kind=
     vx:Math.cos(angle)*speed,
     vy:Math.sin(angle)*speed,
     speed,damage,size,color,kind,
-    life:260,
+    life:220,
     ...(extra||{})
   });
 }
@@ -1680,21 +1680,21 @@ function fireBossRing(boss,count,rot,speed,dmg,size,color,kind='ring',extra=null
   for(let i=0;i<count;i++) spawnEnemyBullet(boss.x,boss.y,rot+i*TAU/count,speed,dmg,size,color,kind,extra);
 }
 function fireBossPatternDuelist(boss,base,tier,dmg){
-  const count=Math.min(13,3+Math.floor(tier/2));
+  const count=Math.min(9,3+Math.floor(tier/3));
   const spread=Math.min(.82,.18+tier*.035);
   fireBossFan(boss,base,count,spread,2.1+tier*.13,dmg,5.2,boss.color,'aimed');
   if(boss.volley%4===0){
-    fireBossRing(boss,Math.min(28,12+tier*2),frame*.035+boss.phase,1.55+tier*.07,Math.ceil(dmg*.72),4.4,HOYO_UI.gold,'ring');
+    fireBossRing(boss,Math.min(18,8+tier),frame*.035+boss.phase,1.55+tier*.07,Math.ceil(dmg*.72),4.4,HOYO_UI.gold,'ring');
     shake(4);
   }
 }
 function fireBossPatternHelix(boss,base,tier,dmg){
-  const arms=Math.min(6,3+Math.floor(tier/3));
+  const arms=Math.min(4,2+Math.floor(tier/4));
   const rot=frame*.085+boss.phase+boss.volley*.42;
   for(let i=0;i<arms;i++){
     const a=rot+i*TAU/arms;
     spawnEnemyBullet(boss.x,boss.y,a,1.75+tier*.08,Math.ceil(dmg*.72),4.6,boss.color,'ring');
-    spawnEnemyBullet(boss.x,boss.y,a+Math.PI/(arms||1),1.22+tier*.05,Math.ceil(dmg*.58),3.8,HOYO_UI.gold,'ring');
+    if(boss.volley%2===0) spawnEnemyBullet(boss.x,boss.y,a+Math.PI/(arms||1),1.22+tier*.05,Math.ceil(dmg*.58),3.8,HOYO_UI.gold,'ring');
   }
   if(boss.volley%3===0) fireBossFan(boss,base,3,.18,2.45+tier*.09,dmg,4.6,HOYO_UI.rose,'aimed');
 }
@@ -1706,7 +1706,7 @@ function fireBossPatternSniper(boss,base,tier,dmg){
     spawnEnemyBullet(boss.x,boss.y+boss.size*.38,base+off,speed+i*.18,Math.ceil(dmg*1.25),4.2,boss.color,'needle',{life:190});
   }
   if(boss.volley%3===0){
-    const n=Math.min(14,6+tier);
+    const n=Math.min(8,4+Math.floor(tier/2));
     for(let i=0;i<n;i++){
       const x=28+i*(W-56)/Math.max(1,n-1);
       const a=Math.PI/2+(Math.sin(frame*.04+i)*.10);
@@ -1716,7 +1716,7 @@ function fireBossPatternSniper(boss,base,tier,dmg){
   }
 }
 function fireBossPatternWall(boss,base,tier,dmg){
-  const lanes=Math.min(10,5+Math.floor(tier/2));
+  const lanes=Math.min(7,4+Math.floor(tier/3));
   const gap=(W-68)/Math.max(1,lanes-1);
   const offset=(boss.volley%2)*gap*.5;
   for(let i=0;i<lanes;i++){
@@ -1724,16 +1724,16 @@ function fireBossPatternWall(boss,base,tier,dmg){
     const sway=(i%2?-.11:.11)+Math.sin(frame*.025+i)*.04;
     spawnEnemyBullet(x,boss.y+boss.size*.15,Math.PI/2+sway,1.7+tier*.08,Math.ceil(dmg*.78),5.4,boss.color,'ring');
   }
-  if(boss.volley%2===0) fireBossFan(boss,base,5,.42,2.35+tier*.07,dmg,4.8,HOYO_UI.rose,'aimed');
+  if(boss.volley%2===0) fireBossFan(boss,base,3,.34,2.35+tier*.07,dmg,4.8,HOYO_UI.rose,'aimed');
 }
 function fireBossPatternWarden(boss,base,tier,dmg){
-  const orbCount=Math.min(6,2+Math.floor(tier/2));
+  const orbCount=Math.min(3,1+Math.floor(tier/3));
   for(let i=0;i<orbCount;i++){
     const a=base+(i-(orbCount-1)/2)*.24;
-    spawnEnemyBullet(boss.x,boss.y+boss.size*.4,a,1.55+tier*.045,Math.ceil(dmg*1.05),6.8,boss.color,'orb',{turn:.026,life:300});
+    spawnEnemyBullet(boss.x,boss.y+boss.size*.4,a,1.55+tier*.045,Math.ceil(dmg*1.05),6.8,boss.color,'orb',{turn:.018,life:220});
   }
   if(boss.volley%3===0){
-    fireBossRing(boss,Math.min(22,10+tier*2),-frame*.045+boss.phase,1.18+tier*.05,Math.ceil(dmg*.66),4.7,HOYO_UI.gold,'ring');
+    fireBossRing(boss,Math.min(14,8+tier),-frame*.045+boss.phase,1.18+tier*.05,Math.ceil(dmg*.66),4.7,HOYO_UI.gold,'ring');
     shake(4);
   }
 }
@@ -1768,7 +1768,7 @@ function updateBoss(boss,slow=1){
   boss.shotTimer=(boss.shotTimer??60)-slow;
   if(boss.shotTimer<=0){
     fireBossPattern(boss);
-    boss.shotTimer=Math.max(18,(68-boss.tier*4)*(boss.shotRate||1));
+    boss.shotTimer=Math.max(28,(78-boss.tier*3)*(boss.shotRate||1));
   }
 }
 function updateEnemyBullets(){
@@ -1776,7 +1776,7 @@ function updateEnemyBullets(){
     const b=enemyBullets[i];
     b.prevX=b.x;
     b.prevY=b.y;
-    if(b.turn){
+    if(b.turn&&(frame&1)===0){
       const desired=Math.atan2(player.y-b.y,player.x-b.x);
       const current=Math.atan2(b.vy,b.vx);
       let diff=((desired-current+Math.PI*3)%TAU)-Math.PI;
@@ -1794,41 +1794,22 @@ function updateEnemyBullets(){
 }
 function drawEnemyBullets(){
   ctx.save();
-  ctx.globalCompositeOperation='lighter';
   ctx.shadowBlur=0;
   for(const b of enemyBullets){
     const col=b.color||HOYO_UI.rose;
-    ctx.strokeStyle=h2r(col,.36);
-    ctx.lineWidth=Math.max(1.2,b.size*.55);
-    ctx.beginPath();
-    ctx.moveTo(b.prevX,b.prevY);
-    ctx.lineTo(b.x,b.y);
-    ctx.stroke();
     ctx.fillStyle=col;
-    if(b.kind==='ring'||b.kind==='orb'){
+    if(b.kind==='orb'){
       ctx.beginPath();
       ctx.arc(b.x,b.y,b.size,0,TAU);
       ctx.fill();
-      if(b.kind==='orb'){
-        ctx.strokeStyle=h2r(col,.55);
-        ctx.lineWidth=1;
-        ctx.beginPath();
-        ctx.arc(b.x,b.y,b.size*1.55,frame*.03,Math.PI*1.35+frame*.03);
-        ctx.stroke();
-      }
+    }else if(b.kind==='ring'){
+      const s=b.size*1.35;
+      ctx.fillRect(b.x-s*.5,b.y-s*.5,s,s);
     }else if(b.kind==='needle'){
-      const a=Math.atan2(b.vy,b.vx);
-      ctx.save();
-      ctx.translate(b.x,b.y);
-      ctx.rotate(a);
-      ctx.fillRect(-b.size*1.8,-b.size*.32,b.size*3.6,b.size*.64);
-      ctx.restore();
+      ctx.fillRect(b.x-b.size*1.55,b.y-b.size*.28,b.size*3.1,b.size*.56);
     }else{
-      ctx.save();
-      ctx.translate(b.x,b.y);
-      ctx.rotate(Math.atan2(b.vy,b.vx)+Math.PI/4);
-      ctx.fillRect(-b.size*.62,-b.size*.62,b.size*1.24,b.size*1.24);
-      ctx.restore();
+      const s=b.size*1.15;
+      ctx.fillRect(b.x-s*.5,b.y-s*.5,s,s);
     }
   }
   ctx.restore();
