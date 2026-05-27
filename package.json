@@ -7,5 +7,8 @@
     "build": "node scripts/build.mjs",
     "dev": "npm run build && node scripts/serve.mjs dist",
     "preview": "node scripts/serve.mjs dist"
+  },
+  "dependencies": {
+    "three": "^0.184.0"
   }
 }

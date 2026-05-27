@@ -1,6635 +1,6521 @@
-// ─────────────────────────────────────
-//  定数
-// ─────────────────────────────────────
-const W = 390, H = 700;
-const XP_BASE       = 80;
-const BASIC_STAT_GROWTH = 1.05;
-const CRIT_STEP     = 0.05;
-const CRIT_BASE_DAMAGE = 2;
-const REGEN_STEP    = 0.5;
-const SHIELD_DELAY  = 300;
-const MAX_SPECIAL_TYPES = 5;
-const REROLL_COST  = 20;
-const TOKEN_SCORE_UNIT = 120;
-const DEMO_START_TOKENS = 1000;
-const DEMO_GRANT_KEY = 'demo-start-tokens-1000-v1';
-const SAVE_RESET_VERSION = 'global-reset-2026-05-26-v1';
-const SAVE_KEY = 'barrage-meta';
-const GOOGLE_PROFILE_KEY = 'barrage-google-profile';
-const RANKING_KEY = 'barrage-ranking-v1';
-const RANKING_LIMIT = 50;
-const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
-const GOOGLE_CLIENT_ID = String(globalThis.BARRAGE_GOOGLE_CLIENT_ID || '').trim();
-const RUN_TOKEN_COIN_MULT = 1;
-const RUN_TOKEN_WAVE_BONUS = 8;
-const RUN_TOKEN_TIME_BONUS = 0.2;
-const RUN_TOKEN_PAYOUT_DIVISOR = 220;
-const BODY_STAT_GROWTH = 1.05;
-const DPR_LIMIT = 1.6;
-const BG_GRID_STEP = 56;
-const BG_STAR_COUNT = 58;
-const BG_BEAM_COUNT = 4;
-const MAX_PARTICLES = 72;
-const MAX_EP_ORBS   = 28;
-const MAX_ARROWS    = 110;
-const MAX_FLOAT_TEXTS = 22;
-const MAX_ACTIVE_ENEMIES = 66;
-const GRACE_FRAMES  = 120;
-const FPS           = 60;
-const WAVE_DURATION_FRAMES = FPS * 10;
-const ENEMY_HP_BASE = 58;
-const ENEMY_HP_LINEAR = 42;
-const ENEMY_HP_QUAD = 4.2;
-const ENEMY_HP_EXP = 1.066;
-const ENEMY_HP_LATE_START = 12;
-const ENEMY_HP_LATE_EXP = 1.058;
-const ENEMY_HP_BRUTAL_START = 40;
-const ENEMY_HP_BRUTAL_EXP = 1.09;
-const ENEMY_CONTACT_EXP = 1.018;
-const BOSS_WAVE_INTERVAL = 10;
-const BOSS_HP_MULT = 18;
-const BOSS_CONTACT_MULT = 4;
-const BOSS_BULLET_BASE_DAMAGE = 36;
-const BOSS_BULLET_DAMAGE_STEP = 11;
-const MAX_ENEMY_BULLETS = 82;
-const DAMAGE_XP_RATE = 0.032;
-const MULTISHOT_DAMAGE_EXP = 0.34;
-const MULTISHOT_FIRE_DELAY_STEP = 0.07;
-const GATLING_FIRE_STEP = 0.14;
-const GATLING_DAMAGE_STEP = 0.06;
-const GATLING_SIZE_STEP = 0.035;
-const SPLIT_DAMAGE_BASE = 0.62;
-const SPLIT_PARENT_RETENTION = 0.68;
-const UPGRADE_ZONE={w:110,h:96,vy:.92,missY:H+44};
-const BASE_ARROW_RANGE = 255;
-const MIN_RENDERED_FIRE_INTERVAL = 4;
-const MIN_RAW_FIRE_INTERVAL = 0.25;
-const MAX_FIRE_COMPRESSION_DAMAGE = 16;
-const DISTANCE_DAMAGE_FULL = 95;
-const DISTANCE_DAMAGE_MIN = 0.35;
-const ARROW_DESPAWN_MARGIN = 58;
-const HUD_T         = 32;   // 上部HUD高さ
-const HUD_B         = 132;  // 下部HUD高さ
-const PLAYER_Y      = H - HUD_B - 48;
-const RESET_CONFIRM_FRAMES = FPS * 3;
-const DEFAULT_SETTINGS = {
-  touchControl:'buttons',
-  sound:true,
-  music:true,
-  sfx:true,
-  musicVolume:.52,
-  sfxVolume:.55
-};
-const AUDIO_ASSETS = {
-  bgm:['audio/bgm-1.mp3','audio/bgm-2.mp3']
-};
-const UI_FONT = '"Zen Kaku Gothic New","Oxanium","Yu Gothic UI",Meiryo,sans-serif';
-const DISPLAY_FONT = '"Zen Kaku Gothic New","Teko","Yu Gothic UI",Meiryo,sans-serif';
-const HOYO_UI = {
-  text:'#eef7ff',
-  muted:'rgba(238,247,255,.67)',
-  faint:'rgba(238,247,255,.27)',
-  gold:'#b8a7ff',
-  goldSoft:'rgba(184,167,255,.34)',
-  blue:'#1ed6ff',
-  jade:'#36f39b',
-  rose:'#ff3b62',
-  ink:'#070808',
-  panelA:'rgba(28,28,25,.94)',
-  panelB:'rgba(8,10,10,.97)',
-  line:'rgba(238,247,255,.18)',
-  dark:'rgba(5,6,7,.76)'
-};
-const UI_COPY = {
-  nav:{
-    store:['ストア','マシン・コア・ドローン'],
-    warehouse:['ガレージ','ロードアウト確認'],
-    upgrade:['アップグレード','ベースステータス'],
-    codex:['アーカイブ','アビリティデータ'],
-    ranking:['ランキング','ハイスコア記録'],
-    settings:['オプション','操作とサウンド']
-  },
-  ship:{coreOnly:'NU-00 ネイキッド',standard:'AF-01 アーク',striker:'VX-03 レイザー',guardian:'BG-12 バルワーク',carrier:'DR-07 ハイヴ'},
-  core:{
-    basic:'C-0 シード',assault:'C-A ブレイズ',reactor:'C-R パルス',sentinel:'C-S センチネル',
-    nova:'C-N ノヴァ',quantum:'C-Q クオンタム',graviton:'C-G グラビトン',prism:'C-P プリズム',
-    chronos:'C-X クロノス',voidCore:'C-V ヴォイド',lagrange:'C-L ラグランジュ',omegaCore:'C-O オメガ炉'
-  },
-  part:{
-    cannon:'ランス砲台',barrel:'クイック砲身',plate:'ミラー装甲',frame:'バイタル骨格',
-    droneBay:'ドローンベイ',bitLink:'ビットリンク',coreLink:'コアリンク',overclock:'オーバークロック'
-  },
-  partType:{turret:'砲台',armor:'装甲',drone:'ドローン',coreBoost:'コア'},
-  stat:{
-    fireRate:'連射速度',bulletSpeed:'弾速',damage:'ダメージ',range:'距離補正',hp:'耐久',
-    xpMult:'経験値',speed:'機動力',critChance:'会心率',critDamage:'会心倍率',regen:'修復'
-  },
-  special:{
-    multiShot:'マルチショット',homing:'ホーミング',piercing:'貫通',powerShot:'強化弾',
-    gatling:'ガトリング',supportDrone:'支援ドローン',explosive:'炸裂弾',ricochet:'跳弾',
-    chainLightning:'電撃チェーン',adrenaline:'背水陣',statSynergy:'ステータス同期',
-    stasisAura:'停滞フィールド',energyShield:'自動防壁',splitter:'スプリット弾',interceptor:'迎撃ビット'
-  }
-};
-const SFX_PRESETS = {
-  start:{f:220,to:520,d:.14,type:'triangle',gain:.075},
-  select:{f:440,to:620,d:.08,type:'triangle',gain:.045},
-  denied:{f:170,to:110,d:.10,type:'sawtooth',gain:.035},
-  shot:{f:760,to:520,d:.045,type:'square',gain:.025},
-  hit:{f:190,to:120,d:.055,type:'triangle',gain:.028},
-  kill:{f:260,to:720,d:.12,type:'triangle',gain:.06},
-  upgrade:{f:360,to:880,d:.16,type:'sine',gain:.07},
-  special:{f:520,to:1040,d:.2,type:'sine',gain:.075},
-  dead:{f:220,to:70,d:.32,type:'sawtooth',gain:.055}
-};
+import * as THREE from './vendor/three.module.js';
+import { getRankingRows, upsertScore } from './features/ranking.js';
 
 const canvas = document.getElementById('canvas');
-const ctx    = canvas.getContext('2d');
-let renderScaleX = 1, renderScaleY = 1;
-let bgBaseGradient=null, bgNebulaA=null, bgNebulaB=null, bgScanGradient=null;
-let hudTopGradient=null, hudBottomGradient=null, pauseButtonGradient=null;
+const W = 390;
+const H = 700;
+const TAU = Math.PI * 2;
+const PIPE_RADIUS = 19.4;
+const PIPE_ARC = Math.PI;
+const PIPE_Z_NEAR = 8.0;
+const PIPE_Z_FAR = -282;
+const PIPE_RING_SPACING = 9.6;
+const PIPE_RING_LOOP = 304;
+const PLAYER_Z = -2.15;
+const PLAYER_RADIAL = .62;
+const PLAYER_Y = -PIPE_RADIUS * PLAYER_RADIAL;
+const CAMERA_BASE_Y = 2.65;
+const CAMERA_BASE_Z = 11.8;
+const CAMERA_LOOK_Y = -PIPE_RADIUS * .77;
+const CAMERA_LOOK_Z = -24.5;
+const ENEMY_VISIBLE_ARC = 2.25;
+const ENEMY_FADE_DISTANCE = 148;
+const BOSS_FADE_DISTANCE = 122;
+const BOSS_SIGHT_Z = -230;
+const CONTROL_TURN_SPEED = 1.78;
+const CONTROL_RESPONSE = 5.9;
+const CONTROL_POINTER_RANGE = .46;
+const PLAYER_BANK_SCALE = .20;
+const PLAYER_DRIFT_SCALE = .12;
+const LOW_POWER_DEVICE = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
+const MAX_DPR = LOW_POWER_DEVICE ? 1 : 1.12;
+const MAX_ENEMIES = LOW_POWER_DEVICE ? 24 : 30;
+const MAX_BULLETS = LOW_POWER_DEVICE ? 34 : 44;
+const MAX_PARTICLES = LOW_POWER_DEVICE ? 18 : 30;
+const ENEMY_POOL_LIMIT = LOW_POWER_DEVICE ? 24 : 34;
+const ENEMY_DETAIL_Z = -92;
+const STAGE_Z_SEGMENTS = LOW_POWER_DEVICE ? 28 : 34;
+const STAGE_ARC_SEGMENTS = LOW_POWER_DEVICE ? 32 : 38;
+const STAGE_RING_COUNT = LOW_POWER_DEVICE ? 22 : 28;
+const STAGE_RING_SEGMENTS = LOW_POWER_DEVICE ? 44 : 56;
+const STAR_COUNT = LOW_POWER_DEVICE ? 72 : 112;
+const SPACE_STAR_COUNT = LOW_POWER_DEVICE ? 170 : 280;
+const SPACE_DUST_COUNT = LOW_POWER_DEVICE ? 46 : 82;
+const VANISH_STAR_COUNT = LOW_POWER_DEVICE ? 44 : 72;
+const SAVE_KEY = 'barrage-3d-save-v1';
+const XP_BASE = 80;
+const BASIC_POINT_UNIT = 60;
+const TOKEN_SCORE_UNIT = 650;
+const TOKEN_WAVE_BONUS = 4;
+const TOKEN_KILL_BONUS = .45;
+const TOKEN_TIME_BONUS = .08;
+const START_TOKENS = 1000;
 
-function resizeCanvas(){
-  const rect = canvas.getBoundingClientRect();
-  const cssW = Math.max(1, rect.width || W);
-  const cssH = Math.max(1, rect.height || H);
-  const dpr = Math.min(window.devicePixelRatio || 1, DPR_LIMIT);
-  const nextW = Math.round(cssW * dpr);
-  const nextH = Math.round(cssH * dpr);
+const COLORS = {
+  bg: 0x02040a,
+  text: '#f4fbff',
+  muted: 'rgba(207,225,236,.72)',
+  faint: 'rgba(207,225,236,.36)',
+  gold: '#d8e2ea',
+  cyan: '#1ed6ff',
+  jade: '#36f39b',
+  rose: '#ff3b62',
+  violet: '#b8a7ff',
+  orange: '#ff7a3d'
+};
 
-  if(canvas.width !== nextW || canvas.height !== nextH){
-    canvas.width = nextW;
-    canvas.height = nextH;
-  }
+const ENEMY_TYPES = [
+  { id:'orb', name:'オーブ', sides:0, unlock:1, color:0x1ed6ff, hp:10, damage:14, radius:.42 },
+  { id:'tri', name:'トライ', sides:3, unlock:11, color:0xff3b62, hp:17, damage:21, radius:.52 },
+  { id:'quad', name:'クアッド', sides:4, unlock:30, color:0xffd36a, hp:32, damage:32, radius:.56 },
+  { id:'penta', name:'ペンタ', sides:5, unlock:60, color:0x36f39b, hp:56, damage:48, radius:.60 },
+  { id:'hexa', name:'ヘクサ', sides:6, unlock:100, color:0xb8a7ff, hp:90, damage:68, radius:.64 }
+];
 
-  renderScaleX = nextW / W;
-  renderScaleY = nextH / H;
-  ctx.setTransform(renderScaleX, 0, 0, renderScaleY, 0, 0);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'low';
-}
-
-window.addEventListener('resize', resizeCanvas);
-if(window.visualViewport) window.visualViewport.addEventListener('resize', resizeCanvas);
-
-// ─────────────────────────────────────
-//  定義テーブル
-// ─────────────────────────────────────
 const BASIC_STAT_DEFS = [
-  { id:'fireRate',    name:'連射速度', icon:'FR', color:'#1ed6ff' },
-  { id:'bulletSpeed', name:'弾速',     icon:'>>', color:'#b8a7ff' },
-  { id:'damage',      name:'ダメージ', icon:'DM', color:'#ff3b62' },
-  { id:'range',       name:'距離補正', icon:'RG', color:'#82d7ff' },
-  { id:'hp',          name:'耐久',     icon:'HP', color:'#ff6b93' },
-  { id:'xpMult',      name:'経験値',   icon:'XP', color:'#36f39b' },
-  { id:'speed',       name:'機動力',   icon:'MV', color:'#1ed6ff' },
-  { id:'critChance',  name:'会心率',   icon:'CR', color:'#b8a7ff' },
-  { id:'critDamage',  name:'会心倍率', icon:'CD', color:'#ff7a3d' },
-  { id:'regen',       name:'修復',     icon:'RP', color:'#ff6b93' },
+  { id:'fireRate', name:'連射速度', icon:'FR', color:COLORS.cyan, text:'ショット間隔を短縮' },
+  { id:'bulletSpeed', name:'弾速', icon:'>>', color:COLORS.violet, text:'弾速と射程を強化' },
+  { id:'damage', name:'ダメージ', icon:'DM', color:COLORS.rose, text:'全ショット火力を強化' },
+  { id:'hp', name:'耐久', icon:'HP', color:0xff6b93, text:'最大耐久と回復量を強化' },
+  { id:'speed', name:'機動力', icon:'MV', color:COLORS.cyan, text:'ロール操作を強化' },
+  { id:'xpMult', name:'経験値', icon:'XP', color:COLORS.jade, text:'獲得XPを増加' }
 ];
-const BASIC_SKILL_TREE = [
-  { id:'fireRate',    x:18,  y:112, requires:null },
-  { id:'damage',      x:206, y:112, requires:'fireRate' },
-  { id:'bulletSpeed', x:18,  y:184, requires:'fireRate' },
-  { id:'range',       x:206, y:184, requires:'bulletSpeed' },
-  { id:'hp',          x:18,  y:256, requires:'damage' },
-  { id:'speed',       x:206, y:256, requires:'bulletSpeed' },
-  { id:'critChance',  x:18,  y:328, requires:'damage' },
-  { id:'critDamage',  x:206, y:328, requires:'critChance' },
-  { id:'regen',       x:18,  y:400, requires:'hp' },
-  { id:'xpMult',      x:206, y:400, requires:'speed' },
+
+const HOME_UPGRADE_CAP = 10;
+const HOME_UPGRADE_PATHS = [
+  {
+    base:{ id:'fireRate', name:'連射性能', icon:'FR', color:COLORS.cyan, text:'ショット間隔を短縮', cap:HOME_UPGRADE_CAP },
+    advanced:{ id:'damage', name:'弾丸ダメージ', icon:'DM', color:COLORS.rose, text:'弾丸ダメージを青天井で強化' }
+  },
+  {
+    base:{ id:'critChance', name:'クリティカル率', icon:'CR', color:COLORS.gold, text:'一定確率でクリティカル', cap:HOME_UPGRADE_CAP },
+    advanced:{ id:'critDamage', name:'クリティカル倍率', icon:'CD', color:COLORS.orange, text:'クリティカル時の倍率を強化' }
+  },
+  {
+    base:{ id:'speed', name:'機動性', icon:'MV', color:COLORS.cyan, text:'ロール移動の反応を強化', cap:HOME_UPGRADE_CAP },
+    advanced:{ id:'evasion', name:'回避力', icon:'EV', color:COLORS.violet, text:'被弾を確率で無効化' }
+  },
+  {
+    base:{ id:'range', name:'射程距離', icon:'RG', color:0x82d7ff, text:'弾の持続時間を延長', cap:HOME_UPGRADE_CAP },
+    advanced:{ id:'bulletSpeed', name:'弾速', icon:'>>', color:COLORS.violet, text:'弾速と弾速由来ダメージを強化' }
+  },
+  {
+    base:{ id:'regen', name:'自動回復', icon:'RP', color:COLORS.jade, text:'戦闘中に耐久を自動回復', cap:HOME_UPGRADE_CAP },
+    advanced:{ id:'hp', name:'HP', icon:'HP', color:0xff6b93, text:'最大耐久を青天井で強化' }
+  },
+  {
+    base:{ id:'xpMult', name:'XP取得倍率', icon:'XP', color:COLORS.jade, text:'獲得XPを増加', cap:HOME_UPGRADE_CAP },
+    advanced:{ id:'tokenMult', name:'トークン取得倍率', icon:'TK', color:COLORS.gold, text:'ラン終了時の獲得トークンを強化' }
+  },
+  {
+    base:{ id:'defense', name:'防御力', icon:'DF', color:0x9cf5ff, text:'被ダメージを軽減', cap:HOME_UPGRADE_CAP },
+    advanced:{ id:'collisionDamage', name:'衝突時ダメージ', icon:'CD', color:COLORS.rose, text:'敵との衝突時に反撃ダメージ' }
+  }
 ];
-const SKILL_NODE_W = 166;
-const SKILL_NODE_H = 58;
-const BODY_UPGRADE_DEFS = [
-  { id:'hp',       name:'耐久',     icon:'HP', color:'#ff6b93', label:'最大耐久' },
-  { id:'defense',  name:'装甲',     icon:'AR', color:'#82d7ff', label:'被ダメ軽減' },
-  { id:'attack',   name:'攻撃力',   icon:'AT', color:'#ff3b62', label:'攻撃倍率' },
-  { id:'fireRate', name:'連射速度', icon:'FR', color:'#1ed6ff', label:'連射倍率' },
+const HOME_UPGRADE_DEFS = Object.fromEntries(
+  HOME_UPGRADE_PATHS.flatMap(path => [
+    [path.base.id, {...path.base, tier:'base'}],
+    [path.advanced.id, {...path.advanced, tier:'advanced', parent:path.base.id}]
+  ])
+);
+
+const SPECIAL_UPGRADE_DEFS = [
+  { id:'barrelMultishot', family:'barrel', name:'マルチショット', icon:'MS', color:COLORS.cyan, text:'弾丸を扇状に拡散して発射', max:1 },
+  { id:'barrelDouble', family:'barrel', name:'ダブルバレル', icon:'DB', color:COLORS.gold, text:'銃身を増設。Lv.3でクアッドバレル', max:3 },
+  { id:'barrelGatling', family:'barrel', name:'ガトリング', icon:'GT', color:COLORS.orange, text:'連射速度を大幅上昇、単発火力は低下', max:1 },
+  { id:'barrelShotgun', family:'barrel', name:'ショットガン', icon:'SG', color:COLORS.rose, text:'短射程の散弾。至近距離火力が非常に高い', max:1 },
+  { id:'barrelSniper', family:'barrel', name:'スナイパー', icon:'SR', color:COLORS.violet, text:'低連射の高速高威力弾を撃つ', max:1 }
 ];
+const SPECIAL_UPGRADE_DEFS_BY_ID = Object.fromEntries(SPECIAL_UPGRADE_DEFS.map(def => [def.id, def]));
+
 const SHIP_DEFS = [
-  { id:'coreOnly', name:'NU-00 ネイキッド', icon:'C0', role:'裸核フレーム', cost:0, color:'#1ed6ff', slots:{turret:0,armor:0,drone:0,coreBoost:0}, mult:{hp:.85,defense:.9,attack:1,fireRate:1.05} },
-  { id:'standard', name:'AF-01 アーク', icon:'AF', role:'汎用フレーム', cost:160, color:'#1ed6ff', slots:{turret:1,armor:1,drone:1,coreBoost:1}, mult:{hp:2.0,defense:1.55,attack:2.2,fireRate:1.45} },
-  { id:'striker',  name:'VX-03 レイザー', icon:'VX', role:'強襲砲撃型', cost:950, color:'#ff3b62', slots:{turret:2,armor:0,drone:1,coreBoost:1}, mult:{hp:2.7,defense:1.85,attack:12.0,fireRate:2.4} },
-  { id:'sniper',   name:'SR-05 ロングレイ', icon:'SR', role:'長射程狙撃型', cost:1600, color:'#eef7ff', slots:{turret:2,armor:1,drone:0,coreBoost:1}, mult:{hp:3.4,defense:2.0,attack:28.0,fireRate:1.25} },
-  { id:'guardian', name:'BG-12 バルワーク', icon:'BG', role:'重装防壁型', cost:2400, color:'#82d7ff', slots:{turret:1,armor:2,drone:0,coreBoost:1}, mult:{hp:9.0,defense:8.0,attack:8.0,fireRate:1.7} },
-  { id:'mirage',   name:'EX-09 ミラージュ', icon:'EX', role:'高速回避型', cost:3800, color:'#36f39b', slots:{turret:1,armor:0,drone:2,coreBoost:2}, mult:{hp:5.0,defense:3.5,attack:30.0,fireRate:4.2} },
-  { id:'carrier',  name:'DR-07 ハイヴ', icon:'DR', role:'ドローン母機', cost:7000, color:'#b8a7ff', slots:{turret:0,armor:1,drone:2,coreBoost:1}, mult:{hp:14.0,defense:8.0,attack:100.0,fireRate:3.2} },
-  { id:'vanguard', name:'VG-11 ヴァンガード', icon:'VG', role:'上位汎用型', cost:12000, color:'#1ed6ff', slots:{turret:2,armor:1,drone:1,coreBoost:1}, mult:{hp:24,defense:14,attack:180,fireRate:4.6} },
-  { id:'oracle',   name:'OR-18 オラクル', icon:'OR', role:'制御予測型', cost:45000, color:'#36f39b', slots:{turret:1,armor:1,drone:2,coreBoost:2}, mult:{hp:42,defense:26,attack:620,fireRate:7.8} },
-  { id:'eclipse',  name:'EC-24 エクリプス', icon:'EC', role:'暗黒強襲型', cost:120000, color:'#b96cff', slots:{turret:2,armor:1,drone:1,coreBoost:2}, mult:{hp:85,defense:52,attack:2100,fireRate:12} },
-  { id:'titan',    name:'TN-32 タイタン', icon:'TN', role:'超重装殲滅型', cost:350000, color:'#82d7ff', slots:{turret:2,armor:2,drone:0,coreBoost:2}, mult:{hp:260,defense:210,attack:6500,fireRate:7.4} },
-  { id:'dominion', name:'DM-44 ドミニオン', icon:'DM', role:'支配火力型', cost:1200000, color:'#ff3b62', slots:{turret:3,armor:1,drone:1,coreBoost:2}, mult:{hp:520,defense:340,attack:26000,fireRate:18} },
-  { id:'astral',   name:'AS-57 アストラル', icon:'AS', role:'星間機動型', cost:4500000, color:'#eef7ff', slots:{turret:2,armor:1,drone:2,coreBoost:3}, mult:{hp:1200,defense:820,attack:98000,fireRate:32} },
-  { id:'singularity', name:'SG-70 シンギュラリティ', icon:'SG', role:'重力炉搭載型', cost:15000000, color:'#b8a7ff', slots:{turret:3,armor:2,drone:1,coreBoost:3}, mult:{hp:4200,defense:3000,attack:420000,fireRate:44} },
-  { id:'aphelion', name:'AP-83 アフェリオン', icon:'AP', role:'遠日点砲撃型', cost:60000000, color:'#ff7a3d', slots:{turret:3,armor:1,drone:2,coreBoost:3}, mult:{hp:15000,defense:9000,attack:1800000,fireRate:70} },
-  { id:'omega',    name:'OM-99 オメガ', icon:'OM', role:'終端戦術型', cost:250000000, color:'#36f39b', slots:{turret:3,armor:2,drone:2,coreBoost:3}, mult:{hp:70000,defense:46000,attack:9500000,fireRate:120} },
-  { id:'ultima',   name:'UT-00 アルティマ', icon:'UT', role:'最終世代機', cost:1000000000, color:'#eef7ff', slots:{turret:4,armor:2,drone:2,coreBoost:4}, mult:{hp:420000,defense:300000,attack:62000000,fireRate:220} },
+  { id:'nu_arc', name:'NU-3D アーク', role:'標準ロールフレーム', cost:0, color:'#8eefff', partPower:1.35, slots:{barrel:1, innerFrame:1, drone:0}, mult:{hp:1, defense:1, damage:1, fireRate:1, speed:1} },
+  { id:'vx_razor', name:'VX-03 レイザー', role:'強襲バレル機', cost:650, color:'#ff5d7e', partPower:1.15, slots:{barrel:2, innerFrame:1, drone:0}, mult:{hp:.94, defense:.98, damage:1.05, fireRate:1.08, speed:1.02} },
+  { id:'bg_bulwark', name:'BG-12 バルワーク', role:'重装インナーフレーム機', cost:1100, color:'#d8e2ea', partPower:1.12, slots:{barrel:1, innerFrame:3, drone:0}, mult:{hp:1.16, defense:1.10, damage:.96, fireRate:.94, speed:.92} },
+  { id:'dr_hive', name:'DR-07 ハイヴ', role:'ドローン管制機', cost:1650, color:'#9dffd9', partPower:1.06, slots:{barrel:1, innerFrame:1, drone:3}, mult:{hp:1.02, defense:1.02, damage:.98, fireRate:1, speed:.98, xp:1.04, token:1.03} },
+  { id:'om_ultima', name:'OM-99 アルティマ', role:'全拡張スロット機', cost:4200, color:'#ffd36a', partPower:1.00, slots:{barrel:3, innerFrame:3, drone:3}, mult:{hp:1.08, defense:1.06, damage:1.06, fireRate:1.05, speed:1.02, xp:1.02, token:1.02} }
 ];
-const CORE_DEFS = [
-  { id:'basic',   name:'C-0 シード', icon:'C0', role:'標準コア', cost:0,  color:'#1ed6ff', mult:{hp:1,defense:1,attack:1,fireRate:1} },
-  { id:'assault', name:'C-A ブレイズ', icon:'CA', role:'火力コア', cost:350,  color:'#ff3b62', mult:{hp:1.05,defense:1.0,attack:4.0,fireRate:1.35} },
-  { id:'reactor', name:'C-R パルス', icon:'CR', role:'高速反応コア', cost:750, color:'#b8a7ff', mult:{hp:1.15,defense:1.1,attack:1.8,fireRate:4.0} },
-  { id:'sentinel', name:'C-S センチネル', icon:'CS', role:'防衛コア', cost:1200, color:'#82d7ff', mult:{hp:2.8,defense:4.2,attack:1.4,fireRate:1.25} },
-  { id:'nova',     name:'C-N ノヴァ', icon:'CN', role:'爆発火力コア', cost:2200, color:'#ff7a3d', mult:{hp:1.4,defense:1.2,attack:8.0,fireRate:1.7} },
-  { id:'quantum',  name:'C-Q クオンタム', icon:'CQ', role:'高機動コア', cost:3200, color:'#36f39b', mult:{hp:1.8,defense:1.5,attack:4.5,fireRate:5.5} },
-  { id:'graviton', name:'C-G グラビトン', icon:'CG', role:'重力防衛コア', cost:9000, color:'#b96cff', mult:{hp:5.5,defense:8.0,attack:2.5,fireRate:1.4} },
-  { id:'prism',    name:'C-P プリズム', icon:'CP', role:'複合増幅コア', cost:24000, color:'#eef7ff', mult:{hp:3.5,defense:2.8,attack:18,fireRate:3.2} },
-  { id:'chronos',  name:'C-X クロノス', icon:'CX', role:'超連射コア', cost:85000, color:'#36f39b', mult:{hp:5,defense:4,attack:12,fireRate:20} },
-  { id:'voidCore', name:'C-V ヴォイド', icon:'CV', role:'虚空火力コア', cost:420000, color:'#ff3b62', mult:{hp:8,defense:6,attack:95,fireRate:5.5} },
-  { id:'lagrange', name:'C-L ラグランジュ', icon:'CL', role:'終盤バランスコア', cost:2500000, color:'#1ed6ff', mult:{hp:40,defense:32,attack:260,fireRate:26} },
-  { id:'omegaCore', name:'C-O オメガ炉', icon:'CO', role:'最上位統合コア', cost:60000000, color:'#b8a7ff', mult:{hp:260,defense:190,attack:2500,fireRate:140} },
-];
-const SHIP_EFFECTS = {
-  coreOnly:'開始SP +1 / 当たり判定小',
-  standard:'WAVE更新時に耐久を10%回復',
-  striker:'4射ごとに高威力ランス弾',
-  sniper:'距離減衰軽減 +40% / 6射ごとにレール弾',
-  guardian:'シールド +3 / 重装甲',
-  mirage:'会心率 +10% / 当たり判定小',
-  carrier:'支援ドローン +3 / 最終火力特化',
-  vanguard:'基礎性能を大幅底上げ',
-  oracle:'ドローンとコア拡張を両立',
-  eclipse:'高火力と高連射の上位強襲機',
-  titan:'圧倒的な耐久と装甲',
-  dominion:'砲台3枠の制圧火力',
-  astral:'高速連射と拡張性の星間機',
-  singularity:'重力炉で全性能を爆発強化',
-  aphelion:'遠距離戦向けの超火力機',
-  omega:'終盤用の総合最上位機',
-  ultima:'10億級の最終世代フレーム'
+const SHIP_BY_ID = Object.fromEntries(SHIP_DEFS.map(ship => [ship.id, ship]));
+const DEFAULT_SHIP_ID = SHIP_DEFS[0].id;
+const PART_TYPES = ['barrel', 'innerFrame', 'drone'];
+const PART_TYPE_LABELS = {
+  barrel: 'バレル',
+  innerFrame: 'インナーフレーム',
+  drone: 'ドローン'
 };
 const PART_DEFS = [
-  { id:'cannon',   name:'T-ランス砲台', icon:'AT', type:'turret',    cost:210, color:'#ff3b62', mult:{attack:3.2} },
-  { id:'barrel',   name:'T-クイック砲身', icon:'FR', type:'turret',    cost:240, color:'#1ed6ff', mult:{fireRate:2.6} },
-  { id:'railgun',  name:'T-レールガン', icon:'RG', type:'turret',    cost:980, color:'#eef7ff', mult:{attack:6.0,fireRate:.85} },
-  { id:'plate',    name:'A-ミラー装甲', icon:'AR', type:'armor',     cost:290, color:'#82d7ff', mult:{defense:2.8} },
-  { id:'frame',    name:'A-バイタル骨格', icon:'HP', type:'armor',     cost:340, color:'#ff6b93', mult:{hp:2.5} },
-  { id:'aegis',    name:'A-イージス装甲', icon:'AG', type:'armor',     cost:1100, color:'#82d7ff', mult:{hp:1.8,defense:4.5} },
-  { id:'droneBay', name:'D-ドローンベイ', icon:'DR', type:'drone',   cost:560, color:'#9cff5e', mult:{attack:1.8,fireRate:1.8} },
-  { id:'bitLink',  name:'D-ビットリンク', icon:'BT', type:'drone',     cost:700, color:'#eef7ff', mult:{fireRate:2.2} },
-  { id:'swarmLink', name:'D-スウォームリンク', icon:'SW', type:'drone', cost:1300, color:'#36f39b', mult:{attack:2.4,fireRate:2.4} },
-  { id:'coreLink', name:'C-コアリンク', icon:'LK', type:'coreBoost', cost:1200, color:'#b96cff', mult:{hp:1.65,defense:1.65,attack:1.65,fireRate:1.65} },
-  { id:'overclock', name:'C-オーバークロック', icon:'OC', type:'coreBoost', cost:1600, color:'#b8a7ff', mult:{attack:2.4,fireRate:2.4} },
-  { id:'rangeExt', name:'C-レンジエクステンダ', icon:'RE', type:'coreBoost', cost:1900, color:'#1ed6ff', mult:{attack:1.4,fireRate:1.4} },
-  { id:'plasmaArray', name:'T-プラズマアレイ', icon:'PA', type:'turret', cost:8000, color:'#ff3b62', mult:{attack:18,fireRate:1.4} },
-  { id:'phaseCannon', name:'T-フェイズカノン', icon:'PH', type:'turret', cost:26000, color:'#b96cff', mult:{attack:60,fireRate:.95} },
-  { id:'singularityRail', name:'T-シンギュラレール', icon:'SG', type:'turret', cost:120000, color:'#eef7ff', mult:{attack:220,fireRate:.82} },
-  { id:'neutronHull', name:'A-ニュートロン外殻', icon:'NH', type:'armor', cost:15000, color:'#82d7ff', mult:{hp:22,defense:18} },
-  { id:'chronosPlate', name:'A-クロノス装甲', icon:'CH', type:'armor', cost:85000, color:'#36f39b', mult:{hp:80,defense:65} },
-  { id:'celestialAegis', name:'A-セレスティアル防壁', icon:'CE', type:'armor', cost:600000, color:'#b8a7ff', mult:{hp:350,defense:280} },
-  { id:'nanoSwarm', name:'D-ナノスウォーム', icon:'NS', type:'drone', cost:45000, color:'#9cff5e', mult:{attack:25,fireRate:18} },
-  { id:'quantumHive', name:'D-クオンタムハイヴ', icon:'QH', type:'drone', cost:350000, color:'#36f39b', mult:{attack:140,fireRate:95} },
-  { id:'zeroPointCore', name:'C-ゼロポイント炉', icon:'ZP', type:'coreBoost', cost:2500000, color:'#1ed6ff', mult:{hp:300,defense:250,attack:450,fireRate:120} },
-  { id:'eventHorizonCore', name:'C-事象境界コア', icon:'EH', type:'coreBoost', cost:750000000, color:'#eef7ff', mult:{hp:120000,defense:90000,attack:180000,fireRate:20000} },
+  { id:'barrel_pulse', type:'barrel', name:'パルスバレル', rarity:'標準', color:COLORS.cyan, text:'連射性能を少し上げる', buff:{fireRate:.035} },
+  { id:'barrel_lance', type:'barrel', name:'ランスバレル', rarity:'火力', color:COLORS.rose, text:'弾丸ダメージを少し上げる', buff:{damage:.030} },
+  { id:'barrel_vector', type:'barrel', name:'ベクターバレル', rarity:'制御', color:COLORS.violet, text:'弾速と射程を少し上げる', buff:{bulletSpeed:.025, range:.020} },
+  { id:'frame_vital', type:'innerFrame', name:'バイタルフレーム', rarity:'耐久', color:0xff6b93, text:'最大HPを上げる', buff:{hp:.045} },
+  { id:'frame_aegis', type:'innerFrame', name:'イージスフレーム', rarity:'防御', color:'#d8e2ea', text:'被ダメージを軽減する', buff:{defense:.030} },
+  { id:'frame_gyro', type:'innerFrame', name:'ジャイロフレーム', rarity:'機動', color:COLORS.jade, text:'移動と回避を少し上げる', buff:{speed:.025, evasion:.012} },
+  { id:'drone_scout', type:'drone', name:'スカウトドローン', rarity:'探索', color:COLORS.jade, text:'XP取得を少し上げる', buff:{xp:.035} },
+  { id:'drone_cargo', type:'drone', name:'カーゴドローン', rarity:'回収', color:COLORS.gold, text:'トークン取得を少し上げる', buff:{token:.030} },
+  { id:'drone_strike', type:'drone', name:'ストライクドローン', rarity:'攻撃', color:COLORS.rose, text:'弾丸ダメージを少し上げる', buff:{damage:.025} }
 ];
-const DRONE_DEFS = [
-  { id:'spark', name:'D-01 スパーク', icon:'SP', role:'近距離支援機', cost:450, color:'#66ccff', mult:{count:1,damage:1.00} },
-  { id:'lumen', name:'D-04 ルーメン', icon:'LM', role:'高出力支援機', cost:4200, color:'#9cff5e', mult:{count:1,damage:1.35} },
-  { id:'vector', name:'D-11 ベクター', icon:'VC', role:'追尾支援機', cost:36000, color:'#b8a7ff', mult:{count:1,damage:1.85} },
-  { id:'aurora', name:'D-99 オーロラ', icon:'AU', role:'最上位支援機', cost:420000, color:'#eef7ff', mult:{count:2,damage:2.65} },
+const PART_BY_ID = Object.fromEntries(PART_DEFS.map(part => [part.id, part]));
+
+const GACHA_COST = 120;
+const COSMETIC_RARITIES = [
+  { id:'common', name:'コモン', weight:520, refund:12, buff:.0010, color:'#d8e2ea' },
+  { id:'uncommon', name:'アンコモン', weight:280, refund:18, buff:.0016, color:'#9dffd9' },
+  { id:'rare', name:'レア', weight:135, refund:28, buff:.0024, color:'#8eefff' },
+  { id:'sr', name:'SR', weight:48, refund:45, buff:.0036, color:'#b8a7ff' },
+  { id:'ssr', name:'SSR', weight:15, refund:80, buff:.0052, color:'#d8e2ea' },
+  { id:'legend', name:'レジェンド', weight:2, refund:150, buff:.0072, color:'#ff7a3d' }
 ];
-const PART_EFFECTS = {
-  cannon:'3射ごとに超高威力ランス弾',
-  barrel:'5射ごとにサイドニードル',
-  railgun:'6射ごとに貫通レール弾',
-  plate:'シールド +2',
-  frame:'自動修復 +3/s',
-  aegis:'シールド +3',
-  droneBay:'支援ドローン +2',
-  bitLink:'迎撃ビット +2',
-  swarmLink:'支援ドローン +3',
-  coreLink:'経験値 +50%',
-  overclock:'会心率 +15%',
-  rangeExt:'距離減衰軽減 +35%',
-  plasmaArray:'高火力プラズマ連装砲',
-  phaseCannon:'位相干渉で単発火力を増幅',
-  singularityRail:'重力収束レールで超火力',
-  neutronHull:'上位耐久と装甲を両立',
-  chronosPlate:'時間装甲で耐久を大幅強化',
-  celestialAegis:'終盤用の高級防壁',
-  nanoSwarm:'ナノ群体が連射を補助',
-  quantumHive:'量子ドローン火力を展開',
-  zeroPointCore:'全性能を上位水準へ増幅',
-  eventHorizonCore:'超高額の最終拡張コア'
+const COSMETIC_RARITY_BY_ID = Object.fromEntries(COSMETIC_RARITIES.map(rarity => [rarity.id, rarity]));
+const COSMETIC_TYPE_LABELS = {
+  bulletSkin: '弾スキン',
+  armorSkin: '装甲スキン',
+  shipCoat: 'クロマコート'
 };
-const SHIP_BY_ID = Object.fromEntries(SHIP_DEFS.map(d=>[d.id,d]));
-const CORE_BY_ID = Object.fromEntries(CORE_DEFS.map(d=>[d.id,d]));
-const PART_BY_ID = Object.fromEntries(PART_DEFS.map(d=>[d.id,d]));
-const DRONE_BY_ID = Object.fromEntries(DRONE_DEFS.map(d=>[d.id,d]));
-const BASIC_STAT_BY_ID = Object.fromEntries(BASIC_STAT_DEFS.map(d=>[d.id,d]));
-const LOADOUT_STAT_IDS = ['hp','defense','attack','fireRate'];
-const TAU = Math.PI * 2;
-const BG_CORNERS = [[8,8,1,1],[W-8,8,-1,1],[8,H-8,1,-1],[W-8,H-8,-1,-1]];
-const STAT_LABELS={hp:'耐久',defense:'装甲',attack:'攻撃',fireRate:'連射'};
-const SHORT_STAT_LABELS={hp:'HP',defense:'AR',attack:'AT',fireRate:'FR'};
-const PART_INFO={
-  cannon:{tier:'RARE',desc:'単発火力を強化。'},
-  barrel:{tier:'RARE',desc:'射撃サイクルを短縮。'},
-  railgun:{tier:'EPIC',desc:'低速だが重い直線火力。'},
-  plate:{tier:'RARE',desc:'被ダメージを軽減。'},
-  frame:{tier:'RARE',desc:'最大耐久を上昇。'},
-  aegis:{tier:'EPIC',desc:'防壁と装甲を大幅強化。'},
-  droneBay:{tier:'EPIC',desc:'攻撃と連射を補助。'},
-  bitLink:{tier:'EPIC',desc:'高連射を安定化。'},
-  swarmLink:{tier:'EPIC',desc:'支援ユニット数を増やす。'},
-  coreLink:{tier:'EPIC',desc:'全システムを底上げ。'},
-  overclock:{tier:'EPIC',desc:'攻撃と連射を過励起。'},
-  rangeExt:{tier:'EPIC',desc:'遠距離のダメージ減衰を抑える。'},
-  plasmaArray:{tier:'MYTH',desc:'上位砲台の入口。'},
-  phaseCannon:{tier:'MYTH',desc:'火力を指数的に押し上げる。'},
-  singularityRail:{tier:'RELIC',desc:'超重量の一点突破火力。'},
-  neutronHull:{tier:'MYTH',desc:'高耐久フレーム用外殻。'},
-  chronosPlate:{tier:'RELIC',desc:'後半WAVE向けの時間装甲。'},
-  celestialAegis:{tier:'RELIC',desc:'高額防壁で被弾を受け切る。'},
-  nanoSwarm:{tier:'MYTH',desc:'高速ドローン火力を展開。'},
-  quantumHive:{tier:'RELIC',desc:'ドローン枠を終盤火力へ変える。'},
-  zeroPointCore:{tier:'RELIC',desc:'全性能の桁をひとつ上げる。'},
-  eventHorizonCore:{tier:'OMEGA',desc:'最終機体向けの超高額拡張。'},
+const COSMETIC_BUFF_LABELS = {
+  damage: '弾ダメージ',
+  bulletSpeed: '弾速',
+  hp: 'HP',
+  defense: '防御',
+  token: 'トークン',
+  xp: 'XP',
+  crit: 'クリ率',
+  fireRate: '連射',
+  range: '射程',
+  speed: '機動',
+  evasion: '回避'
 };
-const SLOT_ORDER=['turret','armor','drone','coreBoost'];
-const SPECIAL_DEFS = [
-  { id:'multiShot', name:'マルチショット', icon:'MS', color:'#1ed6ff', desc:lv=>`弾数 +${lv} / 威力 ${Math.round(100/Math.pow(1+lv,MULTISHOT_DAMAGE_EXP))}%` },
-  { id:'homing',    name:'ホーミング',     icon:'HM', color:'#b96cff', desc:lv=>`誘導性能 Lv.${lv}` },
-  { id:'piercing',  name:'貫通',           icon:'PR', color:'#b8a7ff', desc:lv=>`${lv}体まで貫通` },
-  { id:'powerShot', name:'強化弾',         icon:'PW', color:'#ff3b62', desc:lv=>`ダメージ +${lv*30}%` },
-  { id:'gatling',   name:'ガトリング', icon:'GT', color:'#36f39b', desc:lv=>`連射 +${Math.round(gatlingFireBonus(lv)*100)}% / 威力 ${Math.round(gatlingDamageScale(lv)*100)}%` },
-  { id:'supportDrone', name:'支援ドローン', icon:'DR', color:'#82d7ff', desc:lv=>`${lv}機の支援ユニット` },
-  { id:'explosive',    name:'炸裂弾', icon:'EX', color:'#ff7a3d', desc:lv=>`爆風半径 ${34+lv*6}px` },
-  { id:'ricochet',     name:'跳弾', icon:'RC', color:'#b8a7ff', desc:lv=>`${lv}回跳ね返る` },
-  { id:'chainLightning', name:'電撃チェーン', icon:'CL', color:'#9cff5e', desc:lv=>`${lv+1}体へ連鎖` },
-  { id:'adrenaline',   name:'背水陣', icon:'AD', color:'#ff6b93', desc:lv=>`低耐久時 火力 +${lv*25}%` },
-  { id:'statSynergy',  name:'ステータス同期', icon:'SY', color:'#b96cff', desc:lv=>`弾速を火力へ変換 Lv.${lv}` },
-  { id:'stasisAura',   name:'停滞フィールド', icon:'ST', color:'#82d7ff', desc:lv=>`近距離の敵を減速 Lv.${lv}` },
-  { id:'energyShield', name:'自動防壁', icon:'SH', color:'#1ed6ff', desc:lv=>`${1+Math.floor((lv-1)/3)}枚のシールド` },
-  { id:'splitter',     name:'スプリット弾', icon:'SP', color:'#b8a7ff', desc:lv=>`${2+lv}分裂 / 威力 ${Math.round(100*SPLIT_DAMAGE_BASE/Math.sqrt(2+lv))}%` },
-  { id:'interceptor',  name:'迎撃ビット', icon:'IN', color:'#eef7ff', desc:lv=>`${lv}基が近距離迎撃` },
+const COSMETIC_ITEMS = [
+  { id:'bullet_aqua', type:'bulletSkin', rarity:'common', name:'アクアボルト', colors:{ shot:0x9cf5ff, glow:0x1ed6ff }, buff:{ bulletSpeed:.0010 } },
+  { id:'bullet_lime', type:'bulletSkin', rarity:'common', name:'ライムトレーサー', colors:{ shot:0xc8ffd4, glow:0x36f39b }, buff:{ xp:.0010 } },
+  { id:'bullet_amber', type:'bulletSkin', rarity:'uncommon', name:'アンバーコア', colors:{ shot:0xffe0a3, glow:0xffd36a }, buff:{ damage:.0016 } },
+  { id:'bullet_rose', type:'bulletSkin', rarity:'uncommon', name:'ローズニードル', colors:{ shot:0xff9aae, glow:0xff3b62 }, buff:{ crit:.0016 } },
+  { id:'bullet_prism', type:'bulletSkin', rarity:'rare', name:'プリズムランス', colors:{ shot:0xf1fbff, glow:0xb8a7ff }, buff:{ damage:.0024 } },
+  { id:'bullet_void', type:'bulletSkin', rarity:'sr', name:'ヴォイドパルス', colors:{ shot:0xb8a7ff, glow:0x673dff }, buff:{ bulletSpeed:.0036 } },
+  { id:'bullet_solar', type:'bulletSkin', rarity:'ssr', name:'ソーラーフレア', colors:{ shot:0xfff0b8, glow:0xff7a3d }, buff:{ damage:.0052 } },
+  { id:'bullet_aurora', type:'bulletSkin', rarity:'legend', name:'オーロラシグナル', colors:{ shot:0xffffff, glow:0x36f39b }, buff:{ damage:.0040, bulletSpeed:.0032 } },
+  { id:'armor_slate', type:'armorSkin', rarity:'common', name:'スレート装甲', colors:{ plate:0xd8e2ea, panel:0x263546 }, buff:{ hp:.0010 } },
+  { id:'armor_mint', type:'armorSkin', rarity:'common', name:'ミントシールド', colors:{ plate:0xdaf8ef, panel:0x16382f }, buff:{ defense:.0010 } },
+  { id:'armor_cobalt', type:'armorSkin', rarity:'uncommon', name:'コバルト装甲', colors:{ plate:0xdcecff, panel:0x142b5c }, buff:{ hp:.0016 } },
+  { id:'armor_crimson', type:'armorSkin', rarity:'uncommon', name:'クリムゾンガード', colors:{ plate:0xffdce4, panel:0x4c1726 }, buff:{ defense:.0016 } },
+  { id:'armor_quartz', type:'armorSkin', rarity:'rare', name:'クォーツプレート', colors:{ plate:0xf7fbff, panel:0x33435a }, buff:{ hp:.0024 } },
+  { id:'armor_nova', type:'armorSkin', rarity:'sr', name:'ノヴァシェル', colors:{ plate:0xffedd2, panel:0x513018 }, buff:{ defense:.0036 } },
+  { id:'armor_seraph', type:'armorSkin', rarity:'ssr', name:'セラフアーマー', colors:{ plate:0xf7f3ff, panel:0x352859 }, buff:{ hp:.0052 } },
+  { id:'armor_eclipse', type:'armorSkin', rarity:'legend', name:'エクリプス外殻', colors:{ plate:0xe8f0ff, panel:0x111a31 }, buff:{ hp:.0036, defense:.0036 } },
+  { id:'coat_origin', type:'shipCoat', rarity:'common', name:'オリジンブルー', colors:{ hull:0x07111d, wing:0x132033, line:0x82d7ff }, buff:{ token:.0010 } },
+  { id:'coat_forest', type:'shipCoat', rarity:'common', name:'フォレストライン', colors:{ hull:0x071813, wing:0x15342b, line:0x36f39b }, buff:{ xp:.0010 } },
+  { id:'coat_sunset', type:'shipCoat', rarity:'uncommon', name:'サンセットコート', colors:{ hull:0x1e1110, wing:0x3a1d16, line:0xff7a3d }, buff:{ token:.0016 } },
+  { id:'coat_glacier', type:'shipCoat', rarity:'uncommon', name:'グレイシャー', colors:{ hull:0x09151d, wing:0x173144, line:0x9cf5ff }, buff:{ bulletSpeed:.0016 } },
+  { id:'coat_neon', type:'shipCoat', rarity:'rare', name:'ネオンストライプ', colors:{ hull:0x0a0e17, wing:0x201c42, line:0xb8a7ff }, buff:{ crit:.0024 } },
+  { id:'coat_ember', type:'shipCoat', rarity:'sr', name:'エンバーコート', colors:{ hull:0x170d0b, wing:0x412018, line:0xffd36a }, buff:{ damage:.0036 } },
+  { id:'coat_astral', type:'shipCoat', rarity:'ssr', name:'アストラルコート', colors:{ hull:0x0b0f1f, wing:0x18264a, line:0xf4fbff }, buff:{ xp:.0052 } },
+  { id:'coat_legend', type:'shipCoat', rarity:'legend', name:'レジェンドクロマ', colors:{ hull:0x080a10, wing:0x2a173b, line:0xffd36a }, buff:{ token:.0036, damage:.0036 } }
 ];
-const makeSpecialLevels = () => Object.fromEntries(SPECIAL_DEFS.map(d=>[d.id,0]));
+const COSMETIC_BY_ID = Object.fromEntries(COSMETIC_ITEMS.map(item => [item.id, item]));
+const DEFAULT_COSMETICS = {
+  bulletSkin: 'bullet_aqua',
+  armorSkin: 'armor_slate',
+  shipCoat: 'coat_origin'
+};
+const DOUBLE_BARREL_OFFSETS = [
+  [-.035, .035],
+  [-.065, 0, .065],
+  [-.095, -.032, .032, .095]
+];
+const SHOTGUN_OFFSETS = [-.18, -.09, 0, .09, .18];
+const MULTISHOT_OFFSETS = [-.12, 0, .12];
+let unlockedEnemyWave = 0;
+let unlockedEnemyTypes = ENEMY_TYPES.slice(0, 1);
 
-// ─────────────────────────────────────
-//  状態変数
-// ─────────────────────────────────────
-let state   = 'start';
-let score   = 0, wave = 1, frame = 0;
-let runStartWave = 1;
-let coins   = 0;
-let tokensEarned = 0;
-let hp      = 100, maxHp = 100;
-let xp      = 0, xpLevel = 0, hitXpBank = 0;
-let invincible = 0, skillPoints = 0, fireTimer = 0;
-let regenBank = 0;
-let shield = 0, shieldCooldown = 0, droneTimer = 0, bitTimer = 0;
-let shotSeq = 0;
-let touchDir = 0, touchAxis = 0, touchTargetX = null, mouseX = -1, mouseY = -1;
-let activePointerId = null, suppressNextClick = false;
-let stickState = { active:false, baseX:W/2, baseY:H-166, knobX:W/2, knobY:H-166 };
-let installPromptEvent = null, appInstalled = (window.matchMedia?.('(display-mode: standalone)').matches ?? false) || navigator.standalone === true;
-let shakeT = 0, shakeAmp = 0;
-let waveBanner = 0;
-let waveFrame = 0;
-let audioState = { ctx:null, unlocked:false, bgm:null, bgmMissing:false, bgmAttempts:0, track:0, lastSfx:{} };
+const state = {
+  mode: 'home',
+  wave: 1,
+  waveTime: 0,
+  score: 0,
+  hp: 100,
+  maxHp: 100,
+  energy: 100,
+  xp: 0,
+  level: 1,
+  skillPoints: 0,
+  basicPoints: 0,
+  basicPointMeter: 0,
+  tokens: 0,
+  runTokenGain: 0,
+  runTime: 0,
+  kills: 0,
+  statLevels: freshStatMap(),
+  homeUpgrades: freshHomeUpgradeMap(),
+  specialUpgrades: freshSpecialUpgradeMap(),
+  upgradeOptions: [],
+  roll: 0,
+  rollVel: 0,
+  input: 0,
+  keyboard: 0,
+  pointer: 0,
+  firing: 0,
+  spawnTimer: 0,
+  bossAlive: false,
+  shake: 0,
+  last: 0,
+  highScore: 0,
+  bestWave: 1,
+  garage: freshGarageState(),
+  cosmetics: freshCosmeticState(),
+  lastGacha: null,
+  nextHudAt: 0
+};
 
-const keys = {};
-let statLevels    = { fireRate:0, bulletSpeed:0, damage:0, range:0, hp:0, xpMult:0, speed:0, critChance:0, critDamage:0, regen:0 };
-let specialLevels = makeSpecialLevels();
+const save = loadSave();
+state.highScore = save.highScore;
+state.bestWave = save.bestWave;
+state.tokens = save.tokens;
+state.homeUpgrades = {...freshHomeUpgradeMap(), ...save.homeUpgrades};
+state.garage = save.garage;
+state.cosmetics = save.cosmetics;
 
-let arrows=[], enemies=[], enemyBullets=[], particles=[];
-let epOrbs=[], floatTexts=[];
-let pendingSpecials=[];
-let upgradeZones=[];
-let bgStars=[], bgLines=[], bgBeams=[];
-let player = { x:W/2, y:PLAYER_Y, prevX:W/2, prevY:PLAYER_Y, size:14 };
-let loadoutCache = null;
-function freshMeta(settings={...DEFAULT_SETTINGS}){
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: false,
+  alpha: false,
+  powerPreference: 'high-performance'
+});
+renderer.setClearColor(COLORS.bg, 1);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x02040a, 120, 335);
+
+const camera = new THREE.PerspectiveCamera(64, W / H, 0.1, 340);
+camera.position.set(0, CAMERA_BASE_Y, CAMERA_BASE_Z);
+camera.lookAt(0, CAMERA_LOOK_Y, CAMERA_LOOK_Z);
+
+const world = new THREE.Group();
+const pipeRoot = new THREE.Group();
+const enemyRoot = new THREE.Group();
+const bulletRoot = new THREE.Group();
+const particleRoot = new THREE.Group();
+world.add(pipeRoot, enemyRoot, bulletRoot, particleRoot);
+scene.add(world);
+
+const ambient = new THREE.AmbientLight(0x557799, 1.25);
+scene.add(ambient);
+const keyLight = new THREE.PointLight(0x1ed6ff, 13, 42, 2);
+keyLight.position.set(0, -2, 6);
+scene.add(keyLight);
+const rimLight = new THREE.PointLight(0xff3b62, 9, 60, 2);
+rimLight.position.set(-6, 4, -18);
+scene.add(rimLight);
+
+const shared = makeSharedAssets();
+const bulletMesh = makeBulletMesh();
+bulletRoot.add(bulletMesh);
+const particleMesh = makeParticleMesh();
+particleRoot.add(particleMesh);
+const stage = makeStage();
+const player = makePlayer();
+scene.add(player.root);
+const homeShip = makeHomePreviewShip();
+scene.add(homeShip.root);
+applyCosmetics();
+
+const enemies = [];
+const bullets = [];
+const particles = [];
+const enemyPools = new Map();
+const bulletDummy = new THREE.Object3D();
+const particleDummy = new THREE.Object3D();
+const particleColor = new THREE.Color();
+const enemyFlashColor = new THREE.Color(0xffffff);
+const cameraHomeTarget = new THREE.Vector3();
+let ringPhase = 0;
+let uiDirty = true;
+let activePointer = null;
+let canvas3dActive = false;
+let bulletsDirty = true;
+let particlesDirty = true;
+let cosmeticBuffCache = null;
+const hudCache = {};
+
+const ui = createUi();
+resize();
+renderUi2();
+syncCanvasVisibility();
+bindInput();
+requestAnimationFrame(loop);
+
+function freshStatMap(){
+  return Object.fromEntries(Object.keys(HOME_UPGRADE_DEFS).map(id => [id, 0]));
+}
+
+function freshHomeUpgradeMap(){
+  return Object.fromEntries(Object.keys(HOME_UPGRADE_DEFS).map(id => [id, 0]));
+}
+
+function freshSpecialUpgradeMap(){
+  return Object.fromEntries(SPECIAL_UPGRADE_DEFS.map(def => [def.id, 0]));
+}
+
+function freshEquippedParts(){
+  return Object.fromEntries(PART_TYPES.map(type => [type, Array(3).fill(null)]));
+}
+
+function freshGarageState(){
   return {
-    tokens:DEMO_START_TOKENS,
-    upgrades:{ hp:0, defense:0, attack:0, fireRate:0 },
-    homeUpgrades:{ fireRate:0, bulletSpeed:0, damage:0, range:0, hp:0, xpMult:0, speed:0, critChance:0, critDamage:0, regen:0 },
-    selectedShip:'coreOnly',
-    selectedCore:'basic',
-    ownedShips:{coreOnly:true},
-    ownedCores:{basic:true},
-    ownedParts:{},
-    ownedDrones:{},
-    coreLevels:{basic:0},
-    droneLevels:{},
-    mountedParts:{},
-    grants:{[DEMO_GRANT_KEY]:true},
-    highScore:{score:0,wave:1},
-    bestWave:1,
-    saveResetVersion:SAVE_RESET_VERSION,
-    settings:{...DEFAULT_SETTINGS,...settings}
+    ownedShips: {[DEFAULT_SHIP_ID]: 1},
+    selectedShipId: DEFAULT_SHIP_ID,
+    ownedParts: Object.fromEntries(PART_DEFS.map(part => [part.id, 1])),
+    equippedParts: freshEquippedParts()
   };
 }
-let meta = freshMeta();
-let homeState = 'home'; // 'home' | 'store' | 'warehouse' | 'upgrade' | 'settings' | 'codex' | 'ranking'
-let storeTab = 'ship';   // 'ship' | 'core' | 'part' | 'drone'
-let storePages = { ship:0, core:0, part:0, drone:0 };
-let warehouseTab = 'ship'; // 'ship' | 'custom' | 'turret' | 'armor' | 'drone' | 'coreBoost'
-let codexTab = 'special';
-let codexPage = 0;
-let pauseView = 'menu';
-let resetConfirmFrames = 0;
-let pendingStorePurchase = null;
-let pendingInventorySale = null;
-let uiViewOpenedAt = 0, uiStoreTabAt = 0, uiWarehouseTabAt = 0, uiConfirmAt = 0;
-let accountState = { profile:null, ready:false, loading:false, message:'' };
-let googleIdentityReady = false, googleIdentityLoading = false, googleIdentityPromise = null, googleIdentityInitPromise = null;
 
-// ─────────────────────────────────────
-//  ステータス計算
-// ─────────────────────────────────────
-const xpThresh  = () => Math.floor(XP_BASE * Math.pow(1.6, xpLevel));
-const statMultFor = lv => Math.pow(BASIC_STAT_GROWTH, lv);
-// ホームアップグレード（永続）＋ゲーム内アップグレード（一時）を合算した実効レベル
-const effectiveStatLevel = id => statLevels[id] + (meta.homeUpgrades?.[id] || 0);
-const statMult    = id => statMultFor(effectiveStatLevel(id));
-const bodyLevel = id => meta.upgrades[id] || 0;
-const bodyMultFor = lv => Math.pow(BODY_STAT_GROWTH, lv);
-const selectedShipDef = () => SHIP_BY_ID[meta.selectedShip] || SHIP_DEFS[0];
-const selectedCoreDef = () => CORE_BY_ID[meta.selectedCore] || CORE_DEFS[0];
-const shipMult = id => getLoadoutSnapshot().ship.mult[id] ?? 1;
-const selectedCoreLevel = () => meta.coreLevels[meta.selectedCore] || 0;
-const coreMult = id => getLoadoutSnapshot().coreMult[id] ?? 1;
-const mountedForShip = (shipId=meta.selectedShip) => meta.mountedParts[shipId] || {};
-function mountedPartIds(shipId=meta.selectedShip){
-  const mount=mountedForShip(shipId);
-  const ids=[];
-  for(const type of SLOT_ORDER){
-    const list=mount[type] || [];
-    for(let i=0;i<list.length;i++) ids.push(list[i]);
-  }
-  return ids;
-}
-function invalidateLoadoutCache(){ loadoutCache=null; }
-function buildLoadoutSnapshot(){
-  const ship=selectedShipDef();
-  const core=selectedCoreDef();
-  const coreScale=Math.pow(1.12, selectedCoreLevel());
-  const mount=mountedForShip(ship.id);
-  const partSet=new Set();
-  const partMult={hp:1,defense:1,attack:1,fireRate:1};
-  for(const type of SLOT_ORDER){
-    const list=mount[type] || [];
-    for(let i=0;i<list.length;i++){
-      const pid=list[i];
-      partSet.add(pid);
-      const mult=PART_BY_ID[pid]?.mult;
-      if(!mult) continue;
-      for(const id of LOADOUT_STAT_IDS) partMult[id] *= mult[id] ?? 1;
+function normalizeGarageState(raw){
+  const base = freshGarageState();
+  const ownedShips = {...base.ownedShips, ...(raw?.ownedShips || {})};
+  let selectedShipId = SHIP_BY_ID[raw?.selectedShipId] && ownedShips[raw.selectedShipId] ? raw.selectedShipId : DEFAULT_SHIP_ID;
+  ownedShips[DEFAULT_SHIP_ID] = 1;
+  if(!ownedShips[selectedShipId]) selectedShipId = DEFAULT_SHIP_ID;
+
+  const ownedParts = {...base.ownedParts, ...(raw?.ownedParts || {})};
+  for(const part of PART_DEFS) ownedParts[part.id] = Math.max(1, Number(ownedParts[part.id]) || 1);
+
+  const equippedParts = freshEquippedParts();
+  for(const type of PART_TYPES){
+    const source = Array.isArray(raw?.equippedParts?.[type]) ? raw.equippedParts[type] : [];
+    const seen = new Set();
+    for(let i=0;i<3;i++){
+      const id = source[i];
+      const part = PART_BY_ID[id];
+      if(!part || part.type !== type || !ownedParts[id] || seen.has(id)) continue;
+      equippedParts[type][i] = id;
+      seen.add(id);
     }
   }
-  const coreMults={};
-  const body={};
-  for(const id of LOADOUT_STAT_IDS){
-    coreMults[id]=(core.mult[id] ?? 1) * coreScale;
-    body[id]=bodyMultFor(bodyLevel(id)) * (ship.mult[id] ?? 1) * coreMults[id] * partMult[id];
+  return {ownedShips, selectedShipId, ownedParts, equippedParts};
+}
+
+function freshCosmeticState(){
+  return {
+    owned: Object.fromEntries(Object.values(DEFAULT_COSMETICS).map(id => [id, 1])),
+    equipped: {...DEFAULT_COSMETICS}
+  };
+}
+
+function normalizeCosmeticState(raw){
+  const base = freshCosmeticState();
+  const owned = {...base.owned, ...(raw?.owned || {})};
+  const equipped = {...base.equipped};
+  for(const type of Object.keys(DEFAULT_COSMETICS)){
+    const id = raw?.equipped?.[type];
+    equipped[type] = COSMETIC_BY_ID[id]?.type === type && owned[id] ? id : DEFAULT_COSMETICS[type];
+    owned[equipped[type]] = Math.max(1, Number(owned[equipped[type]]) || 1);
   }
-  return {ship,core,mount,partSet,partMult,coreMult:coreMults,body};
+  return {owned, equipped};
 }
-const getLoadoutSnapshot = () => loadoutCache || (loadoutCache=buildLoadoutSnapshot());
-const activeShipDef = () => getLoadoutSnapshot().ship;
-const activeCoreDef = () => getLoadoutSnapshot().core;
-const hasMountedPart = id => getLoadoutSnapshot().partSet.has(id);
-const partsMult = id => getLoadoutSnapshot().partMult[id] ?? 1;
-const bodyMult = id => getLoadoutSnapshot().body[id] ?? 1;
-const bodyUpgradeCost = id => Math.floor(20 * Math.pow(1.40, bodyLevel(id)));
-// ホームアップグレードコスト: レベルごとに大きく増加（青天井）
-const homeUpgradeCost = id => {
-  const lv=meta.homeUpgrades[id] || 0;
-  return lv===0 ? 30 : Math.floor(60 * Math.pow(1.42, lv-1));
-};
-const coreUpgradeCostAtLevel = lv => Math.floor(80 * Math.pow(1.38, lv));
-const coreUpgradeCost = () => coreUpgradeCostAtLevel(selectedCoreLevel());
-const hpRatio   = () => maxHp>0 ? hp/maxHp : 0;
-const adrenalinePower = () => specialLevels.adrenaline * .25 * (1-hpRatio());
-const synergyMult = () => 1 + Math.max(0, statMult('bulletSpeed')-1) * specialLevels.statSynergy * .35;
-const fireRate  = () => Math.max(1, 22 / (statMult('fireRate') * bodyMult('fireRate')));
-const bulletSpd = () => 9 * statMult('bulletSpeed');
-const damageFalloffRange = () => BASE_ARROW_RANGE * statMult('range') * (activeShipDef().id==='sniper' ? 1.40 : 1) * (hasMountedPart('rangeExt') ? 1.35 : 1);
-function distanceDamageMult(target){
-  const d=Math.hypot((target?.x??player.x)-player.x,(target?.y??player.y)-player.y);
-  if(d<=DISTANCE_DAMAGE_FULL) return 1;
-  const t=Math.max(0,Math.min(1,(d-DISTANCE_DAMAGE_FULL)/damageFalloffRange()));
-  return DISTANCE_DAMAGE_MIN+(1-DISTANCE_DAMAGE_MIN)*(1-t);
-}
-const damage    = () => (10 + wave*2) * statMult('damage') * bodyMult('attack') * (1 + specialLevels.powerShot*0.30) * (1+adrenalinePower()) * synergyMult();
-const xpMult    = () => statMult('xpMult') * (hasMountedPart('coreLink') ? 1.50 : 1);
-const moveSpeed = () => 3.7 * statMult('speed');
-const critChance  = () => Math.min(1, effectiveStatLevel('critChance') * CRIT_STEP + (hasMountedPart('overclock') ? .15 : 0) + (activeShipDef().id==='mirage' ? .10 : 0));
-const doubleCritChance = () => Math.min(1, Math.max(0, effectiveStatLevel('critChance')-20) * CRIT_STEP);
-const critDamage  = () => CRIT_BASE_DAMAGE * statMult('critDamage');
-const regenPerSec = () => effectiveStatLevel('regen') * REGEN_STEP + (hasMountedPart('frame') ? 3 : 0);
-const arrowCnt  = () => 1 + specialLevels.multiShot;
-const multiShotDamageScale = (n=arrowCnt()) => 1 / Math.pow(Math.max(1,n), MULTISHOT_DAMAGE_EXP);
-const splitDamageScale = (parentScale,n) => parentScale * Math.max(.16, SPLIT_DAMAGE_BASE / Math.sqrt(Math.max(1,n)));
-const gatlingFireBonus = (lv=specialLevels.gatling) => lv * GATLING_FIRE_STEP;
-const gatlingFireMult = (lv=specialLevels.gatling) => 1 + gatlingFireBonus(lv);
-const gatlingDamageScale = (lv=specialLevels.gatling) => 1 / (1 + lv * GATLING_DAMAGE_STEP);
-const gatlingBulletScale = (lv=specialLevels.gatling) => Math.max(.65, 1 - lv * GATLING_SIZE_STEP);
-const homingStr = () => specialLevels.homing * 0.13;
-const pierce    = () => specialLevels.piercing;
-const multiShotFireDelay = () => 1 + specialLevels.multiShot * MULTISHOT_FIRE_DELAY_STEP;
-const rawFireInterval = () => Math.max(MIN_RAW_FIRE_INTERVAL, fireRate() * multiShotFireDelay() / ((1+adrenalinePower()) * gatlingFireMult()));
-const fireInterval = () => Math.max(MIN_RENDERED_FIRE_INTERVAL, rawFireInterval());
-const fireCompressionBoost = () => Math.min(MAX_FIRE_COMPRESSION_DAMAGE, fireInterval()/rawFireInterval());
-function fireRateReadout(){
-  const shots=(60/fireInterval()).toFixed(1);
-  const boost=fireCompressionBoost();
-  return boost>1.01 ? `${shots}/s x${boost.toFixed(boost>=10?0:1)}` : `${shots}/s`;
-}
-const ownedDroneDefs = () => DRONE_DEFS.filter(d=>meta.ownedDrones?.[d.id]);
-const purchasedDroneCount = () => ownedDroneDefs().reduce((sum,d)=>sum+(d.mult.count||1),0);
-const droneLevel = id => Math.max(0,Number(meta.droneLevels?.[id])||0);
-const droneUpgradeCostAtLevel = (id,lv) => {
-  const d=DRONE_BY_ID[id];
-  if(!d) return Infinity;
-  return Math.floor(Math.max(120,d.cost*.55)*Math.pow(1.55,lv));
-};
-const droneUpgradeCost = id => {
-  return droneUpgradeCostAtLevel(id,droneLevel(id));
-};
-function purchasedDroneDamageMult(){
-  const owned=ownedDroneDefs();
-  if(owned.length===0) return 1;
-  return owned.reduce((mult,d)=>mult + Math.max(0,(d.mult.damage||1)-1) + droneLevel(d.id)*0.18,1);
-}
-const passiveShieldBonus = () => (activeShipDef().id==='guardian'?3:0) + (hasMountedPart('plate')?2:0) + (hasMountedPart('aegis')?3:0);
-const supportDroneCount = () => Math.min(10, specialLevels.supportDrone + purchasedDroneCount() + (activeShipDef().id==='carrier'?3:0) + (hasMountedPart('droneBay')?2:0) + (hasMountedPart('swarmLink')?3:0));
-const interceptorCount = () => Math.min(10, specialLevels.interceptor + (hasMountedPart('bitLink')?2:0));
-const shieldMax = () => (specialLevels.energyShield>0 ? 1+Math.floor((specialLevels.energyShield-1)/3) : 0) + passiveShieldBonus();
-const stasisRadius = () => 72 + specialLevels.stasisAura*10;
-const stasisMult = () => Math.max(.35, 1-specialLevels.stasisAura*.07);
-const incomingDamage = amount => Math.max(1, Math.ceil(amount / bodyMult('defense')));
-const playerHitRadius = () => activeShipDef().id==='coreOnly' ? 9 : (activeShipDef().id==='mirage' ? 10 : 12);
-const fmtMult = value => {
-  const v=Number(value)||1;
-  if(v>=1000) return `x${formatCompactNumber(v)}`;
-  if(v>=100) return `x${Math.round(v)}`;
-  return `x${v>=10 ? v.toFixed(1) : v.toFixed(2)}`;
-};
-function formatCompactNumber(value){
-  const raw=String(value).trim();
-  const sign=raw.startsWith('+')?'+':(raw.startsWith('-')?'-':'');
-  const body=sign?raw.slice(1):raw;
-  const num=Number(body);
-  if(!Number.isFinite(num)) return raw;
-  const abs=Math.abs(num);
-  if(abs<1000) return `${sign}${Math.round(abs).toLocaleString()}`;
-  const units=[
-    {v:1e15,s:'P'},
-    {v:1e12,s:'T'},
-    {v:1e9,s:'G'},
-    {v:1e6,s:'M'},
-    {v:1e3,s:'K'},
-  ];
-  const unit=units.find(u=>abs>=u.v);
-  const scaled=abs/unit.v;
-  const digits=scaled>=100?0:(scaled>=10?1:2);
-  return `${sign}${scaled.toFixed(digits).replace(/\.0+$|(\.\d*[1-9])0+$/,'$1')}${unit.s}`;
-}
-function fmtCompactMult(value){
-  return fmtMult(value);
-}
-const hpText = () => `${formatCompactNumber(hp)}/${formatCompactNumber(maxHp)}`;
-const basicGainText = (id, lv=statLevels[id]) => {
-  if(id==='regen') return `+${REGEN_STEP.toFixed(1)}/s`;
-  if(id==='critChance'&&lv>=20) return '二重+5%';
-  if(id==='range') return '+5% 補正距離';
-  return '+5%';
-};
-const critReadout = () => doubleCritChance()>0 ? `100% 二重${Math.round(doubleCritChance()*100)}%` : `${Math.round(critChance()*100)}%`;
-function rollCritTier(chance=critChance(), doubleChance=doubleCritChance()){
-  if(Math.random()>=chance) return 0;
-  return Math.random()<doubleChance ? 2 : 1;
-}
-const ownedSpecialCount = () => SPECIAL_DEFS.reduce((n,d)=>n+(specialLevels[d.id]>0?1:0),0);
-function basicStatReadouts(){
-  return [
-    { id:'fireRate',    icon:'FR', label:'連射', value:fireRateReadout(), color:'#00f0ff' },
-    { id:'bulletSpeed', icon:'▶▶', label:'弾速', value:fmtMult(statMult('bulletSpeed')),      color:'#b8a7ff' },
-    { id:'damage',      icon:'✦',  label:'威力', value:fmtMult(statMult('damage')),           color:'#ff6020' },
-    { id:'range',       icon:'RG', label:'距離補正', value:`${Math.round(damageFalloffRange())}`, color:'#88aaff' },
-    { id:'speed',       icon:'⇄',  label:'移動', value:fmtMult(statMult('speed')),             color:'#66ccff' },
-    { id:'critChance',  icon:'※',  label:'会心', value:critReadout(),                          color:'#b8a7ff' },
-    { id:'critDamage',  icon:'✹',  label:'倍率', value:fmtMult(critDamage()),                  color:'#ff7040' },
-    { id:'regen',       icon:'＋', label:'回復', value:`${regenPerSec().toFixed(1)}/s`,         color:'#ff7ad9' },
-    { id:'hp',          icon:'❤',  label:'HP',   value:fmtMult(maxHp/100),                     color:'#ff2d78' },
-    { id:'xpMult',      icon:'★',  label:'XP',   value:fmtMult(xpMult()),                      color:'#00dd77' },
-  ];
-}
-function bodyStatReadouts(){
-  return [
-    { label:'HP', value:`最大 ${fmtMult(bodyMult('hp'))}`, color:'#ff2d78' },
-    { label:'防御', value:`被ダメ ${fmtMult(1/bodyMult('defense'))}`, color:'#66ccff' },
-    { label:'攻撃', value:fmtMult(bodyMult('attack')), color:'#ff6020' },
-    { label:'連射', value:fmtMult(bodyMult('fireRate')), color:'#00f0ff' },
-  ];
-}
-function normalizeHighScore(){
-  const saved=meta.highScore || {};
-  const scoreValue=Math.max(0,Math.floor(Number(saved.score)||Number(meta.bestScore)||0));
-  const highScoreWave=Math.max(1,Math.floor(Number(saved.wave)||Number(meta.bestWave)||1));
-  const bestWave=Math.max(1,Math.floor(Number(meta.bestWave)||highScoreWave));
-  meta.highScore={score:scoreValue,wave:highScoreWave};
-  meta.bestWave=Math.max(bestWave,highScoreWave);
-}
-function highScoreWave(){
-  normalizeHighScore();
-  return Math.max(meta.bestWave||1,meta.highScore?.wave||1);
-}
-function highScoreCheckpointWave(){
-  const best=highScoreWave();
-  return Math.max(1,Math.floor((best-1)/BOSS_WAVE_INTERVAL)*BOSS_WAVE_INTERVAL+1);
-}
-function canUseHighScoreCheckpoint(){
-  return highScoreCheckpointWave()>1;
-}
-function recordRunHighScore(){
-  normalizeHighScore();
-  const currentWave=Math.max(1,Math.floor(wave)||1);
-  const currentScore=Math.max(0,Math.floor(score)||0);
-  let changed=false;
-  if(currentWave>meta.bestWave){
-    meta.bestWave=currentWave;
-    changed=true;
+
+function loadSave(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return {highScore:0,bestWave:1,tokens:START_TOKENS,homeUpgrades:freshHomeUpgradeMap(),garage:freshGarageState(),cosmetics:freshCosmeticState()};
+    const parsed = JSON.parse(raw);
+    return {
+      highScore: Math.max(0, Number(parsed.highScore) || 0),
+      bestWave: Math.max(1, Number(parsed.bestWave) || 1),
+      tokens: Math.max(0, parsed.tokens == null ? START_TOKENS : Number(parsed.tokens) || 0),
+      homeUpgrades: {...freshHomeUpgradeMap(), ...(parsed.homeUpgrades || {})},
+      garage: normalizeGarageState(parsed.garage),
+      cosmetics: normalizeCosmeticState(parsed.cosmetics)
+    };
+  }catch{
+    return {highScore:0,bestWave:1,tokens:START_TOKENS,homeUpgrades:freshHomeUpgradeMap(),garage:freshGarageState(),cosmetics:freshCosmeticState()};
   }
-  if(currentScore>meta.highScore.score || (currentScore===meta.highScore.score&&currentWave>meta.highScore.wave)){
-    meta.highScore={score:currentScore,wave:currentWave};
-    changed=true;
+}
+
+function saveProgress(){
+  localStorage.setItem(SAVE_KEY, JSON.stringify({
+    highScore: state.highScore,
+    bestWave: state.bestWave,
+    tokens: state.tokens,
+    homeUpgrades: state.homeUpgrades,
+    garage: state.garage,
+    cosmetics: state.cosmetics
+  }));
+}
+
+function saveRun(){
+  state.runTokenGain = calculateTokenReward();
+  state.tokens += state.runTokenGain;
+  state.highScore = Math.max(state.highScore, state.score);
+  state.bestWave = Math.max(state.bestWave, state.wave);
+  upsertScore({
+    playerId: 'local:guest',
+    name: 'GUEST',
+    score: state.score,
+    wave: state.wave
+  });
+  saveProgress();
+}
+
+function statDef(id){
+  return HOME_UPGRADE_DEFS[id] || BASIC_STAT_DEFS.find(d => d.id === id) || BASIC_STAT_DEFS[0];
+}
+
+function homeUpgradeDef(id){
+  return HOME_UPGRADE_DEFS[id] || HOME_UPGRADE_DEFS.fireRate;
+}
+
+function homeUpgradeLevel(id){
+  const lv = Math.max(0, Math.floor(Number(state.homeUpgrades?.[id]) || 0));
+  return homeUpgradeDef(id).tier === 'base' ? Math.min(HOME_UPGRADE_CAP, lv) : lv;
+}
+
+function isHomeUpgradeUnlocked(id){
+  const def = homeUpgradeDef(id);
+  return !def.parent || homeUpgradeLevel(def.parent) >= HOME_UPGRADE_CAP;
+}
+
+function isHomeUpgradeMaxed(id){
+  const def = homeUpgradeDef(id);
+  return def.tier === 'base' && homeUpgradeLevel(id) >= HOME_UPGRADE_CAP;
+}
+
+function runBasicLevel(id){
+  const lv = Math.max(0, Math.floor(Number(state.statLevels?.[id]) || 0));
+  return homeUpgradeDef(id).tier === 'base' ? Math.min(HOME_UPGRADE_CAP, lv) : lv;
+}
+
+function isRunBasicUnlocked(id){
+  const def = homeUpgradeDef(id);
+  return !def.parent || runBasicLevel(def.parent) >= HOME_UPGRADE_CAP;
+}
+
+function isRunBasicMaxed(id){
+  const def = homeUpgradeDef(id);
+  return def.tier === 'base' && runBasicLevel(id) >= HOME_UPGRADE_CAP;
+}
+
+function statLevel(id){
+  return Math.max(0, Number(state.statLevels[id]) || 0) + homeUpgradeLevel(id);
+}
+
+function specialUpgradeDef(id){
+  return SPECIAL_UPGRADE_DEFS_BY_ID[id];
+}
+
+function specialUpgradeLevel(id){
+  return Math.max(0, Math.floor(Number(state.specialUpgrades?.[id]) || 0));
+}
+
+function selectedSpecialInFamily(family){
+  return SPECIAL_UPGRADE_DEFS.find(def => def.family === family && specialUpgradeLevel(def.id) > 0)?.id || null;
+}
+
+function canOfferSpecialUpgrade(id){
+  const def = specialUpgradeDef(id);
+  if(!def) return false;
+  if(specialUpgradeLevel(id) >= def.max) return false;
+  const selected = selectedSpecialInFamily(def.family);
+  return !selected || selected === id;
+}
+
+function runUpgradeDef(id){
+  return specialUpgradeDef(id) || statDef(id);
+}
+
+function runUpgradeLevel(id){
+  return specialUpgradeDef(id) ? specialUpgradeLevel(id) : Math.max(0, Number(state.statLevels[id]) || 0);
+}
+
+function barrelFireBoost(){
+  if(specialUpgradeLevel('barrelGatling') > 0) return 3.15;
+  if(specialUpgradeLevel('barrelSniper') > 0) return .42;
+  if(specialUpgradeLevel('barrelShotgun') > 0) return .74;
+  if(specialUpgradeLevel('barrelMultishot') > 0) return .90;
+  if(specialUpgradeLevel('barrelDouble') > 0) return .96;
+  return 1;
+}
+
+function currentShip(){
+  return SHIP_BY_ID[state.garage?.selectedShipId] || SHIP_BY_ID[DEFAULT_SHIP_ID];
+}
+
+function shipOwned(id){
+  return !!state.garage?.ownedShips?.[id];
+}
+
+function shipMult(key){
+  return Number(currentShip().mult?.[key]) || 1;
+}
+
+function shipSlotCount(type, ship = currentShip()){
+  return Math.max(0, Math.min(3, Math.floor(Number(ship.slots?.[type]) || 0)));
+}
+
+function loadoutBuff(key){
+  const ship = currentShip();
+  const power = Number(ship.partPower) || 1;
+  let total = 0;
+  for(const type of PART_TYPES){
+    const slots = shipSlotCount(type, ship);
+    const equipped = state.garage?.equippedParts?.[type] || [];
+    for(let i=0;i<slots;i++){
+      const part = PART_BY_ID[equipped[i]];
+      if(part?.buff?.[key]) total += part.buff[key] * power;
+    }
+  }
+  return Math.min(.24, total);
+}
+
+function loadoutMult(key){
+  return shipMult(key) * (1 + loadoutBuff(key));
+}
+
+function refreshLoadoutVitals(){
+  const before = state.maxHp || 100;
+  const next = hpMax();
+  state.maxHp = next;
+  if(state.mode === 'play'){
+    state.hp = Math.min(next, state.hp + Math.max(0, next - before));
+  }else{
+    state.hp = Math.min(next, state.hp || next);
+  }
+}
+
+function cosmeticBuff(key){
+  if(!cosmeticBuffCache){
+    cosmeticBuffCache = {};
+    for(const id of Object.keys(state.cosmetics?.owned || {})){
+      const item = COSMETIC_BY_ID[id];
+      if(!item?.buff) continue;
+      for(const [buffKey, value] of Object.entries(item.buff)){
+        cosmeticBuffCache[buffKey] = (cosmeticBuffCache[buffKey] || 0) + value;
+      }
+    }
+  }
+  const cap = key === 'hp' || key === 'defense' ? .05 : .035;
+  return Math.min(cap, cosmeticBuffCache[key] || 0);
+}
+
+function statMult(id, step = .08){
+  return Math.pow(1 + step, statLevel(id));
+}
+
+function hpMax(){
+  return Math.round((100 + statLevel('hp') * 18) * (1 + cosmeticBuff('hp')) * loadoutMult('hp'));
+}
+
+function regenPerSecond(){
+  return statLevel('regen') * .45;
+}
+
+function evasionChance(){
+  return Math.min(.62, 1 - Math.pow(.96, statLevel('evasion')) + loadoutBuff('evasion'));
+}
+
+function defenseMultiplier(){
+  return Math.max(.45, (1 - statLevel('defense') * .035 - cosmeticBuff('defense') - loadoutBuff('defense')) / shipMult('defense'));
+}
+
+function critChance(){
+  return Math.min(.55, statLevel('critChance') * .03);
+}
+
+function critDamageMult(){
+  return 1.5 + statLevel('critDamage') * .10;
+}
+
+function bulletSpeedDamageMult(){
+  return 1 + statLevel('bulletSpeed') * .035 + cosmeticBuff('bulletSpeed') + loadoutBuff('bulletSpeed');
+}
+
+function tokenRewardMult(){
+  return (1 + statLevel('tokenMult') * .08 + cosmeticBuff('token') + loadoutBuff('token')) * shipMult('token');
+}
+
+function collisionDamageAmount(enemy){
+  const lv = statLevel('collisionDamage');
+  if(lv <= 0) return 0;
+  const bossScale = enemy?.boss ? .45 : 1;
+  return Math.ceil((12 + state.wave * 1.6) * Math.pow(1.12, lv) * bossScale);
+}
+
+function xpThreshold(){
+  return Math.floor(XP_BASE * Math.pow(1.55, state.level - 1));
+}
+
+function homeUpgradeCost(id){
+  const def = homeUpgradeDef(id);
+  const lv = homeUpgradeLevel(id);
+  if(def.tier === 'base'){
+    if(lv >= HOME_UPGRADE_CAP) return Infinity;
+    return Math.floor(30 * Math.pow(1.34, lv));
+  }
+  return Math.floor(90 * Math.pow(1.24, lv));
+}
+
+function runBasicUpgradeCost(id){
+  const def = homeUpgradeDef(id);
+  const lv = runBasicLevel(id);
+  if(def.tier === 'base'){
+    return lv >= HOME_UPGRADE_CAP ? Infinity : 1;
+  }
+  return 2 + Math.floor(lv / 6);
+}
+
+function calculateTokenReward(){
+  const scoreBonus = Math.floor(state.score / TOKEN_SCORE_UNIT);
+  const waveBonus = Math.max(0, state.wave - 1) * TOKEN_WAVE_BONUS;
+  const killBonus = Math.floor(state.kills * TOKEN_KILL_BONUS);
+  const timeBonus = Math.floor(state.runTime * TOKEN_TIME_BONUS);
+  return Math.max(0, Math.floor((scoreBonus + waveBonus + killBonus + timeBonus) * tokenRewardMult()));
+}
+
+function grantXp(amount){
+  grantBasicPoints(amount);
+  const gain = Math.max(1, Math.ceil(amount * statMult('xpMult', .10) * (1 + cosmeticBuff('xp') + loadoutBuff('xp')) * shipMult('xp')));
+  state.xp += gain;
+  let leveled = false;
+  while(state.xp >= xpThreshold()){
+    state.xp -= xpThreshold();
+    state.level++;
+    state.skillPoints++;
+    leveled = true;
+  }
+  if(leveled && state.mode === 'play') openLevelUp();
+}
+
+function grantBasicPoints(amount){
+  state.basicPointMeter += Math.max(0, Number(amount) || 0);
+  while(state.basicPointMeter >= BASIC_POINT_UNIT){
+    state.basicPointMeter -= BASIC_POINT_UNIT;
+    state.basicPoints++;
+  }
+}
+
+function rollUpgradeOptions(){
+  const candidates = SPECIAL_UPGRADE_DEFS
+    .filter(def => canOfferSpecialUpgrade(def.id))
+    .map(def => def.id);
+  const options = [];
+  while(options.length < 3 && candidates.length){
+    const index = Math.floor(Math.random() * candidates.length);
+    options.push(candidates[index]);
+    candidates[index] = candidates[candidates.length - 1];
+    candidates.pop();
+  }
+  return options;
+}
+
+function openLevelUp(){
+  if(activePointer !== null) canvas.releasePointerCapture?.(activePointer);
+  activePointer = null;
+  state.pointer = 0;
+  state.rollVel *= .35;
+  state.upgradeOptions = rollUpgradeOptions();
+  if(!state.upgradeOptions.length) return;
+  setMode('levelup');
+}
+
+function applyRunUpgrade(id){
+  if(state.skillPoints <= 0) return;
+  const specialDef = specialUpgradeDef(id);
+  if(!specialDef || !canOfferSpecialUpgrade(id)) return;
+  state.specialUpgrades[id] = Math.min(specialDef.max, specialUpgradeLevel(id) + 1);
+  state.skillPoints--;
+  if(state.skillPoints > 0){
+    state.upgradeOptions = rollUpgradeOptions();
+    if(state.upgradeOptions.length){
+      renderUi2();
+    }else{
+      setMode('play');
+    }
+  }else{
+    state.upgradeOptions = [];
+    setMode('play');
+  }
+}
+
+function buyRunBasicUpgrade(id){
+  if(!HOME_UPGRADE_DEFS[id] || !isRunBasicUnlocked(id) || isRunBasicMaxed(id)) return;
+  const cost = runBasicUpgradeCost(id);
+  if(!Number.isFinite(cost) || state.basicPoints < cost) return;
+  const beforeMax = state.maxHp;
+  state.basicPoints -= cost;
+  state.statLevels[id] = runBasicLevel(id) + 1;
+  if(id === 'hp'){
+    state.maxHp = hpMax();
+    state.hp = Math.min(state.maxHp, state.hp + Math.max(0, state.maxHp - beforeMax) + 18);
+  }
+  renderUi2();
+}
+
+function buyHomeUpgrade(id){
+  if(!isHomeUpgradeUnlocked(id) || isHomeUpgradeMaxed(id)) return;
+  const cost = homeUpgradeCost(id);
+  if(!Number.isFinite(cost) || state.tokens < cost) return;
+  state.tokens -= cost;
+  state.homeUpgrades[id] = homeUpgradeLevel(id) + 1;
+  state.maxHp = hpMax();
+  state.hp = Math.min(state.maxHp, state.hp || state.maxHp);
+  saveProgress();
+  renderUi2();
+}
+
+function buyShip(id){
+  const ship = SHIP_BY_ID[id];
+  if(!ship) return;
+  if(shipOwned(id)){
+    equipShip(id);
+    return;
+  }
+  if(state.tokens < ship.cost) return;
+  state.tokens -= ship.cost;
+  state.garage.ownedShips[id] = 1;
+  state.garage.selectedShipId = id;
+  refreshLoadoutVitals();
+  saveProgress();
+  renderUi2();
+}
+
+function equipShip(id){
+  if(!SHIP_BY_ID[id] || !shipOwned(id)) return;
+  state.garage.selectedShipId = id;
+  refreshLoadoutVitals();
+  saveProgress();
+  applyCosmetics();
+  renderUi2();
+}
+
+function equipPart(type, index, id){
+  if(!PART_TYPES.includes(type)) return;
+  const slot = Math.max(0, Math.floor(Number(index) || 0));
+  if(slot >= shipSlotCount(type)) return;
+  const equipped = state.garage.equippedParts[type] || Array(3).fill(null);
+  state.garage.equippedParts[type] = equipped;
+  if(!id || id === 'none'){
+    equipped[slot] = null;
+  }else{
+    const part = PART_BY_ID[id];
+    if(!part || part.type !== type || !state.garage.ownedParts[id]) return;
+    for(let i=0;i<equipped.length;i++){
+      if(equipped[i] === id) equipped[i] = null;
+    }
+    equipped[slot] = id;
+  }
+  refreshLoadoutVitals();
+  saveProgress();
+  renderUi2();
+}
+
+function cosmeticItem(id){
+  return COSMETIC_BY_ID[id];
+}
+
+function equippedCosmetic(type){
+  return cosmeticItem(state.cosmetics?.equipped?.[type] || DEFAULT_COSMETICS[type]) || cosmeticItem(DEFAULT_COSMETICS[type]);
+}
+
+function rollGachaItem(){
+  const total = COSMETIC_RARITIES.reduce((sum, rarity) => sum + rarity.weight, 0);
+  let roll = Math.random() * total;
+  const rarity = COSMETIC_RARITIES.find(r => (roll -= r.weight) <= 0) || COSMETIC_RARITIES[0];
+  const pool = COSMETIC_ITEMS.filter(item => item.rarity === rarity.id);
+  return pool[Math.floor(Math.random() * pool.length)] || COSMETIC_ITEMS[0];
+}
+
+function rollGacha(){
+  if(state.tokens < GACHA_COST) return;
+  state.tokens -= GACHA_COST;
+  const item = rollGachaItem();
+  const ownedCount = Number(state.cosmetics.owned[item.id]) || 0;
+  const duplicate = ownedCount > 0;
+  state.cosmetics.owned[item.id] = ownedCount + 1;
+  if(!state.cosmetics.equipped[item.type]) state.cosmetics.equipped[item.type] = item.id;
+  if(duplicate){
+    state.tokens += COSMETIC_RARITY_BY_ID[item.rarity].refund;
+  }
+  cosmeticBuffCache = null;
+  state.lastGacha = {id:item.id, duplicate};
+  saveProgress();
+  applyCosmetics();
+  renderUi2();
+}
+
+function equipCosmetic(id){
+  const item = cosmeticItem(id);
+  if(!item || !state.cosmetics.owned[id]) return;
+  state.cosmetics.equipped[item.type] = id;
+  saveProgress();
+  applyCosmetics();
+  renderUi2();
+}
+
+function applyColor(material, color){
+  if(material?.color) material.color.setHex(color);
+}
+
+function applyLineColor(material, color){
+  if(material?.color) material.color.setHex(color);
+}
+
+function applyCosmetics(){
+  if(!shared?.materials) return;
+  const bullet = equippedCosmetic('bulletSkin');
+  const armor = equippedCosmetic('armorSkin');
+  const coat = equippedCosmetic('shipCoat');
+
+  applyColor(shared.materials.shot, bullet.colors.shot);
+  applyColor(shared.materials.shotGlow, bullet.colors.glow);
+  applyColor(shared.materials.playerPlate, armor.colors.plate);
+  applyColor(shared.materials.playerPanel, armor.colors.panel);
+  applyColor(shared.materials.player, coat.colors.hull);
+  applyColor(shared.materials.playerWing, coat.colors.wing);
+  applyLineColor(shared.materials.playerEdge, coat.colors.line);
+  applyLineColor(shared.materials.railCyan, coat.colors.line);
+
+  if(homeShip?.materials){
+    applyColor(homeShip.materials.hull, coat.colors.hull);
+    applyColor(homeShip.materials.wing || homeShip.materials.hull, coat.colors.wing);
+    applyColor(homeShip.materials.plate, armor.colors.plate);
+    applyColor(homeShip.materials.panel, armor.colors.panel);
+    applyColor(homeShip.materials.core, bullet.colors.glow);
+    applyColor(homeShip.materials.glass, bullet.colors.shot);
+    applyLineColor(homeShip.materials.edge, coat.colors.line);
+  }
+}
+
+function makeSharedAssets(){
+  const materials = {
+    pipe: new THREE.MeshBasicMaterial({ color:0x07111f, side:THREE.DoubleSide, transparent:true, opacity:.86, depthWrite:false }),
+    pipeSide: new THREE.MeshBasicMaterial({ color:0x102533, side:THREE.DoubleSide, transparent:true, opacity:.34, depthWrite:false }),
+    railCyan: new THREE.LineBasicMaterial({ color:0x1ed6ff, transparent:true, opacity:.42 }),
+    railRose: new THREE.LineBasicMaterial({ color:0xff3b62, transparent:true, opacity:.30 }),
+    ring: new THREE.LineBasicMaterial({ color:0x82d7ff, transparent:true, opacity:.28 }),
+    ringHot: new THREE.LineBasicMaterial({ color:0xffd36a, transparent:true, opacity:.46 }),
+    shot: new THREE.MeshBasicMaterial({ color:0x9cf5ff }),
+    shotGlow: new THREE.MeshBasicMaterial({ color:0x1ed6ff, transparent:true, opacity:.32 }),
+    particle: new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.58, depthWrite:false, fog:false, vertexColors:true }),
+    player: new THREE.MeshStandardMaterial({ color:0x07111d, metalness:.78, roughness:.24, emissive:0x082f44, emissiveIntensity:.70 }),
+    playerPlate: new THREE.MeshStandardMaterial({ color:0xf1f6f8, metalness:.62, roughness:.18, emissive:0x182d3a, emissiveIntensity:.46 }),
+    playerPanel: new THREE.MeshStandardMaterial({ color:0x18283a, metalness:.70, roughness:.22, emissive:0x0a4155, emissiveIntensity:.42 }),
+    playerGlass: new THREE.MeshStandardMaterial({ color:0x9cf5ff, metalness:.18, roughness:.08, emissive:0x1ed6ff, emissiveIntensity:1.38, transparent:true, opacity:.82 }),
+    playerCore: new THREE.MeshBasicMaterial({ color:0x1ed6ff }),
+    playerWing: new THREE.MeshStandardMaterial({ color:0x132033, metalness:.64, roughness:.24, emissive:0x0a4960, emissiveIntensity:.52 }),
+    playerGold: new THREE.MeshBasicMaterial({ color:0xffd36a, transparent:true, opacity:.92 }),
+    playerRose: new THREE.MeshBasicMaterial({ color:0xff3b62, transparent:true, opacity:.82 }),
+    playerEdge: new THREE.LineBasicMaterial({ color:0x82d7ff, transparent:true, opacity:.72 }),
+    playerGoldLine: new THREE.LineBasicMaterial({ color:0xffd36a, transparent:true, opacity:.70 }),
+    playerRoseLine: new THREE.LineBasicMaterial({ color:0xff3b62, transparent:true, opacity:.62 }),
+    enemyArmor: new THREE.MeshStandardMaterial({ color:0x08111d, metalness:.76, roughness:.24, emissive:0x071421, emissiveIntensity:.55, fog:false }),
+    enemyArmorLight: new THREE.MeshStandardMaterial({ color:0xf4fbff, metalness:.42, roughness:.20, emissive:0x28465c, emissiveIntensity:.36, fog:false }),
+    bossSight: new THREE.LineBasicMaterial({ color:0xffd36a, transparent:true, opacity:.72, fog:false, depthTest:false })
+  };
+  const enemyMaterials = new Map();
+  const edgeMaterials = new Map();
+  const coreMaterials = new Map();
+  const glowMaterials = new Map();
+  for(const t of ENEMY_TYPES){
+    enemyMaterials.set(t.id, new THREE.MeshStandardMaterial({
+      color:t.color,
+      metalness:.26,
+      roughness:.28,
+      emissive:t.color,
+      emissiveIntensity:.72,
+      transparent:true,
+      opacity:.92,
+      fog:false
+    }));
+    edgeMaterials.set(t.id, new THREE.LineBasicMaterial({
+      color:t.color,
+      transparent:true,
+      opacity:.82,
+      depthTest:false,
+      fog:false
+    }));
+    coreMaterials.set(t.id, new THREE.MeshBasicMaterial({
+      color:t.color,
+      fog:false
+    }));
+    glowMaterials.set(t.id, new THREE.MeshBasicMaterial({
+      color:t.color,
+      transparent:true,
+      opacity:.40,
+      depthTest:false,
+      depthWrite:false,
+      fog:false
+    }));
+  }
+  enemyMaterials.set('boss', new THREE.MeshStandardMaterial({
+    color:0xff3b62,
+    metalness:.34,
+    roughness:.24,
+    emissive:0xff1f5c,
+    emissiveIntensity:1.28,
+    fog:false
+  }));
+  edgeMaterials.set('boss', new THREE.LineBasicMaterial({ color:0xffd36a, transparent:true, opacity:.95, depthTest:false, fog:false }));
+  coreMaterials.set('boss', new THREE.MeshBasicMaterial({ color:0xffd36a, fog:false }));
+  glowMaterials.set('boss', new THREE.MeshBasicMaterial({ color:0xff3b62, transparent:true, opacity:.46, depthTest:false, depthWrite:false, fog:false }));
+
+  const geometries = {
+    shot: new THREE.SphereGeometry(.095, 8, 5),
+    engineFlare: new THREE.SphereGeometry(.20, 10, 6),
+    particle: new THREE.SphereGeometry(.050, 5, 4),
+    enemyCore: new THREE.SphereGeometry(.24, 9, 6),
+    enemyGlow: new THREE.SphereGeometry(.52, 9, 6),
+    enemyBlade: new THREE.BoxGeometry(.13, .58, .14),
+    enemySpike: new THREE.ConeGeometry(.13, .48, 3, 1),
+    enemyRing: makeRingCircleGeometry(1, LOW_POWER_DEVICE ? 28 : 36),
+    bossBlade: new THREE.BoxGeometry(.26, 1.18, .18),
+    bossCore: new THREE.OctahedronGeometry(.58, 0),
+    orb: new THREE.IcosahedronGeometry(.55, 1),
+    tri: new THREE.ConeGeometry(.62, .92, 3, 1),
+    quad: new THREE.BoxGeometry(.86, .86, .86),
+    penta: new THREE.CylinderGeometry(.58, .58, .72, 5, 1),
+    hexa: new THREE.CylinderGeometry(.60, .60, .78, 6, 1),
+    boss: new THREE.ConeGeometry(1.45, 2.15, 3, 2)
+  };
+  const edgeGeometries = new Map();
+  for(const [id, geometry] of Object.entries(geometries)){
+    if(['orb','tri','quad','penta','hexa','boss'].includes(id)){
+      edgeGeometries.set(id, new THREE.EdgesGeometry(geometry, 18));
+    }
+  }
+  return {materials, enemyMaterials, edgeMaterials, coreMaterials, glowMaterials, geometries, edgeGeometries};
+}
+
+function makeBulletMesh(){
+  const mesh = new THREE.InstancedMesh(shared.geometries.shot, shared.materials.shot, MAX_BULLETS);
+  mesh.count = 0;
+  mesh.frustumCulled = false;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  return mesh;
+}
+
+function makeParticleMesh(){
+  const mesh = new THREE.InstancedMesh(shared.geometries.particle, shared.materials.particle, MAX_PARTICLES);
+  mesh.count = 0;
+  mesh.frustumCulled = false;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  return mesh;
+}
+
+function makeStage(){
+  const vanishingDust = makeVanishingStarLayer(Math.floor(VANISH_STAR_COUNT * .62), 0x9fdcff, .052, .36, 5.2, .045, .8);
+  const vanishingPins = makeVanishingStarLayer(Math.floor(VANISH_STAR_COUNT * .38), 0xf4fbff, .086, .58, 7.4, .090, 2.7, true);
+  const farDust = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .58), 34, 76, -330, 26, 0x7da8c6, .030, .24, 4.2, .018, .3);
+  const farPins = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .45), 24, 66, -315, 20, 0xd8f2ff, .052, .48, 5.8, .028, 1.7);
+  const midBlue = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .28), 16, 50, -286, 14, 0x8fefff, .078, .52, 8.4, .045, 3.2);
+  const nearWhite = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .18), 9, 36, -230, 8, 0xf4fbff, .138, .64, 12.6, .070, 5.0);
+  const glints = makeStarLayer(Math.max(14, Math.floor(SPACE_STAR_COUNT * .065)), 8, 28, -205, 4, 0xffffff, .215, .78, 15.8, .15, 7.4, true);
+  const amberDust = makeStarLayer(SPACE_DUST_COUNT, 18, 60, -305, 4, 0xffd36a, .085, .22, 6.9, .05, 9.0);
+  const starLayers = [vanishingDust, vanishingPins, farDust, farPins, midBlue, nearWhite, glints, amberDust];
+  for(const layer of starLayers) pipeRoot.add(layer);
+  return {starLayers};
+}
+
+function makeVanishingStarLayer(count, color, size, opacity, scroll, twinkle = 0, phase = 0, additive = false){
+  const layer = makeSpacePoints(count, .25, 7.6, -334, -78, color, size, opacity, {
+    additive,
+    axisY:true,
+    radiusPower:1.85,
+    yDrift:1.15
+  });
+  layer.userData.scroll = scroll;
+  layer.userData.baseOpacity = opacity;
+  layer.userData.twinkle = twinkle;
+  layer.userData.phase = phase;
+  return layer;
+}
+
+function makeStarLayer(count, radiusMin, radiusMax, zMin, zMax, color, size, opacity, scroll, twinkle = 0, phase = 0, additive = false){
+  const layer = makeSpacePoints(count, radiusMin, radiusMax, zMin, zMax, color, size, opacity, {
+    additive,
+    radiusPower: additive ? 1.15 : .72,
+    yDrift: additive ? 2.6 : 5.5
+  });
+  layer.userData.scroll = scroll;
+  layer.userData.baseOpacity = opacity;
+  layer.userData.twinkle = twinkle;
+  layer.userData.phase = phase;
+  return layer;
+}
+
+
+function makeSpacePoints(count, radiusMin, radiusMax, zMin, zMax, color, size, opacity, options = {}){
+  const pos = new Float32Array(count * 3);
+  const span = Math.max(1, zMax - zMin);
+  const radiusPower = options.radiusPower ?? .72;
+  const yDriftRange = options.yDrift ?? 5.5;
+  const cameraSlopeY = (CAMERA_LOOK_Y - CAMERA_BASE_Y) / (CAMERA_LOOK_Z - CAMERA_BASE_Z);
+  for(let i=0;i<count;i++){
+    const a = Math.random() * TAU;
+    const r = radiusMin + Math.pow(Math.random(), radiusPower) * (radiusMax - radiusMin);
+    const yDrift = (Math.random() - .5) * yDriftRange;
+    const z = zMin + Math.random() * span;
+    const axisY = options.axisY ? CAMERA_BASE_Y + cameraSlopeY * (z - CAMERA_BASE_Z) : 0;
+    pos[i*3] = Math.cos(a) * r;
+    pos[i*3+1] = axisY + Math.sin(a) * r + yDrift;
+    pos[i*3+2] = z;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const m = new THREE.PointsMaterial({
+    color,
+    size,
+    transparent:true,
+    opacity,
+    sizeAttenuation:true,
+    depthWrite:false,
+    fog:false,
+    blending: options.additive ? THREE.AdditiveBlending : THREE.NormalBlending
+  });
+  const points = new THREE.Points(g, m);
+  points.userData.loop = span;
+  return points;
+}
+
+function makePlateGeometry(points, thickness = .08){
+  const half = thickness / 2;
+  const verts = [];
+  for(const [x,z] of points) verts.push(x, half, z);
+  for(const [x,z] of points) verts.push(x, -half, z);
+  const indices = [];
+  for(let i=1;i<points.length-1;i++) indices.push(0, i, i + 1);
+  const offset = points.length;
+  for(let i=1;i<points.length-1;i++) indices.push(offset, offset + i + 1, offset + i);
+  for(let i=0;i<points.length;i++){
+    const j = (i + 1) % points.length;
+    indices.push(i, j, offset + i, j, offset + j, offset + i);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  g.setIndex(indices);
+  g.computeVertexNormals();
+  return g;
+}
+
+function addShipPlate(root, points, material, thickness = .08, edgeMaterial = shared.materials.playerEdge){
+  const mesh = new THREE.Mesh(makePlateGeometry(points, thickness), material);
+  root.add(mesh);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 16), edgeMaterial);
+  root.add(edges);
+  return mesh;
+}
+
+function makeShipLine(points, material, y = .07){
+  const verts = points.map(([x,z]) => new THREE.Vector3(x, y, z));
+  return new THREE.Line(new THREE.BufferGeometry().setFromPoints(verts), material);
+}
+
+function makePlayer(){
+  const root = new THREE.Group();
+  root.position.set(0, PLAYER_Y, PLAYER_Z);
+  root.rotation.x = -.13;
+  root.scale.setScalar(2.06);
+
+  const mirrorPoints = points => points.map(([x, z]) => [-x, z]).reverse();
+
+  const mainBody = addShipPlate(root, [
+    [0, -1.34], [.18, -1.06], [.31, -.48], [.28, .34],
+    [.15, .82], [0, 1.02], [-.15, .82], [-.28, .34],
+    [-.31, -.48], [-.18, -1.06]
+  ], shared.materials.player, .14);
+
+  const nose = addShipPlate(root, [
+    [0, -1.58], [.105, -1.20], [.075, -.72], [0, -.56], [-.075, -.72], [-.105, -1.20]
+  ], shared.materials.playerPlate, .075, shared.materials.playerGoldLine);
+  nose.position.y = .06;
+
+  const topArmor = addShipPlate(root, [
+    [0, -.94], [.135, -.55], [.18, .28], [.08, .68],
+    [0, .78], [-.08, .68], [-.18, .28], [-.135, -.55]
+  ], shared.materials.playerPlate, .06, shared.materials.playerEdge);
+  topArmor.position.y = .085;
+
+  const canopy = addShipPlate(root, [
+    [0, -.50], [.118, -.24], [.088, .06], [0, .20], [-.088, .06], [-.118, -.24]
+  ], shared.materials.playerGlass, .045, shared.materials.playerEdge);
+  canopy.position.y = .145;
+
+  const canopyGlow = addShipPlate(root, [
+    [0, -.44], [.070, -.20], [.052, -.02], [0, .09], [-.052, -.02], [-.070, -.20]
+  ], shared.materials.playerCore, .026, shared.materials.playerEdge);
+  canopyGlow.position.y = .184;
+
+  const wingPoints = [
+    [.19, -.42], [.98, -.05], [.90, .16], [.44, .36], [.25, .74], [.08, .56]
+  ];
+  const leftWing = addShipPlate(root, wingPoints, shared.materials.playerWing, .10);
+  const rightWing = addShipPlate(root, mirrorPoints(wingPoints), shared.materials.playerWing, .10);
+
+  const wingArmor = [
+    [.34, -.07], [.78, .08], [.58, .22], [.34, .23]
+  ];
+  const leftWingArmor = addShipPlate(root, wingArmor, shared.materials.playerPlate, .045, shared.materials.playerGoldLine);
+  const rightWingArmor = addShipPlate(root, mirrorPoints(wingArmor), shared.materials.playerPlate, .045, shared.materials.playerGoldLine);
+  leftWingArmor.position.y = .08;
+  rightWingArmor.position.y = .08;
+
+  const intakePoints = [[.22,-.36],[.42,-.23],[.36,.02],[.18,-.04]];
+  const leftIntake = addShipPlate(root, intakePoints, shared.materials.playerPanel, .038, shared.materials.playerEdge);
+  const rightIntake = addShipPlate(root, mirrorPoints(intakePoints), shared.materials.playerPanel, .038, shared.materials.playerEdge);
+  leftIntake.position.y = .135;
+  rightIntake.position.y = .135;
+
+  const shoulderPoints = [[.12,.26],[.31,.35],[.25,.68],[.07,.58]];
+  const leftShoulder = addShipPlate(root, shoulderPoints, shared.materials.playerPanel, .050, shared.materials.playerRoseLine);
+  const rightShoulder = addShipPlate(root, mirrorPoints(shoulderPoints), shared.materials.playerPanel, .050, shared.materials.playerRoseLine);
+  leftShoulder.position.y = .125;
+  rightShoulder.position.y = .125;
+
+  const sidePodPoints = [[.30,.20],[.58,.30],[.56,.78],[.36,.90],[.23,.54]];
+  addShipPlate(root, sidePodPoints, shared.materials.playerPlate, .08, shared.materials.playerGoldLine);
+  addShipPlate(root, mirrorPoints(sidePodPoints), shared.materials.playerPlate, .08, shared.materials.playerGoldLine);
+
+  const finPoints = [[.18,.70],[.34,1.04],[.16,.96],[.05,.76]];
+  const leftFin = addShipPlate(root, finPoints, shared.materials.playerWing, .055, shared.materials.playerEdge);
+  const rightFin = addShipPlate(root, mirrorPoints(finPoints), shared.materials.playerWing, .055, shared.materials.playerEdge);
+  leftFin.position.y = .10;
+  rightFin.position.y = .10;
+
+  root.add(makeShipLine([[0,-1.44],[0,-.54],[0,.74]], shared.materials.playerRoseLine, .17));
+  root.add(makeShipLine([[.13,-.74],[.24,-.30],[.20,.54]], shared.materials.playerGoldLine, .15));
+  root.add(makeShipLine([[-.13,-.74],[-.24,-.30],[-.20,.54]], shared.materials.playerGoldLine, .15));
+  root.add(makeShipLine([[.28,-.20],[.72,.06],[.48,.32],[.32,.66]], shared.materials.playerEdge, .13));
+  root.add(makeShipLine([[-.28,-.20],[-.72,.06],[-.48,.32],[-.32,.66]], shared.materials.playerEdge, .13));
+  root.add(makeShipLine([[.36,.40],[.52,.82]], shared.materials.playerGoldLine, .13));
+  root.add(makeShipLine([[-.36,.40],[-.52,.82]], shared.materials.playerGoldLine, .13));
+  root.add(makeShipLine([[.08,-1.18],[.17,-.88],[.13,-.58]], shared.materials.playerEdge, .19));
+  root.add(makeShipLine([[-.08,-1.18],[-.17,-.88],[-.13,-.58]], shared.materials.playerEdge, .19));
+  root.add(makeShipLine([[.48,-.02],[.82,.12]], shared.materials.playerRoseLine, .16));
+  root.add(makeShipLine([[-.48,-.02],[-.82,.12]], shared.materials.playerRoseLine, .16));
+
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.155, 16, 10), shared.materials.playerCore);
+  core.position.set(0, .22, -.16);
+  root.add(core);
+
+  const reactorHalo = new THREE.Line(makeRingCircleGeometry(.33, LOW_POWER_DEVICE ? 32 : 46), shared.materials.playerGoldLine);
+  reactorHalo.rotation.x = Math.PI / 2;
+  reactorHalo.position.set(0, .225, -.16);
+  root.add(reactorHalo);
+
+  const coreRing = new THREE.Line(makeRingCircleGeometry(.245, 40), shared.materials.playerEdge);
+  coreRing.rotation.x = Math.PI / 2;
+  coreRing.position.set(0, .235, -.16);
+  root.add(coreRing);
+
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(.075, .045, 1.58), shared.materials.playerGold);
+  spine.position.set(0, .17, -.10);
+  root.add(spine);
+
+  const engineGeo = new THREE.CylinderGeometry(.105, .165, .46, 12, 1);
+  const engineNozzleGeo = new THREE.CylinderGeometry(.135, .095, .18, 12, 1);
+  for(const x of [-.30,.30]){
+    const engine = new THREE.Mesh(engineGeo, shared.materials.playerCore);
+    engine.rotation.x = Math.PI / 2;
+    engine.position.set(x, -.035, .80);
+    root.add(engine);
+    const nozzle = new THREE.Mesh(engineNozzleGeo, shared.materials.player);
+    nozzle.rotation.x = Math.PI / 2;
+    nozzle.position.set(x, -.035, 1.04);
+    root.add(nozzle);
+    const engineCowl = addShipPlate(root, [
+      [x - Math.sign(x)*.12, .48], [x + Math.sign(x)*.14, .54],
+      [x + Math.sign(x)*.16, .92], [x, 1.08], [x - Math.sign(x)*.13, .88]
+    ], shared.materials.player, .07, shared.materials.playerEdge);
+    engineCowl.position.y = -.01;
+    const flare = new THREE.Mesh(shared.geometries.engineFlare, shared.materials.shotGlow);
+    flare.position.set(x, -.035, 1.20);
+    flare.scale.set(.78, .78, 1.18);
+    root.add(flare);
+  }
+
+  const aura = new THREE.Line(makeRingCircleGeometry(.78, 56), shared.materials.railCyan);
+  aura.rotation.x = Math.PI / 2;
+  aura.position.z = .18;
+  root.add(aura);
+
+  return {root, body:mainBody, wings:leftWing, rightWing, core, aura, nose};
+}
+
+function makeHomePreviewShip(){
+  const root = new THREE.Group();
+  root.visible = false;
+  const mirrorPoints = points => points.map(([x, z]) => [-x, z]).reverse();
+
+  const materials = {
+    hull: new THREE.MeshStandardMaterial({ color:0x0b1016, metalness:.72, roughness:.24, emissive:0x123040, emissiveIntensity:.86, side:THREE.DoubleSide, fog:false }),
+    plate: new THREE.MeshBasicMaterial({ color:0xf2f6f7, side:THREE.DoubleSide, fog:false }),
+    wing: new THREE.MeshStandardMaterial({ color:0x132033, metalness:.64, roughness:.22, emissive:0x0a4960, emissiveIntensity:.52, side:THREE.DoubleSide, fog:false }),
+    panel: new THREE.MeshStandardMaterial({ color:0x18283a, metalness:.68, roughness:.22, emissive:0x0a4155, emissiveIntensity:.42, side:THREE.DoubleSide, fog:false }),
+    core: new THREE.MeshBasicMaterial({ color:0x8eefff, fog:false }),
+    glass: new THREE.MeshStandardMaterial({ color:0x9cf5ff, metalness:.18, roughness:.08, emissive:0x1ed6ff, emissiveIntensity:1.5, transparent:true, opacity:.82, fog:false }),
+    edge: new THREE.LineBasicMaterial({ color:0x9ef5ff, transparent:true, opacity:.72, fog:false }),
+    goldLine: new THREE.LineBasicMaterial({ color:0xd8e2ea, transparent:true, opacity:.70, fog:false }),
+    roseLine: new THREE.LineBasicMaterial({ color:0x8eefff, transparent:true, opacity:.58, fog:false }),
+    shadow: new THREE.MeshBasicMaterial({ color:0x071017, transparent:true, opacity:.28, depthWrite:false, fog:false })
+  };
+
+  const addPreviewPlate = (points, material, thickness = .10) => {
+    const mesh = new THREE.Mesh(makePlateGeometry(points, thickness), material);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 16), materials.edge);
+    root.add(mesh, edges);
+    return mesh;
+  };
+  const addPreviewLine = (points, material = materials.edge, y = .16) => {
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points.map(([x, z]) => new THREE.Vector3(x, y, z))), material);
+    root.add(line);
+    return line;
+  };
+
+  addPreviewPlate([
+    [0, -1.34], [.18, -1.06], [.31, -.48], [.28, .34],
+    [.15, .82], [0, 1.02], [-.15, .82], [-.28, .34],
+    [-.31, -.48], [-.18, -1.06]
+  ], materials.hull, .17);
+  addPreviewPlate([
+    [0, -1.58], [.105, -1.20], [.075, -.72], [0, -.56], [-.075, -.72], [-.105, -1.20]
+  ], materials.plate, .085);
+  addPreviewPlate([
+    [0, -.94], [.135, -.55], [.18, .28], [.08, .68],
+    [0, .78], [-.08, .68], [-.18, .28], [-.135, -.55]
+  ], materials.plate, .07);
+
+  const wingPoints = [
+    [.19, -.42], [.98, -.05], [.90, .16], [.44, .36], [.25, .74], [.08, .56]
+  ];
+  addPreviewPlate(wingPoints, materials.wing, .11);
+  addPreviewPlate(mirrorPoints(wingPoints), materials.wing, .11);
+  addPreviewPlate([[.22,-.36],[.42,-.23],[.36,.02],[.18,-.04]], materials.panel, .044).position.y = .13;
+  addPreviewPlate(mirrorPoints([[.22,-.36],[.42,-.23],[.36,.02],[.18,-.04]]), materials.panel, .044).position.y = .13;
+  addPreviewPlate([[.12,.26],[.31,.35],[.25,.68],[.07,.58]], materials.panel, .052).position.y = .12;
+  addPreviewPlate(mirrorPoints([[.12,.26],[.31,.35],[.25,.68],[.07,.58]]), materials.panel, .052).position.y = .12;
+
+  const canopy = addPreviewPlate([
+    [0, -.50], [.118, -.24], [.088, .06], [0, .20], [-.088, .06], [-.118, -.24]
+  ], materials.glass, .052);
+  canopy.position.y = .15;
+  addPreviewPlate([
+    [0, -.44], [.070, -.20], [.052, -.02], [0, .09], [-.052, -.02], [-.070, -.20]
+  ], materials.core, .030).position.y = .19;
+
+  addPreviewLine([[0,-1.44],[0,-.54],[0,.74]], materials.roseLine, .18);
+  addPreviewLine([[.13,-.74],[.24,-.30],[.20,.54]], materials.goldLine, .16);
+  addPreviewLine([[-.13,-.74],[-.24,-.30],[-.20,.54]], materials.goldLine, .16);
+  addPreviewLine([[.28,-.20],[.72,.06],[.48,.32],[.32,.66]], materials.edge, .14);
+  addPreviewLine([[-.28,-.20],[-.72,.06],[-.48,.32],[-.32,.66]], materials.edge, .14);
+
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.17, 18, 10), materials.core);
+  core.position.set(0, .24, -.16);
+  root.add(core);
+  const coreRing = new THREE.Line(makeRingCircleGeometry(.32, LOW_POWER_DEVICE ? 32 : 46), materials.goldLine);
+  coreRing.rotation.x = Math.PI / 2;
+  coreRing.position.set(0, .24, -.16);
+  root.add(coreRing);
+
+  const engineGeo = new THREE.CylinderGeometry(.12, .18, .44, 14, 1);
+  for(const x of [-.32, .32]){
+    const engine = new THREE.Mesh(engineGeo, materials.hull);
+    engine.rotation.x = Math.PI / 2;
+    engine.position.set(x, -.04, .92);
+    root.add(engine);
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(.13, 12, 8), materials.core);
+    glow.position.set(x, -.04, 1.15);
+    glow.scale.set(.9, .7, 1.1);
+    root.add(glow);
+  }
+
+  const underGlow = new THREE.Mesh(new THREE.CircleGeometry(1.12, 36), materials.shadow);
+  underGlow.rotation.x = -Math.PI / 2;
+  underGlow.position.set(0, -.18, .10);
+  underGlow.scale.set(1.25, .58, 1);
+  root.add(underGlow);
+
+  return {root, core, materials};
+}
+
+function makeRingCircleGeometry(radius, steps){
+  const pts = [];
+  for(let i=0;i<=steps;i++){
+    const a = TAU * i / steps;
+    pts.push(new THREE.Vector3(Math.cos(a)*radius, Math.sin(a)*radius, 0));
+  }
+  return new THREE.BufferGeometry().setFromPoints(pts);
+}
+
+function createUi(){
+  const style = document.createElement('style');
+  style.textContent = `
+    #barrage-ui{position:fixed;z-index:5;pointer-events:none;color:${COLORS.text};font-family:"Zen Kaku Gothic New","Oxanium","Yu Gothic UI",Meiryo,sans-serif;text-shadow:0 1px 0 rgba(0,0,0,.8)}
+    #barrage-ui *{box-sizing:border-box}
+    #barrage-ui button{pointer-events:auto;position:relative;overflow:hidden;border:1px solid rgba(244,251,255,.22);background:rgba(244,251,255,.075);color:${COLORS.text};font:900 14px inherit;letter-spacing:0;border-radius:0;padding:0 16px;height:42px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 12px 26px rgba(0,0,0,.22);cursor:pointer;clip-path:polygon(13px 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%,0 13px)}
+    #barrage-ui button:hover{border-color:rgba(244,251,255,.36);background:rgba(244,251,255,.11)}
+    #barrage-ui button:active{transform:translateY(1px);filter:brightness(.94)}
+    #barrage-ui .screen{position:absolute;inset:0;display:none;overflow:hidden;background:
+      radial-gradient(circle at 74% 16%,rgba(238,247,255,.10),transparent 28%),
+      radial-gradient(circle at 20% 72%,rgba(30,214,255,.075),transparent 36%),
+      linear-gradient(180deg,#07080a 0%,#101216 45%,#060607 100%)}
+    #barrage-ui .screen::before{content:"";position:absolute;inset:0;background:
+      linear-gradient(rgba(238,247,255,.055) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(238,247,255,.045) 1px,transparent 1px);
+      background-size:56px 56px;opacity:.22;transform:perspective(360px) rotateX(54deg) translateY(48px) scale(1.4);transform-origin:center bottom}
+    #barrage-ui .screen::after{content:"";position:absolute;left:-10%;right:-10%;top:52%;height:1px;background:linear-gradient(90deg,transparent,rgba(238,247,255,.32),rgba(30,214,255,.42),transparent);box-shadow:0 0 18px rgba(30,214,255,.16)}
+    #barrage-ui .screen.on{display:block}
+    #barrage-ui .cut{clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px)}
+    #barrage-ui .panel{position:relative;border:1px solid rgba(238,247,255,.16);background:linear-gradient(180deg,rgba(8,10,10,.92),rgba(5,8,13,.78));box-shadow:0 0 0 1px rgba(184,167,255,.07),0 18px 46px rgba(0,0,0,.34);border-radius:0;padding:13px}
+    #barrage-ui .panel::before{content:"";position:absolute;left:14px;right:14px;top:12px;height:1px;background:rgba(238,247,255,.14)}
+    #barrage-ui .top{position:absolute;z-index:1;left:12px;right:12px;top:10px;display:flex;align-items:flex-start;justify-content:flex-start;gap:9px}
+    #barrage-ui .brand-card{position:relative;width:205px;min-height:62px;padding:10px 12px 9px 18px;border-left:5px solid ${COLORS.violet}}
+    #barrage-ui .brand{font-size:26px;line-height:1;font-weight:900;color:${COLORS.text};text-shadow:0 0 16px rgba(30,214,255,.62)}
+    #barrage-ui .sub{margin-top:4px;font-size:10px;font-weight:900;color:${COLORS.muted}}
+    #barrage-ui .top-stack{display:grid;grid-template-columns:1fr;gap:6px;width:76px;min-width:76px}
+    #barrage-ui .chip{position:relative;min-width:66px;border:1px solid rgba(238,247,255,.14);background:rgba(5,8,13,.74);padding:7px 8px 6px;text-align:right;font-size:10px;font-weight:900;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+    #barrage-ui .chip b{display:block;color:${COLORS.faint};font-size:9px;line-height:1.05}
+    #barrage-ui .chip span{display:block;color:${COLORS.text};font-size:14px;line-height:1.15}
+    #barrage-ui .home-main{position:absolute;z-index:1;left:18px;right:18px;bottom:22px;display:grid;grid-template-columns:1fr;gap:9px}
+    #barrage-ui .title{font-size:43px;line-height:.92;font-weight:900;color:${COLORS.text};text-shadow:0 0 24px rgba(255,59,98,.55)}
+    #barrage-ui .mode-line{display:flex;align-items:center;gap:8px;color:${COLORS.violet};font-size:11px;font-weight:900}
+    #barrage-ui .mode-line::before{content:"";width:34px;height:3px;background:${COLORS.violet};box-shadow:0 0 12px rgba(184,167,255,.7)}
+    #barrage-ui .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+    #barrage-ui .stat{border:1px solid rgba(238,247,255,.12);border-left:4px solid ${COLORS.cyan};background:rgba(238,247,255,.045);padding:7px 8px 8px;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+    #barrage-ui .stat b{display:block;font-size:9px;line-height:1.05;color:${COLORS.faint};white-space:nowrap}
+    #barrage-ui .stat span{display:block;margin-top:4px;font-size:15px;line-height:1;font-weight:900;color:${COLORS.text}}
+    #barrage-ui .dock{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+    #barrage-ui .dock .tab{height:34px;border:1px solid rgba(238,247,255,.13);background:rgba(5,8,13,.68);padding:6px 7px;color:${COLORS.muted};font-size:9px;font-weight:900;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+    #barrage-ui .dock .tab.active{border-color:rgba(30,214,255,.58);color:${COLORS.cyan};box-shadow:0 0 16px rgba(30,214,255,.12)}
+    #barrage-ui .launch{width:100%;height:46px;margin-top:1px;color:${COLORS.gold};border-color:rgba(216,226,234,.58);background:linear-gradient(135deg,rgba(216,226,234,.20),rgba(8,10,10,.92) 48%,rgba(30,214,255,.18));font-size:16px}
+    #barrage-ui .hud{position:absolute;inset:0;display:none;overflow:hidden}
+    #barrage-ui .hud.on{display:block}
+    #barrage-ui .hud::before{content:"";position:absolute;left:0;right:0;top:0;height:62px;background:linear-gradient(180deg,rgba(5,6,7,.78),rgba(5,6,7,.30),transparent);pointer-events:none}
+    #barrage-ui .hud::after{content:"";position:absolute;left:0;right:0;bottom:0;height:148px;background:linear-gradient(180deg,transparent,rgba(5,6,7,.52) 18%,rgba(5,6,7,.94));pointer-events:none}
+    #barrage-ui .hud-top{position:absolute;z-index:1;left:10px;right:10px;top:8px;display:grid;grid-template-columns:74px 1fr 112px;gap:8px;align-items:start}
+    #barrage-ui .hud-pause{height:34px;width:74px;padding:0 8px;display:flex;align-items:center;justify-content:center;gap:7px;color:#f4fbff;font-size:11px;border-color:rgba(244,251,255,.34);background:rgba(244,251,255,.08)}
+    #barrage-ui .hud-pause::before{content:"";width:12px;height:13px;border-left:3px solid ${COLORS.gold};border-right:3px solid ${COLORS.gold};filter:drop-shadow(0 0 5px rgba(216,226,234,.55))}
+    #barrage-ui .wave-panel{height:45px;border:1px solid rgba(255,59,98,.36);background:linear-gradient(180deg,rgba(8,10,10,.76),rgba(8,10,10,.42));clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);padding:5px 9px 6px;text-align:center;box-shadow:0 0 18px rgba(255,59,98,.10)}
+    #barrage-ui .wave-panel b{display:block;font-size:9px;line-height:1;color:${COLORS.faint}}
+    #barrage-ui .wave-panel span{display:block;margin-top:1px;font-size:18px;line-height:1;font-weight:900;color:${COLORS.text}}
+    #barrage-ui .wave-timer{height:4px;margin-top:5px;background:rgba(238,247,255,.10);overflow:hidden;clip-path:polygon(3px 0,100% 0,100% 100%,0 100%,0 3px)}
+    #barrage-ui .wave-timer i{display:block;height:100%;width:0;background:${COLORS.rose};box-shadow:0 0 10px rgba(255,59,98,.82)}
+    #barrage-ui .score-panel{height:45px;border:1px solid rgba(30,214,255,.28);background:linear-gradient(180deg,rgba(5,8,13,.72),rgba(5,8,13,.44));clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);padding:6px 9px;text-align:right}
+    #barrage-ui .score-panel b{display:block;font-size:9px;color:${COLORS.faint};line-height:1}
+    #barrage-ui .score-panel span{display:block;margin-top:4px;font-size:16px;line-height:1;font-weight:900;color:${COLORS.text}}
+    #barrage-ui .hud-bottom{position:absolute;z-index:1;left:0;right:0;bottom:0;padding:14px 12px 10px;border-top:1px solid rgba(238,247,255,.16);display:grid;gap:7px}
+    #barrage-ui .status-panel{display:grid;gap:8px;padding:0 0 2px}
+    #barrage-ui .meter-row{display:grid;grid-template-columns:58px 1fr 66px;align-items:center;gap:8px;font-size:10px;font-weight:900;color:${COLORS.muted}}
+    #barrage-ui .meter-row.hp{grid-template-columns:58px 1fr 70px}
+    #barrage-ui .meter-label{display:flex;align-items:center;gap:5px;color:${COLORS.text};white-space:nowrap}
+    #barrage-ui .meter-label::before{content:"";display:block;width:4px;height:14px;background:var(--meter-color);box-shadow:0 0 9px var(--meter-color)}
+    #barrage-ui .bar{height:13px;background:rgba(238,247,255,.075);overflow:hidden;border:1px solid rgba(238,247,255,.16);clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);box-shadow:inset 0 0 12px rgba(0,0,0,.36)}
+    #barrage-ui .meter-row.hp .bar{height:17px}
+    #barrage-ui .bar i{display:block;height:100%;width:50%;background:linear-gradient(90deg,var(--meter-color),var(--meter-end));box-shadow:0 0 14px var(--meter-color),inset 0 1px 0 rgba(255,255,255,.28)}
+    #barrage-ui .hud-chips{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+    #barrage-ui .hud-chip{height:25px;border:1px solid rgba(238,247,255,.13);background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,8,13,.56));clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);display:grid;grid-template-columns:1fr auto;align-items:center;padding:0 9px;font-weight:900}
+    #barrage-ui .hud-chip b{font-size:9px;color:${COLORS.faint}}
+    #barrage-ui .hud-chip span{font-size:14px;color:${COLORS.text}}
+    #barrage-ui .hud-top{grid-template-columns:1fr 1fr 1fr 44px}
+    #barrage-ui .hud-top .chip{min-width:0;height:42px;padding:7px 9px 6px;background:linear-gradient(180deg,rgba(8,10,10,.76),rgba(5,8,13,.42));border-color:rgba(238,247,255,.12)}
+    #barrage-ui .hud-top .chip:nth-child(1){border-color:rgba(255,59,98,.36);text-align:center}
+    #barrage-ui .hud-top .chip:nth-child(2){border-color:rgba(30,214,255,.28)}
+    #barrage-ui .hud-top .chip:nth-child(3){border-color:rgba(184,167,255,.28)}
+    #barrage-ui .hud-top .chip b{font-size:0}
+    #barrage-ui .hud-top .chip b::after{display:block;font-size:9px;line-height:1.05;color:${COLORS.faint}}
+    #barrage-ui .hud-top .chip:nth-child(1) b::after{content:"ウェーブ"}
+    #barrage-ui .hud-top .chip:nth-child(2) b::after{content:"スコア"}
+    #barrage-ui .hud-top .chip:nth-child(3) b::after{content:"残り"}
+    #barrage-ui .hud-top .chip span{font-size:16px;line-height:1.15;margin-top:4px}
+    #barrage-ui .hud-top .chip:nth-child(1) span::before{content:"WAVE ";font-size:10px;color:${COLORS.rose};vertical-align:1px}
+    #barrage-ui .hud-top .pause{width:44px;height:42px;padding:0;font-size:0;color:#f4fbff;border-color:rgba(244,251,255,.34);background:rgba(244,251,255,.08)}
+    #barrage-ui .hud-top .pause::before{content:"";display:block;width:13px;height:15px;margin:auto;border-left:4px solid #f4fbff;border-right:4px solid #f4fbff;filter:drop-shadow(0 0 6px rgba(132,241,255,.30))}
+    #barrage-ui .hud-bottom .meter-row:nth-child(1){--meter-color:#ff3b62;--meter-end:#ffb3a5;grid-template-columns:50px 1fr 72px}
+    #barrage-ui .hud-bottom .meter-row:nth-child(2){--meter-color:#1ed6ff;--meter-end:#9cf5ff}
+    #barrage-ui .hud-bottom .meter-row:nth-child(3){--meter-color:#36f39b;--meter-end:#d6ff69}
+    #barrage-ui .hud-bottom .meter-row>span:first-child{font-size:0;color:${COLORS.text}}
+    #barrage-ui .hud-bottom .meter-row>span:first-child::after{display:block;font-size:10px;white-space:nowrap}
+    #barrage-ui .hud-bottom .meter-row:nth-child(1)>span:first-child::after{content:"HP"}
+    #barrage-ui .hud-bottom .meter-row:nth-child(2)>span:first-child::after{content:"エネルギー"}
+    #barrage-ui .hud-bottom .meter-row:nth-child(3)>span:first-child::after{content:"XP"}
+    #barrage-ui .result,#barrage-ui .menu{position:absolute;z-index:1;left:26px;right:26px;top:168px;display:grid;gap:10px}
+    #barrage-ui .menu-title{font-size:28px;font-weight:900;color:${COLORS.text};text-shadow:0 0 16px rgba(30,214,255,.5)}
+    #barrage-ui .upgrade-page{position:absolute;z-index:1;left:16px;right:16px;top:96px;display:grid;gap:10px}
+    #barrage-ui .upgrade-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    #barrage-ui .upgrade-card{pointer-events:auto;position:relative;min-height:76px;border:1px solid rgba(238,247,255,.14);border-left:4px solid var(--accent);background:linear-gradient(180deg,rgba(8,10,10,.88),rgba(5,8,13,.72));padding:10px 10px 9px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px)}
+    #barrage-ui .upgrade-card b{display:block;color:var(--accent);font-size:11px}
+    #barrage-ui .upgrade-card span{display:block;margin-top:5px;color:${COLORS.text};font-size:15px;font-weight:900}
+    #barrage-ui .upgrade-card small{display:block;margin-top:6px;color:${COLORS.muted};font-size:10px;font-weight:800;line-height:1.25}
+    #barrage-ui .upgrade-card button{position:absolute;right:8px;bottom:8px;height:26px;padding:0 10px;font-size:10px;background:rgba(244,251,255,.08);border-color:rgba(244,251,255,.24);color:#f4fbff}
+    #barrage-ui .levelup{position:absolute;z-index:2;left:16px;right:16px;top:118px;display:grid;gap:10px}
+    #barrage-ui .levelup .upgrade-grid{grid-template-columns:1fr}
+    #barrage-ui .upgrade-overlay{position:absolute;inset:0;z-index:3;display:none;pointer-events:none;background:linear-gradient(180deg,rgba(5,6,7,.20),rgba(5,6,7,.58) 42%,rgba(5,6,7,.86));overflow:hidden}
+    #barrage-ui .upgrade-overlay.on{display:block}
+    #barrage-ui .upgrade-overlay::before{content:"";position:absolute;left:-10%;right:-10%;top:96px;height:1px;background:linear-gradient(90deg,transparent,rgba(30,214,255,.58),rgba(216,226,234,.38),transparent);box-shadow:0 0 20px rgba(30,214,255,.26)}
+    #barrage-ui .upgrade-overlay .levelup{pointer-events:auto;left:14px;right:14px;top:108px;padding:13px 13px 14px;border-color:rgba(216,226,234,.26);background:linear-gradient(180deg,rgba(8,10,10,.92),rgba(5,8,13,.86));box-shadow:0 0 0 1px rgba(238,247,255,.06),0 20px 44px rgba(0,0,0,.45)}
+    #barrage-ui .upgrade-overlay .level-head{display:grid;grid-template-columns:1fr auto;align-items:end;gap:10px}
+    #barrage-ui .upgrade-overlay .level-title{font-size:25px;line-height:1;font-weight:900;color:${COLORS.text};text-shadow:0 0 16px rgba(216,226,234,.34)}
+    #barrage-ui .upgrade-overlay .level-sp{height:26px;min-width:72px;display:grid;place-items:center;border:1px solid rgba(244,251,255,.30);background:rgba(244,251,255,.08);color:#f4fbff;font-size:12px;font-weight:900;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+    #barrage-ui .upgrade-overlay .level-note{font-size:10px;font-weight:900;color:${COLORS.muted};line-height:1.25}
+    #barrage-ui .upgrade-overlay .upgrade-grid{grid-template-columns:1fr;gap:8px;margin-top:2px}
+    #barrage-ui .upgrade-overlay .upgrade-card{min-height:82px;padding:10px 92px 10px 12px;background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,8,13,.72));border-left-width:5px}
+    #barrage-ui .upgrade-overlay .upgrade-card b{font-size:10px;color:var(--accent)}
+    #barrage-ui .upgrade-overlay .upgrade-card span{font-size:18px;color:${COLORS.text}}
+    #barrage-ui .upgrade-overlay .upgrade-card small{font-size:10px;line-height:1.3;max-width:190px}
+    #barrage-ui .upgrade-overlay .upgrade-card button{right:10px;top:50%;bottom:auto;transform:translateY(-50%);height:36px;min-width:70px;border-color:rgba(244,251,255,.34);color:#f4fbff;font-size:11px;background:rgba(244,251,255,.08)}
+    #barrage-ui .upgrade-overlay .upgrade-card button:active{transform:translateY(calc(-50% + 1px))}
+
+    #barrage-ui{
+      --ui-bg:#050607;
+      --ui-panel:rgba(12,14,16,.78);
+      --ui-panel-strong:rgba(18,21,24,.92);
+      --ui-line:rgba(244,251,255,.18);
+      --ui-line-strong:rgba(244,251,255,.34);
+      --ui-text:#f6f8fa;
+      --ui-muted:rgba(214,226,234,.66);
+      --ui-faint:rgba(214,226,234,.38);
+      --ui-cyan:#8eefff;
+      --ui-red:#ff5d7e;
+      --ui-green:#9dffd9;
+      --ui-silver:#d8e2ea;
+      --ui-shadow:0 18px 40px rgba(0,0,0,.30);
+      color:var(--ui-text);
+      text-shadow:none;
+    }
+    #barrage-ui button{
+      min-width:0;
+      border:1px solid var(--ui-line);
+      background:linear-gradient(180deg,rgba(250,252,255,.11),rgba(250,252,255,.045));
+      color:var(--ui-text);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 12px 24px rgba(0,0,0,.20);
+      clip-path:polygon(13px 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%,0 13px);
+      transition:background .15s ease,border-color .15s ease,box-shadow .15s ease,filter .15s ease,transform .08s ease;
+    }
+    #barrage-ui button:focus-visible{
+      outline:2px solid var(--ui-cyan);
+      outline-offset:2px;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 0 0 4px rgba(142,239,255,.14),0 12px 24px rgba(0,0,0,.22);
+    }
+    #barrage-ui button:disabled{
+      opacity:.42;
+      cursor:not-allowed;
+      filter:grayscale(.35);
+    }
+    #barrage-ui .screen{
+      background:
+        radial-gradient(circle at 76% 18%,rgba(142,239,255,.13),transparent 28%),
+        radial-gradient(circle at 20% 76%,rgba(255,93,126,.10),transparent 34%),
+        linear-gradient(180deg,#060709 0%,#101215 48%,#050607 100%);
+    }
+    #barrage-ui .screen::before{
+      opacity:.18;
+      background:
+        linear-gradient(rgba(244,251,255,.050) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(244,251,255,.040) 1px,transparent 1px);
+      background-size:44px 44px;
+    }
+    #barrage-ui .screen::after{
+      top:auto;
+      bottom:92px;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(142,239,255,.42),rgba(246,248,250,.26),transparent);
+      box-shadow:0 0 18px rgba(142,239,255,.16);
+    }
+    #barrage-ui .ui-stage{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:390px;
+      height:700px;
+      transform:translate(-50%,-50%) scale(var(--ui-scale,1));
+      transform-origin:center center;
+      overflow:hidden;
+    }
+    #barrage-ui .glass-panel{
+      position:relative;
+      border:1px solid var(--ui-line);
+      background:linear-gradient(180deg,rgba(247,250,252,.075),rgba(7,9,11,.78));
+      box-shadow:var(--ui-shadow),inset 0 1px 0 rgba(255,255,255,.07);
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+    }
+    #barrage-ui .glass-panel::before{
+      content:"";
+      position:absolute;
+      left:13px;
+      right:13px;
+      top:10px;
+      height:1px;
+      background:linear-gradient(90deg,rgba(246,248,250,.34),transparent);
+      pointer-events:none;
+    }
+    #barrage-ui .micro-label{
+      display:block;
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+      color:var(--ui-faint);
+      white-space:nowrap;
+    }
+    #barrage-ui .big-value{
+      display:block;
+      margin-top:5px;
+      font-size:18px;
+      line-height:1;
+      font-weight:900;
+      color:var(--ui-text);
+      white-space:nowrap;
+    }
+    #barrage-ui .home-top{
+      position:absolute;
+      left:14px;
+      right:14px;
+      top:14px;
+      height:64px;
+      display:grid;
+      grid-template-columns:1fr 128px;
+      gap:10px;
+    }
+    #barrage-ui .brand-mark{
+      padding:11px 16px 10px 18px;
+      background:#070809;
+      border-color:rgba(246,248,250,.28);
+    }
+    #barrage-ui .brand-mark::after{
+      content:"";
+      position:absolute;
+      left:16px;
+      bottom:9px;
+      width:126px;
+      height:3px;
+      background:linear-gradient(90deg,var(--ui-cyan),transparent);
+    }
+    #barrage-ui .brand-mark span{
+      display:block;
+      font-size:34px;
+      line-height:.86;
+      font-weight:900;
+      color:#fff;
+      transform:skewX(-8deg);
+      text-shadow:-2px -1px 0 rgba(142,239,255,.58),2px 2px 0 rgba(85,90,96,.58);
+    }
+    #barrage-ui .brand-mark small{
+      position:absolute;
+      right:15px;
+      bottom:12px;
+      font-size:9px;
+      font-weight:900;
+      color:var(--ui-muted);
+    }
+    #barrage-ui .token-box{
+      padding:10px 12px 8px;
+      text-align:right;
+    }
+    #barrage-ui .token-box .big-value{font-size:17px}
+    #barrage-ui .hero-card{
+      position:absolute;
+      left:14px;
+      right:14px;
+      top:88px;
+      height:286px;
+      padding:18px;
+      overflow:hidden;
+    }
+    #barrage-ui .hero-card::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        repeating-linear-gradient(18deg,rgba(246,248,250,.045) 0 1px,transparent 1px 31px),
+        linear-gradient(90deg,rgba(142,239,255,.08),transparent 34%,rgba(255,255,255,.025));
+      pointer-events:none;
+    }
+    #barrage-ui .hero-tag{
+      position:absolute;
+      left:18px;
+      top:16px;
+      height:30px;
+      min-width:104px;
+      padding:0 16px;
+      display:grid;
+      place-items:center;
+      background:#f6f8fa;
+      color:#060709;
+      font-size:12px;
+      font-weight:900;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .record-box{
+      position:absolute;
+      right:20px;
+      top:16px;
+      width:118px;
+      height:70px;
+      padding:12px;
+      background:rgba(5,6,7,.82);
+      border:1px solid rgba(246,248,250,.12);
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    }
+    #barrage-ui .ship-title{
+      position:absolute;
+      left:32px;
+      top:68px;
+      z-index:1;
+      width:226px;
+    }
+    #barrage-ui .ship-title h1{
+      margin:0;
+      font-size:30px;
+      line-height:1;
+      color:var(--ui-text);
+      font-weight:900;
+      white-space:nowrap;
+    }
+    #barrage-ui .ship-title p{
+      margin:8px 0 0;
+      font-size:10px;
+      font-weight:900;
+      color:var(--ui-cyan);
+      white-space:nowrap;
+    }
+    #barrage-ui .core-card{
+      position:absolute;
+      z-index:1;
+      left:32px;
+      top:124px;
+      width:150px;
+      height:52px;
+      padding:10px 12px;
+      background:rgba(5,6,7,.72);
+      border:1px solid rgba(246,248,250,.12);
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .ship-emblem{
+      position:absolute;
+      z-index:1;
+      right:28px;
+      top:118px;
+      width:150px;
+      height:150px;
+      filter:drop-shadow(0 0 22px rgba(142,239,255,.20));
+    }
+    #barrage-ui .ship-emblem::before{
+      content:"";
+      position:absolute;
+      left:64px;
+      top:0;
+      width:22px;
+      height:114px;
+      background:linear-gradient(180deg,#fff,var(--ui-cyan) 46%,#101820);
+      clip-path:polygon(50% 0,84% 30%,64% 100%,36% 100%,16% 30%);
+    }
+    #barrage-ui .ship-emblem::after{
+      content:"";
+      position:absolute;
+      left:6px;
+      top:56px;
+      width:138px;
+      height:60px;
+      background:linear-gradient(90deg,rgba(246,248,250,.10),rgba(246,248,250,.90),rgba(142,239,255,.16));
+      clip-path:polygon(0 42%,38% 0,50% 30%,62% 0,100% 42%,72% 84%,54% 68%,46% 68%,28% 84%);
+    }
+    #barrage-ui .loadout-strip{
+      position:absolute;
+      z-index:2;
+      left:32px;
+      right:32px;
+      bottom:30px;
+      height:58px;
+      padding:11px 13px;
+      background:rgba(5,6,7,.62);
+      border:1px solid rgba(246,248,250,.12);
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .loadout-strip .big-value{
+      font-size:13px;
+      color:var(--ui-cyan);
+    }
+    #barrage-ui .checkpoint-pill{
+      position:absolute;
+      left:34px;
+      top:360px;
+      width:322px;
+      height:26px;
+      display:grid;
+      place-items:center;
+      color:var(--ui-muted);
+      font-size:10px;
+      font-weight:900;
+      background:rgba(246,248,250,.045);
+      border:1px solid rgba(246,248,250,.12);
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .primary-start{
+      position:absolute;
+      left:82px;
+      top:404px;
+      width:226px;
+      height:56px;
+      color:#050607;
+      background:linear-gradient(180deg,#fff,#dfe5e9);
+      border-color:rgba(255,255,255,.92);
+      box-shadow:0 18px 30px rgba(0,0,0,.28),inset 0 0 0 2px rgba(5,6,7,.10);
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 18px);
+    }
+    #barrage-ui .primary-start span{
+      display:block;
+      font-size:31px;
+      line-height:.92;
+      font-weight:900;
+    }
+    #barrage-ui .primary-start small{
+      display:block;
+      margin-top:5px;
+      color:rgba(5,6,7,.64);
+      font-size:9px;
+      font-weight:900;
+    }
+    #barrage-ui .nav-grid{
+      position:absolute;
+      left:24px;
+      top:484px;
+      width:342px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px 16px;
+    }
+    #barrage-ui .nav-tile{
+      pointer-events:auto;
+      position:relative;
+      height:54px;
+      padding:10px 30px 10px 15px;
+      background:linear-gradient(180deg,rgba(246,248,250,.085),rgba(246,248,250,.038));
+      border:1px solid rgba(246,248,250,.16);
+      clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px);
+    }
+    #barrage-ui .nav-tile::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:7px;
+      bottom:7px;
+      width:4px;
+      background:var(--accent);
+    }
+    #barrage-ui .nav-tile::after{
+      content:">";
+      position:absolute;
+      right:12px;
+      top:17px;
+      color:var(--ui-text);
+      font-size:15px;
+      font-weight:900;
+      opacity:.82;
+    }
+    #barrage-ui .nav-tile b{
+      display:block;
+      color:var(--accent);
+      font-size:13px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    #barrage-ui .nav-tile span{
+      display:block;
+      margin-top:8px;
+      color:var(--ui-muted);
+      font-size:10px;
+      line-height:1;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    #barrage-ui .page-stage{padding:16px}
+    #barrage-ui .page-header{
+      height:72px;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 92px;
+      gap:10px;
+      align-items:stretch;
+    }
+    #barrage-ui .page-title{
+      position:relative;
+      padding:14px 16px;
+      overflow:hidden;
+    }
+    #barrage-ui .page-title::after{
+      content:"";
+      position:absolute;
+      left:16px;
+      right:16px;
+      bottom:10px;
+      height:2px;
+      background:linear-gradient(90deg,var(--ui-cyan),rgba(246,248,250,.62),transparent);
+      opacity:.78;
+    }
+    #barrage-ui .page-title h1{
+      margin:0;
+      font-size:28px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .page-title p{
+      margin:7px 0 0;
+      font-size:10px;
+      font-weight:900;
+      color:var(--ui-muted);
+    }
+    #barrage-ui .page-back{
+      height:72px;
+      color:var(--ui-text);
+      background:linear-gradient(180deg,rgba(246,248,250,.10),rgba(246,248,250,.045));
+    }
+    #barrage-ui .ranking-list{
+      position:absolute;
+      left:16px;
+      right:16px;
+      top:102px;
+      bottom:16px;
+      display:grid;
+      grid-auto-rows:50px;
+      gap:8px;
+      overflow:hidden;
+    }
+    #barrage-ui .ranking-row{
+      display:grid;
+      grid-template-columns:42px 1fr 82px 58px;
+      align-items:center;
+      gap:8px;
+      padding:0 12px;
+      border:1px solid rgba(246,248,250,.14);
+      border-left:4px solid var(--ui-cyan);
+      background:linear-gradient(180deg,rgba(246,248,250,.085),rgba(7,9,11,.74));
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+      font-weight:900;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    #barrage-ui .ranking-row b{
+      color:var(--ui-cyan);
+      font-size:13px;
+      line-height:1;
+    }
+    #barrage-ui .ranking-row span{
+      min-width:0;
+      color:var(--ui-text);
+      font-size:13px;
+      line-height:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .ranking-row strong{
+      color:var(--ui-text);
+      font-size:14px;
+      line-height:1;
+      text-align:right;
+    }
+    #barrage-ui .ranking-row small{
+      color:var(--ui-muted);
+      font-size:10px;
+      line-height:1;
+      text-align:right;
+    }
+    #barrage-ui .ranking-empty{
+      height:96px;
+      display:grid;
+      place-items:center;
+      color:var(--ui-muted);
+      border:1px solid rgba(246,248,250,.12);
+      background:rgba(246,248,250,.045);
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+      font-size:16px;
+      font-weight:900;
+    }
+    #barrage-ui .catalog-grid{
+      position:absolute;
+      left:16px;
+      right:16px;
+      top:102px;
+      bottom:16px;
+      display:grid;
+      grid-template-columns:1fr;
+      grid-auto-rows:auto;
+      align-content:start;
+      gap:8px;
+      overflow-y:auto;
+      padding-right:4px;
+      pointer-events:auto;
+    }
+    #barrage-ui .catalog-grid::-webkit-scrollbar{width:6px}
+    #barrage-ui .catalog-grid::-webkit-scrollbar-thumb{background:rgba(246,248,250,.22)}
+    #barrage-ui .ship-card{
+      position:relative;
+      min-height:132px;
+      padding:13px 94px 12px 13px;
+      border:1px solid rgba(246,248,250,.14);
+      border-left:4px solid var(--accent);
+      background:linear-gradient(180deg,rgba(246,248,250,.075),rgba(7,9,11,.78));
+      clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.045);
+    }
+    #barrage-ui .ship-card.selected{
+      border-color:rgba(142,239,255,.48);
+      background:linear-gradient(180deg,rgba(142,239,255,.10),rgba(7,9,11,.80));
+    }
+    #barrage-ui .ship-card.locked{
+      opacity:.78;
+    }
+    #barrage-ui .ship-card-head b,
+    #barrage-ui .garage-summary b,
+    #barrage-ui .part-slot b{
+      display:block;
+      color:var(--accent);
+      font-size:10px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .ship-card-head strong,
+    #barrage-ui .garage-summary strong{
+      display:block;
+      margin-top:6px;
+      color:var(--ui-text);
+      font-size:18px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .ship-card-head small,
+    #barrage-ui .garage-summary span,
+    #barrage-ui .garage-summary small,
+    #barrage-ui .garage-summary em,
+    #barrage-ui .ship-card-body span,
+    #barrage-ui .ship-card-body em,
+    #barrage-ui .ship-card-body i{
+      display:block;
+      margin-top:6px;
+      color:var(--ui-muted);
+      font-size:10px;
+      line-height:1.2;
+      font-weight:900;
+      font-style:normal;
+    }
+    #barrage-ui .ship-card-body span{
+      color:var(--ui-text);
+    }
+    #barrage-ui .ship-card button{
+      position:absolute;
+      right:9px;
+      top:50%;
+      transform:translateY(-50%);
+      width:74px;
+      height:54px;
+      padding:0 8px;
+      font-size:11px;
+    }
+    #barrage-ui .ship-card button:active{transform:translateY(calc(-50% + 1px))}
+    #barrage-ui .garage-panel{
+      position:absolute;
+      left:16px;
+      right:16px;
+      top:102px;
+      bottom:16px;
+      display:grid;
+      grid-template-columns:1fr;
+      grid-auto-rows:auto;
+      align-content:start;
+      gap:8px;
+      overflow-y:auto;
+      padding-right:4px;
+      pointer-events:auto;
+    }
+    #barrage-ui .garage-panel::-webkit-scrollbar{width:6px}
+    #barrage-ui .garage-panel::-webkit-scrollbar-thumb{background:rgba(246,248,250,.22)}
+    #barrage-ui .garage-summary,
+    #barrage-ui .part-section,
+    #barrage-ui .garage-skin-section{
+      border:1px solid rgba(246,248,250,.14);
+      border-left:4px solid var(--accent,var(--ui-line));
+      background:linear-gradient(180deg,rgba(246,248,250,.070),rgba(7,9,11,.78));
+      clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.045);
+    }
+    #barrage-ui .garage-summary{
+      padding:13px;
+    }
+    #barrage-ui .garage-summary em{
+      color:var(--accent);
+    }
+    #barrage-ui .garage-ship-strip{
+      display:grid;
+      grid-auto-flow:column;
+      grid-auto-columns:132px;
+      gap:7px;
+      overflow-x:auto;
+      padding-bottom:2px;
+    }
+    #barrage-ui .garage-ship{
+      height:48px;
+      padding:7px 9px;
+      text-align:left;
+      border-left:4px solid var(--accent);
+      background:linear-gradient(180deg,rgba(246,248,250,.070),rgba(7,9,11,.78));
+      box-shadow:none;
+    }
+    #barrage-ui .garage-ship.selected{
+      border-color:rgba(142,239,255,.52);
+      color:var(--ui-text);
+    }
+    #barrage-ui .garage-ship.locked{
+      opacity:.42;
+    }
+    #barrage-ui .garage-ship b,
+    #barrage-ui .garage-ship span{
+      display:block;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .garage-ship b{
+      color:var(--accent);
+      font-size:10px;
+      line-height:1;
+    }
+    #barrage-ui .garage-ship span{
+      margin-top:6px;
+      color:var(--ui-muted);
+      font-size:9px;
+      line-height:1;
+    }
+    #barrage-ui .part-section,
+    #barrage-ui .garage-skin-section{
+      padding:11px;
+    }
+    #barrage-ui .garage-section-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:8px;
+    }
+    #barrage-ui .garage-section-head b{
+      color:var(--ui-text);
+      font-size:13px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .garage-section-head span{
+      color:var(--ui-muted);
+      font-size:10px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .part-slot-grid{
+      display:grid;
+      gap:7px;
+    }
+    #barrage-ui .part-slot-grid.empty{
+      min-height:42px;
+    }
+    #barrage-ui .part-empty{
+      display:grid;
+      place-items:center;
+      height:42px;
+      color:var(--ui-muted);
+      border:1px solid rgba(246,248,250,.10);
+      background:rgba(246,248,250,.035);
+      font-size:11px;
+      font-weight:900;
+    }
+    #barrage-ui .part-slot{
+      padding:10px;
+      border:1px solid rgba(246,248,250,.12);
+      border-left:4px solid var(--accent);
+      background:rgba(5,7,10,.54);
+    }
+    #barrage-ui .part-slot span{
+      display:block;
+      margin-top:6px;
+      color:var(--ui-text);
+      font-size:14px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .part-slot small{
+      display:block;
+      margin-top:6px;
+      color:var(--ui-muted);
+      font-size:9px;
+      line-height:1.25;
+      font-weight:900;
+    }
+    #barrage-ui .part-picker{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:6px;
+      margin-top:8px;
+    }
+    #barrage-ui .part-picker button{
+      height:30px;
+      min-width:0;
+      padding:0 7px;
+      font-size:9px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      box-shadow:none;
+    }
+    #barrage-ui .part-picker button.selected{
+      border-color:rgba(142,239,255,.48);
+      color:var(--ui-text);
+      background:rgba(142,239,255,.13);
+    }
+    #barrage-ui .garage-skin-section{
+      --accent:var(--ui-cyan);
+    }
+    #barrage-ui .garage-skin-section .equipped-grid{
+      margin-bottom:8px;
+    }
+    #barrage-ui .garage-skin-section .cosmetic-list{
+      overflow:visible;
+    }
+    #barrage-ui .gacha-panel{
+      position:absolute;
+      left:16px;
+      right:16px;
+      top:102px;
+      bottom:16px;
+      display:grid;
+      grid-template-rows:52px 76px 80px 1fr;
+      gap:8px;
+      pointer-events:auto;
+    }
+    #barrage-ui .gacha-roll{
+      height:52px;
+      color:#050607;
+      background:linear-gradient(180deg,#f6f8fa,#cfd7de);
+      border-color:rgba(246,248,250,.62);
+      font-size:18px;
+      box-shadow:6px 6px 0 #08090a,0 16px 30px rgba(0,0,0,.28);
+    }
+    #barrage-ui .gacha-result,
+    #barrage-ui .equipped-card,
+    #barrage-ui .cosmetic-row{
+      border:1px solid rgba(246,248,250,.14);
+      border-left:4px solid var(--accent);
+      background:linear-gradient(180deg,rgba(246,248,250,.075),rgba(7,9,11,.76));
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .gacha-result{
+      padding:10px 12px;
+    }
+    #barrage-ui .gacha-result.empty{--accent:var(--ui-line);color:var(--ui-muted);display:grid;place-items:center;font-weight:900}
+    #barrage-ui .gacha-result b,
+    #barrage-ui .equipped-card b,
+    #barrage-ui .cosmetic-row b{display:block;color:var(--accent);font-size:10px;font-weight:900}
+    #barrage-ui .gacha-result span,
+    #barrage-ui .equipped-card span,
+    #barrage-ui .cosmetic-row span{display:block;margin-top:5px;color:var(--ui-text);font-size:14px;font-weight:900;line-height:1}
+    #barrage-ui .gacha-result small,
+    #barrage-ui .equipped-card small,
+    #barrage-ui .cosmetic-row small{display:block;margin-top:5px;color:var(--ui-muted);font-size:9px;font-weight:900;line-height:1}
+    #barrage-ui .equipped-grid{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:7px;
+    }
+    #barrage-ui .equipped-card{
+      min-width:0;
+      padding:9px 8px;
+    }
+    #barrage-ui .cosmetic-list{
+      min-height:0;
+      display:grid;
+      grid-auto-rows:68px;
+      align-content:start;
+      gap:7px;
+      overflow-y:auto;
+      padding-right:4px;
+    }
+    #barrage-ui .cosmetic-row{
+      position:relative;
+      padding:10px 84px 9px 11px;
+    }
+    #barrage-ui .cosmetic-row.locked{
+      opacity:.48;
+      filter:grayscale(.55);
+    }
+    #barrage-ui .cosmetic-row.equipped{
+      border-color:rgba(142,239,255,.42);
+    }
+    #barrage-ui .cosmetic-row button{
+      position:absolute;
+      right:8px;
+      top:50%;
+      transform:translateY(-50%);
+      height:48px;
+      min-width:68px;
+      padding:0 9px;
+      font-size:10px;
+    }
+    #barrage-ui .cosmetic-row button:active{transform:translateY(calc(-50% + 1px))}
+    #barrage-ui .upgrade-path{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr);
+      gap:6px;
+      align-items:stretch;
+      min-height:128px;
+    }
+    #barrage-ui .upgrade-link{
+      display:grid;
+      place-items:center;
+      color:var(--ui-faint);
+      font-size:18px;
+      font-weight:900;
+    }
+    #barrage-ui .upgrade-link.open{
+      color:var(--ui-cyan);
+      text-shadow:0 0 12px rgba(142,239,255,.60);
+    }
+    #barrage-ui .upgrade-card{
+      min-height:0;
+      padding:13px 82px 12px 12px;
+      background:linear-gradient(180deg,rgba(246,248,250,.08),rgba(7,9,11,.80));
+      border:1px solid rgba(246,248,250,.14);
+      border-left:4px solid var(--accent);
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.045);
+    }
+    #barrage-ui .upgrade-card.locked{
+      opacity:.56;
+      filter:grayscale(.55);
+    }
+    #barrage-ui .upgrade-card.maxed{
+      border-color:rgba(142,239,255,.42);
+      background:linear-gradient(180deg,rgba(142,239,255,.08),rgba(7,9,11,.80));
+    }
+    #barrage-ui .upgrade-card b{
+      color:var(--accent);
+      font-size:10px;
+      line-height:1;
+    }
+    #barrage-ui .upgrade-card span{
+      display:block;
+      margin-top:6px;
+      font-size:15px;
+      color:var(--ui-text);
+    }
+    #barrage-ui .upgrade-card small{
+      margin-top:6px;
+      color:var(--ui-muted);
+      font-size:10px;
+      line-height:1.25;
+    }
+    #barrage-ui .upgrade-card em{
+      display:block;
+      margin-top:5px;
+      color:var(--ui-faint);
+      font-size:9px;
+      font-style:normal;
+      font-weight:900;
+      line-height:1.15;
+    }
+    #barrage-ui .upgrade-card button{
+      right:8px;
+      top:50%;
+      bottom:auto;
+      transform:translateY(-50%);
+      height:44px;
+      min-width:58px;
+      padding:0 10px;
+      font-size:10px;
+    }
+    #barrage-ui .upgrade-card button:active{transform:translateY(calc(-50% + 1px))}
+    #barrage-ui .hud{
+      pointer-events:none;
+    }
+    #barrage-ui .hud::before{
+      height:86px;
+      background:linear-gradient(180deg,rgba(5,6,7,.84),rgba(5,6,7,.34) 68%,transparent);
+    }
+    #barrage-ui .hud::after{
+      height:134px;
+      background:linear-gradient(180deg,transparent,rgba(5,6,7,.24) 24%,rgba(5,6,7,.80));
+    }
+    #barrage-ui .hud-topbar{
+      position:absolute;
+      z-index:2;
+      left:10px;
+      right:10px;
+      top:8px;
+      display:grid;
+      grid-template-columns:82px minmax(0,1fr) 128px;
+      gap:7px;
+      align-items:stretch;
+    }
+    #barrage-ui .hud-stat{
+      position:relative;
+      min-width:0;
+      height:52px;
+      padding:7px 10px 6px;
+      border:1px solid rgba(246,248,250,.16);
+      background:linear-gradient(180deg,rgba(246,248,250,.075),rgba(5,6,7,.70));
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+      text-align:right;
+      overflow:hidden;
+    }
+    #barrage-ui .hud-stat::before{
+      content:"";
+      position:absolute;
+      inset:4px auto 4px 5px;
+      width:3px;
+      background:var(--accent,var(--ui-line));
+      opacity:.82;
+    }
+    #barrage-ui .hud-stat::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:linear-gradient(110deg,transparent 0 56%,rgba(246,248,250,.075) 57%,transparent 72%);
+      opacity:.45;
+      pointer-events:none;
+    }
+    #barrage-ui .hud-stat b{
+      position:relative;
+      z-index:1;
+      display:block;
+      font-size:9px;
+      line-height:1;
+      color:var(--ui-faint);
+      letter-spacing:0;
+    }
+    #barrage-ui .hud-stat > span{
+      position:relative;
+      z-index:1;
+      display:block;
+      margin-top:3px;
+      font-size:15px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .hud-wave{
+      --accent:var(--ui-cyan);
+      text-align:center;
+      padding-bottom:5px;
+    }
+    #barrage-ui .hud-wave b{
+      display:inline-block;
+      vertical-align:middle;
+    }
+    #barrage-ui .hud-wave > span{
+      display:inline-block;
+      margin:0 0 0 6px;
+      vertical-align:middle;
+      font-size:16px;
+    }
+    #barrage-ui .hud-wave small{
+      position:relative;
+      z-index:1;
+      display:block;
+      margin-top:3px;
+      color:var(--ui-muted);
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    #barrage-ui .hud-wave small span{
+      color:var(--ui-text);
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .hud-score{
+      --accent:var(--ui-silver);
+      border-color:rgba(246,248,250,.20);
+    }
+    #barrage-ui .hud-time{
+      --accent:rgba(246,248,250,.46);
+      padding-inline:8px;
+      text-align:center;
+    }
+    #barrage-ui .wave-timer{
+      position:relative;
+      z-index:1;
+      height:4px;
+      margin-top:3px;
+      border:1px solid rgba(246,248,250,.13);
+      background:rgba(246,248,250,.055);
+      overflow:hidden;
+      clip-path:polygon(4px 0,100% 0,100% 100%,0 100%,0 4px);
+    }
+    #barrage-ui .wave-timer i{
+      display:block;
+      height:100%;
+      width:0;
+      background:linear-gradient(90deg,rgba(142,239,255,.28),rgba(216,226,234,.86));
+      box-shadow:0 0 12px rgba(142,239,255,.36);
+    }
+    #barrage-ui .pause-control{
+      width:82px;
+      height:52px;
+      padding:0 10px;
+      display:grid;
+      grid-template-columns:18px 1fr;
+      gap:7px;
+      align-items:center;
+      justify-items:center;
+      font-size:11px;
+      font-weight:900;
+      pointer-events:auto;
+      border-color:rgba(246,248,250,.20);
+      background:linear-gradient(180deg,rgba(246,248,250,.12),rgba(5,6,7,.72));
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    }
+    #barrage-ui .pause-control::before{
+      content:"";
+      display:block;
+      width:13px;
+      height:15px;
+      margin:auto;
+      border-left:4px solid var(--ui-text);
+      border-right:4px solid var(--ui-text);
+    }
+    #barrage-ui .pause-control span{
+      color:var(--ui-text);
+      line-height:1;
+      white-space:nowrap;
+    }
+    #barrage-ui .hud-counter{
+      position:relative;
+      min-width:0;
+      height:52px;
+      padding:7px 9px;
+      border:1px solid rgba(246,248,250,.16);
+      border-left:4px solid var(--ui-silver);
+      background:linear-gradient(180deg,rgba(246,248,250,.075),rgba(5,6,7,.70));
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+      overflow:hidden;
+    }
+    #barrage-ui .hud-counter::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:linear-gradient(110deg,transparent 0 55%,rgba(246,248,250,.075) 56%,transparent 72%);
+      pointer-events:none;
+    }
+    #barrage-ui .counter-line{
+      position:relative;
+      z-index:1;
+      display:grid;
+      grid-template-columns:42px minmax(0,1fr);
+      align-items:center;
+      gap:7px;
+      height:18px;
+      font-weight:900;
+    }
+    #barrage-ui .counter-line + .counter-line{
+      margin-top:2px;
+      padding-top:4px;
+      border-top:1px solid rgba(246,248,250,.10);
+    }
+    #barrage-ui .counter-line b{
+      color:var(--ui-faint);
+      font-size:9px;
+      line-height:1;
+    }
+    #barrage-ui .counter-line span{
+      min-width:0;
+      color:var(--ui-text);
+      font-size:14px;
+      line-height:1;
+      text-align:right;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .hud-dock{
+      position:absolute;
+      z-index:2;
+      left:12px;
+      right:12px;
+      bottom:10px;
+      padding:8px 9px;
+      border:1px solid rgba(246,248,250,.14);
+      border-bottom-color:rgba(246,248,250,.22);
+      background:linear-gradient(180deg,rgba(246,248,250,.052),rgba(5,6,7,.78));
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 72px;
+      gap:7px;
+      align-items:end;
+      box-shadow:0 16px 30px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    #barrage-ui .hud-dock::before{
+      content:"";
+      position:absolute;
+      left:10px;
+      right:10px;
+      top:5px;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(142,239,255,.42),rgba(246,248,250,.26),transparent);
+      opacity:.76;
+    }
+    #barrage-ui .hud-meters{
+      min-width:0;
+      display:grid;
+      gap:4px;
+    }
+    #barrage-ui .meter-row{
+      display:grid;
+      grid-template-columns:48px minmax(0,1fr) 56px;
+      align-items:center;
+      gap:7px;
+      height:16px;
+      font-size:10px;
+      font-weight:900;
+      color:var(--ui-muted);
+    }
+    #barrage-ui .meter-row span{
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .meter-row strong{
+      text-align:right;
+      color:var(--ui-text);
+      font-size:10px;
+      line-height:1;
+      white-space:nowrap;
+    }
+    #barrage-ui .meter-track{
+      height:10px;
+      border:1px solid rgba(246,248,250,.16);
+      background:rgba(246,248,250,.052);
+      overflow:hidden;
+      clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+    }
+    #barrage-ui .meter-track i{
+      display:block;
+      height:100%;
+      width:50%;
+      background:linear-gradient(90deg,var(--meter-a),var(--meter-b));
+      box-shadow:0 0 12px var(--meter-a);
+      transition:width .14s linear;
+    }
+    #barrage-ui .meter-row.is-primary{
+      grid-template-columns:48px minmax(0,1fr) 62px;
+      height:20px;
+      color:var(--ui-text);
+    }
+    #barrage-ui .meter-row.is-primary .meter-track{
+      height:14px;
+      border-color:rgba(255,93,126,.26);
+    }
+    #barrage-ui .meter-row.is-primary span,
+    #barrage-ui .meter-row.is-primary strong{
+      font-size:11px;
+    }
+    #barrage-ui .run-chips{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:4px;
+    }
+    #barrage-ui .run-chip{
+      min-width:0;
+      height:20px;
+      padding:0 7px;
+      display:grid;
+      grid-template-columns:1fr auto;
+      align-items:center;
+      border:1px solid rgba(246,248,250,.12);
+      background:linear-gradient(180deg,rgba(246,248,250,.070),rgba(5,6,7,.48));
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+      font-weight:900;
+    }
+    #barrage-ui .run-chip b{
+      font-size:8px;
+      color:var(--ui-faint);
+    }
+    #barrage-ui .run-chip span{
+      font-size:12px;
+      color:var(--ui-text);
+      line-height:1;
+      white-space:nowrap;
+    }
+    @keyframes hudCriticalPulse{
+      0%,100%{filter:brightness(1);box-shadow:0 0 10px rgba(255,93,126,.34)}
+      50%{filter:brightness(1.35);box-shadow:0 0 20px rgba(255,93,126,.72)}
+    }
+    #barrage-ui .hud.critical .meter-row.is-primary .meter-track{
+      border-color:rgba(255,93,126,.72);
+      box-shadow:0 0 14px rgba(255,93,126,.30),inset 0 0 12px rgba(255,93,126,.12);
+    }
+    #barrage-ui .hud.critical .meter-row.is-primary .meter-track i{
+      animation:hudCriticalPulse 1s ease-in-out infinite;
+    }
+    #barrage-ui .upgrade-overlay{
+      background:
+        radial-gradient(circle at 72% 22%,rgba(142,239,255,.11),transparent 30%),
+        linear-gradient(180deg,rgba(5,6,7,.22),rgba(5,6,7,.66) 44%,rgba(5,6,7,.90));
+    }
+    #barrage-ui .level-dialog{
+      pointer-events:auto;
+      position:absolute;
+      left:16px;
+      right:16px;
+      top:92px;
+      padding:16px;
+      border:1px solid rgba(246,248,250,.18);
+      background:linear-gradient(180deg,rgba(246,248,250,.09),rgba(8,9,12,.88));
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+      box-shadow:0 24px 54px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.07);
+    }
+    #barrage-ui .level-head{
+      display:grid;
+      grid-template-columns:1fr 74px;
+      gap:10px;
+      align-items:start;
+      margin-bottom:10px;
+    }
+    #barrage-ui .level-title{
+      font-size:31px;
+      line-height:1;
+      font-weight:900;
+      text-shadow:2px 2px 0 rgba(142,239,255,.18);
+    }
+    #barrage-ui .level-note{
+      margin-top:6px;
+      color:var(--ui-muted);
+      font-size:10px;
+      font-weight:900;
+    }
+    #barrage-ui .level-sp{
+      height:34px;
+      display:grid;
+      place-items:center;
+      color:var(--ui-text);
+      border:1px solid rgba(246,248,250,.18);
+      background:rgba(246,248,250,.06);
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+      font-size:12px;
+      font-weight:900;
+    }
+    #barrage-ui .level-dialog .upgrade-grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:9px;
+    }
+    #barrage-ui .level-dialog .upgrade-card{
+      min-height:92px;
+      padding:12px 98px 12px 13px;
+      background:linear-gradient(180deg,rgba(246,248,250,.085),rgba(7,9,11,.78));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    #barrage-ui .level-dialog .upgrade-card::after{
+      content:"";
+      position:absolute;
+      right:88px;
+      top:12px;
+      bottom:12px;
+      width:1px;
+      background:linear-gradient(180deg,transparent,rgba(246,248,250,.18),transparent);
+    }
+    #barrage-ui .level-dialog .upgrade-card button{
+      top:50%;
+      bottom:auto;
+      transform:translateY(-50%);
+      height:48px;
+      min-width:76px;
+      border-color:rgba(246,248,250,.28);
+      background:linear-gradient(180deg,rgba(246,248,250,.13),rgba(246,248,250,.055));
+    }
+    #barrage-ui .level-dialog .upgrade-card button:hover{
+      border-color:var(--accent);
+      box-shadow:0 0 16px color-mix(in srgb,var(--accent),transparent 70%);
+    }
+    #barrage-ui .dialog-card{
+      position:absolute;
+      z-index:2;
+      left:24px;
+      right:24px;
+      top:154px;
+      padding:18px;
+      display:grid;
+      gap:14px;
+      border:1px solid rgba(246,248,250,.18);
+      background:linear-gradient(180deg,rgba(246,248,250,.095),rgba(8,9,12,.88));
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+      box-shadow:0 24px 54px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.07);
+    }
+    #barrage-ui .dialog-title{
+      font-size:32px;
+      line-height:1;
+      font-weight:900;
+      color:var(--ui-text);
+      text-shadow:2px 2px 0 rgba(142,239,255,.20);
+    }
+    #barrage-ui .dialog-actions{
+      display:grid;
+      gap:8px;
+    }
+    #barrage-ui .dialog-actions button{
+      height:48px;
+      font-size:15px;
+      border-color:rgba(246,248,250,.22);
+      background:linear-gradient(180deg,rgba(246,248,250,.12),rgba(246,248,250,.045));
+    }
+    #barrage-ui .result-grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:8px;
+    }
+    #barrage-ui .result-stat{
+      min-height:58px;
+      padding:10px;
+      border:1px solid rgba(246,248,250,.12);
+      background:linear-gradient(180deg,rgba(246,248,250,.070),rgba(5,6,7,.52));
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .result-stat b{
+      display:block;
+      font-size:9px;
+      color:var(--ui-faint);
+      line-height:1;
+    }
+    #barrage-ui .result-stat span{
+      display:block;
+      margin-top:8px;
+      font-size:14px;
+      font-weight:900;
+      color:var(--ui-text);
+      line-height:1;
+    }
+    #barrage-ui .modal-screen{
+      background:
+        radial-gradient(circle at 72% 20%,rgba(142,239,255,.10),transparent 30%),
+        linear-gradient(180deg,rgba(5,6,7,.38),rgba(5,6,7,.80));
+    }
+    #barrage-ui .modal-screen::before{display:none}
+    #barrage-ui .modal-screen::after{display:none}
+    #barrage-ui .home-screen{
+      background:
+        linear-gradient(180deg,#05070b 0%,#10131a 45%,#050609 100%),
+        repeating-linear-gradient(90deg,rgba(244,251,255,.032) 0 1px,transparent 1px 46px);
+    }
+    #barrage-ui .home-screen::before{
+      opacity:.26;
+      background:
+        linear-gradient(rgba(244,251,255,.040) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(244,251,255,.032) 1px,transparent 1px);
+      background-size:38px 38px;
+      transform:perspective(340px) rotateX(58deg) translateY(48px) scale(1.45);
+    }
+    #barrage-ui .home-screen::after{
+      bottom:128px;
+      background:linear-gradient(90deg,transparent,rgba(142,239,255,.44),rgba(255,93,126,.28),transparent);
+    }
+    #barrage-ui .home-hub{
+      padding:14px;
+    }
+    #barrage-ui .home-hub::before{
+      content:"";
+      position:absolute;
+      left:14px;
+      right:14px;
+      top:86px;
+      height:282px;
+      border:1px solid rgba(246,248,250,.11);
+      background:
+        linear-gradient(115deg,transparent 0 46%,rgba(142,239,255,.10) 46% 47%,transparent 47%),
+        linear-gradient(180deg,rgba(246,248,250,.055),rgba(5,7,10,.62));
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 20px 46px rgba(0,0,0,.26);
+    }
+    #barrage-ui .home-header{
+      position:absolute;
+      z-index:2;
+      left:14px;
+      right:14px;
+      top:14px;
+      display:grid;
+      grid-template-columns:1fr 112px;
+      gap:10px;
+    }
+    #barrage-ui .brand-lockup{
+      position:relative;
+      height:60px;
+      padding:10px 16px 9px 18px;
+      border:1px solid rgba(246,248,250,.30);
+      background:#07090d;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 18px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 16px 28px rgba(0,0,0,.25);
+    }
+    #barrage-ui .brand-lockup::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:0;
+      bottom:0;
+      width:5px;
+      background:#f6f8fa;
+    }
+    #barrage-ui .brand-lockup::after{
+      content:"";
+      position:absolute;
+      left:18px;
+      bottom:9px;
+      width:132px;
+      height:3px;
+      background:linear-gradient(90deg,var(--ui-cyan),rgba(255,93,126,.75),transparent);
+      box-shadow:0 0 14px rgba(142,239,255,.26);
+    }
+    #barrage-ui .brand-lockup span{
+      display:block;
+      font-size:34px;
+      line-height:.84;
+      font-weight:900;
+      color:#fff;
+      transform:skewX(-8deg);
+      text-shadow:-2px -1px 0 rgba(142,239,255,.58),2px 2px 0 rgba(80,84,92,.62);
+      white-space:nowrap;
+    }
+    #barrage-ui .brand-lockup small{
+      position:absolute;
+      right:16px;
+      bottom:11px;
+      color:var(--ui-muted);
+      font-size:9px;
+      font-weight:900;
+      line-height:1;
+    }
+    #barrage-ui .wallet-chip{
+      height:60px;
+      padding:10px 12px 8px;
+      text-align:right;
+      border:1px solid rgba(246,248,250,.18);
+      background:linear-gradient(180deg,rgba(246,248,250,.075),rgba(5,7,10,.70));
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+    }
+    #barrage-ui .wallet-chip b{
+      display:block;
+      color:var(--ui-faint);
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .wallet-chip span{
+      display:block;
+      margin-top:8px;
+      color:#fff;
+      font-size:18px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .hangar-visual{
+      position:absolute;
+      z-index:2;
+      left:14px;
+      right:14px;
+      top:86px;
+      height:282px;
+      overflow:hidden;
+      pointer-events:none;
+    }
+    #barrage-ui .hangar-visual::before{
+      content:"";
+      position:absolute;
+      left:32px;
+      right:32px;
+      bottom:38px;
+      height:48px;
+      background:repeating-linear-gradient(90deg,rgba(246,248,250,.10) 0 2px,transparent 2px 18px);
+      transform:perspective(190px) rotateX(60deg);
+      opacity:.38;
+    }
+    #barrage-ui .hangar-rails{
+      position:absolute;
+      left:24px;
+      right:24px;
+      top:60px;
+      bottom:28px;
+      border-top:1px solid rgba(142,239,255,.24);
+      border-bottom:1px solid rgba(246,248,250,.10);
+    }
+    #barrage-ui .hangar-rails::before,
+    #barrage-ui .hangar-rails::after{
+      content:"";
+      position:absolute;
+      top:-1px;
+      bottom:-1px;
+      width:1px;
+      background:linear-gradient(180deg,rgba(142,239,255,.30),transparent);
+    }
+    #barrage-ui .hangar-rails::before{left:28px;transform:skewX(-18deg)}
+    #barrage-ui .hangar-rails::after{right:28px;transform:skewX(18deg)}
+    #barrage-ui .ship-showcase{
+      position:absolute;
+      left:144px;
+      top:64px;
+      width:176px;
+      height:176px;
+      filter:drop-shadow(0 0 24px rgba(142,239,255,.22));
+    }
+    #barrage-ui .ship-showcase::before{
+      content:"";
+      position:absolute;
+      left:20px;
+      top:20px;
+      width:136px;
+      height:136px;
+      border:1px solid rgba(142,239,255,.24);
+      transform:rotate(45deg);
+      box-shadow:0 0 22px rgba(142,239,255,.08);
+    }
+    #barrage-ui .ship-showcase::after{
+      content:"";
+      position:absolute;
+      left:21px;
+      top:80px;
+      width:134px;
+      height:52px;
+      background:
+        linear-gradient(90deg,rgba(142,239,255,.14),rgba(246,248,250,.88) 18% 28%,rgba(22,30,42,.92) 42% 58%,rgba(246,248,250,.88) 72% 82%,rgba(142,239,255,.14));
+      clip-path:polygon(0 50%,32% 10%,43% 38%,50% 28%,57% 38%,68% 10%,100% 50%,75% 90%,57% 70%,50% 82%,43% 70%,25% 90%);
+      box-shadow:0 0 18px rgba(142,239,255,.16);
+    }
+    #barrage-ui .ship-nose{
+      position:absolute;
+      left:76px;
+      top:13px;
+      width:22px;
+      height:142px;
+      background:linear-gradient(180deg,#ffffff 0%,#e9faff 22%,var(--ui-cyan) 45%,#101820 100%);
+      clip-path:polygon(50% 0,82% 25%,68% 86%,50% 100%,32% 86%,18% 25%);
+      box-shadow:0 0 16px rgba(142,239,255,.30);
+    }
+    #barrage-ui .ship-core{
+      position:absolute;
+      left:65px;
+      top:72px;
+      width:44px;
+      height:64px;
+      background:linear-gradient(180deg,rgba(142,239,255,.68),rgba(7,12,18,.96));
+      clip-path:polygon(50% 0,78% 24%,64% 100%,36% 100%,22% 24%);
+      box-shadow:inset 0 0 18px rgba(255,255,255,.14),0 0 14px rgba(142,239,255,.18);
+    }
+    #barrage-ui .ship-core::before,
+    #barrage-ui .ship-core::after{
+      content:"";
+      position:absolute;
+      bottom:-26px;
+      width:16px;
+      height:32px;
+      background:linear-gradient(180deg,#101820 0%,var(--ui-cyan) 58%,rgba(142,239,255,.08) 100%);
+      clip-path:polygon(24% 0,76% 0,100% 72%,50% 100%,0 72%);
+      box-shadow:0 0 12px rgba(142,239,255,.26);
+    }
+    #barrage-ui .ship-core::before{left:-15px}
+    #barrage-ui .ship-core::after{right:-15px}
+    #barrage-ui .mission-tag{
+      position:absolute;
+      z-index:3;
+      left:32px;
+      top:108px;
+      min-width:104px;
+      height:30px;
+      display:grid;
+      place-items:center;
+      padding:0 14px;
+      color:#05070b;
+      background:#f6f8fa;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+      font-size:12px;
+      font-weight:900;
+    }
+    #barrage-ui .record-stack{
+      position:absolute;
+      z-index:3;
+      left:32px;
+      top:150px;
+      display:grid;
+      gap:8px;
+      width:126px;
+    }
+    #barrage-ui .record-pill{
+      min-height:54px;
+      padding:10px 11px;
+      border:1px solid rgba(246,248,250,.14);
+      background:rgba(5,7,10,.70);
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .record-pill b{
+      display:block;
+      color:var(--ui-faint);
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .record-pill span{
+      display:block;
+      margin-top:7px;
+      color:#fff;
+      font-size:17px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .loadout-panel{
+      position:absolute;
+      z-index:3;
+      left:24px;
+      right:24px;
+      top:386px;
+      height:86px;
+      display:grid;
+      grid-template-columns:1fr 92px;
+      gap:12px;
+      padding:13px 14px;
+      border:1px solid rgba(246,248,250,.15);
+      background:linear-gradient(180deg,rgba(246,248,250,.072),rgba(5,7,10,.76));
+      clip-path:polygon(15px 0,100% 0,100% calc(100% - 15px),calc(100% - 15px) 100%,0 100%,0 15px);
+      box-shadow:0 16px 34px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .loadout-copy b{
+      display:block;
+      color:var(--ui-cyan);
+      font-size:10px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .loadout-copy h1{
+      margin:7px 0 0;
+      color:#fff;
+      font-size:24px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    #barrage-ui .loadout-copy p{
+      margin:7px 0 0;
+      color:var(--ui-muted);
+      font-size:10px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    #barrage-ui .base-sync{
+      align-self:center;
+      display:grid;
+      gap:7px;
+      text-align:right;
+      color:var(--ui-muted);
+      font-size:9px;
+      font-weight:900;
+      line-height:1;
+    }
+    #barrage-ui .sync-track{
+      height:8px;
+      border:1px solid rgba(246,248,250,.14);
+      background:rgba(246,248,250,.052);
+      overflow:hidden;
+      clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);
+    }
+    #barrage-ui .sync-track i{
+      display:block;
+      height:100%;
+      background:linear-gradient(90deg,var(--ui-cyan),#ff5d7e);
+      box-shadow:0 0 10px rgba(142,239,255,.40);
+    }
+    #barrage-ui .primary-start{
+      left:64px;
+      top:492px;
+      width:262px;
+      height:64px;
+      border-color:rgba(255,255,255,.94);
+      background:linear-gradient(180deg,#fff,#dfe5e9);
+      color:#05070b;
+      box-shadow:0 20px 34px rgba(0,0,0,.34),0 0 26px rgba(142,239,255,.14),inset 0 0 0 2px rgba(5,7,10,.11);
+      clip-path:polygon(20px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 20px);
+    }
+    #barrage-ui .primary-start::before{
+      content:"";
+      position:absolute;
+      left:12px;
+      top:10px;
+      bottom:10px;
+      width:5px;
+      background:rgba(5,7,10,.18);
+    }
+    #barrage-ui .primary-start::after{
+      content:"";
+      position:absolute;
+      right:0;
+      top:0;
+      width:40px;
+      height:100%;
+      background:linear-gradient(135deg,transparent 0 42%,rgba(5,7,10,.16) 42% 58%,transparent 58%);
+    }
+    #barrage-ui .primary-start span{
+      font-size:34px;
+      line-height:.92;
+    }
+    #barrage-ui .primary-start small{
+      margin-top:5px;
+      color:rgba(5,7,10,.62);
+      font-size:10px;
+    }
+    #barrage-ui .home-actions{
+      position:absolute;
+      z-index:3;
+      left:20px;
+      right:20px;
+      top:574px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:9px;
+    }
+    #barrage-ui .action-tile{
+      position:relative;
+      min-height:48px;
+      padding:10px 30px 9px 14px;
+      border:1px solid rgba(246,248,250,.14);
+      background:linear-gradient(180deg,rgba(246,248,250,.072),rgba(5,7,10,.66));
+      color:var(--ui-text);
+      text-align:left;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .action-tile::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:7px;
+      bottom:7px;
+      width:4px;
+      background:var(--accent);
+    }
+    #barrage-ui .action-tile::after{
+      content:">";
+      position:absolute;
+      right:12px;
+      top:17px;
+      color:var(--accent);
+      font-size:14px;
+      font-weight:900;
+    }
+    #barrage-ui .action-tile b{
+      display:block;
+      color:var(--accent);
+      font-size:12px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    #barrage-ui .action-tile span{
+      display:block;
+      margin-top:7px;
+      color:var(--ui-muted);
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    #barrage-ui button.action-tile{
+      height:auto;
+      min-height:48px;
+    }
+    #barrage-ui .action-tile.is-quiet{
+      pointer-events:none;
+      color:var(--ui-muted);
+      opacity:.70;
+    }
+    #barrage-ui .action-tile.is-quiet::after{
+      content:"";
+      width:8px;
+      height:8px;
+      top:20px;
+      right:14px;
+      border:1px solid rgba(246,248,250,.36);
+      background:rgba(246,248,250,.08);
+    }
+    #barrage-ui .home-screen{
+      background:
+        radial-gradient(circle at 78% 18%,rgba(142,239,255,.08),transparent 28%),
+        radial-gradient(circle at 16% 72%,rgba(246,248,250,.055),transparent 30%),
+        linear-gradient(180deg,rgba(5,5,6,.78) 0%,rgba(17,18,22,.66) 48%,rgba(5,5,6,.92) 100%);
+    }
+    #barrage-ui .home-screen::before{
+      opacity:.18;
+      background:
+        linear-gradient(rgba(246,248,250,.055) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(246,248,250,.040) 1px,transparent 1px);
+      background-size:34px 34px;
+    }
+    #barrage-ui .home-screen::after{
+      background:linear-gradient(90deg,transparent,rgba(142,239,255,.24),rgba(246,248,250,.18),transparent);
+      box-shadow:0 0 18px rgba(142,239,255,.10);
+    }
+    #barrage-ui .home-hub::before{
+      left:12px;
+      right:12px;
+      top:84px;
+      height:302px;
+      border-color:rgba(142,239,255,.18);
+      background:
+        radial-gradient(ellipse at 76% 58%,rgba(142,239,255,.18),transparent 34%),
+        linear-gradient(116deg,transparent 0 43%,rgba(142,239,255,.16) 43% 44%,transparent 44%),
+        linear-gradient(180deg,rgba(246,248,250,.055),rgba(8,9,12,.34));
+      box-shadow:0 20px 52px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.09),inset 0 -1px 0 rgba(142,239,255,.12);
+    }
+    #barrage-ui .brand-lockup{
+      height:62px;
+      background:#f5f3ea;
+      border-color:#f5f3ea;
+      box-shadow:6px 6px 0 #09090a,0 16px 30px rgba(0,0,0,.32);
+    }
+    #barrage-ui .brand-lockup::before{
+      background:#09090a;
+      width:6px;
+    }
+    #barrage-ui .brand-lockup::after{
+      bottom:8px;
+      width:142px;
+      background:linear-gradient(90deg,#101114 0 42%,#8eefff 42% 70%,#f6f8fa 70% 100%);
+      box-shadow:none;
+    }
+    #barrage-ui .brand-lockup span{
+      color:#08090a;
+      font-size:35px;
+      text-shadow:2px 2px 0 #8eefff,-1px -1px 0 #fff;
+    }
+    #barrage-ui .brand-lockup small{
+      right:13px;
+      bottom:13px;
+      padding:3px 6px;
+      color:#f6f8fa;
+      background:#08090a;
+      clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+    }
+    #barrage-ui .wallet-chip{
+      height:62px;
+      background:#09090a;
+      border-color:#8eefff;
+      box-shadow:inset 0 0 0 1px rgba(142,239,255,.18);
+    }
+    #barrage-ui .wallet-chip b{color:#8eefff}
+    #barrage-ui .wallet-chip span{font-size:19px;color:#f6f8fa}
+    #barrage-ui .home-decal{
+      position:absolute;
+      z-index:3;
+      height:22px;
+      display:grid;
+      place-items:center;
+      padding:0 10px;
+      color:#070809;
+      background:#f5f3ea;
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+      letter-spacing:0;
+      transform:rotate(-2deg);
+      box-shadow:4px 4px 0 rgba(0,0,0,.52);
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    }
+    #barrage-ui .home-decal-a{right:34px;top:93px}
+    #barrage-ui .home-decal-b{
+      left:30px;
+      top:343px;
+      color:#f6f8fa;
+      background:#30343a;
+      transform:rotate(1.5deg);
+    }
+    #barrage-ui .home-dots{
+      position:absolute;
+      right:28px;
+      top:28px;
+      width:96px;
+      height:76px;
+      opacity:.20;
+      background:radial-gradient(circle,#f6f8fa 0 1.5px,transparent 1.8px);
+      background-size:10px 10px;
+    }
+    #barrage-ui .hollow-tape{
+      position:absolute;
+      left:-12px;
+      right:-12px;
+      bottom:11px;
+      height:8px;
+      background:repeating-linear-gradient(135deg,#f5f3ea 0 10px,#08090a 10px 20px);
+      opacity:.22;
+      transform:rotate(-1.2deg);
+    }
+    #barrage-ui .hangar-visual{
+      top:84px;
+      height:302px;
+    }
+    #barrage-ui .hangar-visual::after{
+      content:"";
+      position:absolute;
+      left:150px;
+      right:14px;
+      bottom:18px;
+      height:128px;
+      background:
+        radial-gradient(ellipse at 54% 62%,rgba(142,239,255,.24),transparent 54%),
+        linear-gradient(180deg,transparent,rgba(246,248,250,.06));
+      opacity:.72;
+      filter:blur(.2px);
+      pointer-events:none;
+    }
+    #barrage-ui .hangar-rails{
+      left:20px;
+      right:20px;
+      top:56px;
+      bottom:36px;
+      border-top-color:rgba(142,239,255,.30);
+      border-bottom-color:rgba(246,248,250,.16);
+    }
+    #barrage-ui .hangar-status{
+      position:absolute;
+      right:22px;
+      top:18px;
+      width:118px;
+      height:46px;
+      padding:9px 10px;
+      color:#08090a;
+      background:#f5f3ea;
+      font-size:10px;
+      font-weight:900;
+      line-height:1;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+      box-shadow:4px 4px 0 rgba(0,0,0,.46);
+    }
+    #barrage-ui .hangar-status b{
+      display:block;
+      color:#52616b;
+      font-size:10px;
+    }
+    #barrage-ui .hangar-status span{
+      display:block;
+      margin-top:8px;
+      color:#08090a;
+      font-size:13px;
+    }
+    #barrage-ui .mission-tag{
+      top:105px;
+      background:#f5f3ea;
+      color:#08090a;
+      box-shadow:5px 5px 0 rgba(0,0,0,.54);
+      transform:rotate(-1.5deg);
+      height:34px;
+      min-width:126px;
+      padding:0 34px 0 14px;
+      font-size:13px;
+    }
+    #barrage-ui .mission-tag::after{
+      content:"";
+      position:absolute;
+      right:10px;
+      top:7px;
+      width:16px;
+      height:16px;
+      border:3px solid #08090a;
+      border-left:0;
+      border-bottom:0;
+      transform:rotate(45deg);
+      opacity:.85;
+    }
+    #barrage-ui .record-stack{
+      left:30px;
+      top:158px;
+      width:136px;
+      gap:8px;
+    }
+    #barrage-ui .record-pill{
+      min-height:58px;
+      padding:10px 12px;
+      background:linear-gradient(180deg,rgba(8,9,10,.92),rgba(8,9,10,.72));
+      border-color:rgba(246,248,250,.18);
+      box-shadow:4px 4px 0 rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    #barrage-ui .record-pill b{
+      color:#cbd3da;
+      font-size:10px;
+    }
+    #barrage-ui .record-pill span{
+      font-size:22px;
+      margin-top:8px;
+    }
+    #barrage-ui .ship-showcase{
+      left:156px;
+      top:70px;
+      filter:drop-shadow(0 0 22px rgba(142,239,255,.18));
+      display:none;
+    }
+    #barrage-ui .ship-showcase::before{
+      border-color:rgba(246,248,250,.22);
+      box-shadow:8px 8px 0 rgba(142,239,255,.08);
+    }
+    #barrage-ui .loadout-panel{
+      top:390px;
+      height:82px;
+      grid-template-columns:1fr 88px;
+      background:#f5f3ea;
+      border:0;
+      color:#08090a;
+      box-shadow:6px 6px 0 #08090a,0 18px 36px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.78);
+    }
+    #barrage-ui .loadout-copy b{
+      color:#52616b;
+      font-size:11px;
+    }
+    #barrage-ui .loadout-copy h1{
+      color:#08090a;
+      font-size:27px;
+    }
+    #barrage-ui .loadout-copy p{
+      color:#3b4147;
+      font-size:11px;
+      line-height:1.2;
+    }
+    #barrage-ui .base-sync{
+      color:#31363c;
+      font-size:10px;
+    }
+    #barrage-ui .sync-track{
+      height:9px;
+      border-color:#08090a;
+      background:#08090a;
+    }
+    #barrage-ui .sync-track i{
+      background:linear-gradient(90deg,#f6f8fa,#8eefff);
+      box-shadow:none;
+    }
+    #barrage-ui .primary-start{
+      left:48px;
+      top:492px;
+      width:294px;
+      height:70px;
+      color:#08090a;
+      border:0;
+      background:#f5f3ea;
+      box-shadow:7px 7px 0 #08090a,0 18px 34px rgba(0,0,0,.38),0 0 24px rgba(142,239,255,.18);
+      transform:rotate(-1deg);
+    }
+    #barrage-ui .primary-start:hover{
+      background:#ffffff;
+      filter:none;
+    }
+    #barrage-ui .primary-start span{
+      font-size:42px;
+      line-height:.9;
+      text-shadow:2px 2px 0 #f6f8fa;
+    }
+    #barrage-ui .primary-start span::before{
+      content:">> ";
+      font-size:21px;
+      vertical-align:5px;
+    }
+    #barrage-ui .primary-start small{
+      color:#08090a;
+      font-size:11px;
+    }
+    #barrage-ui .home-actions{
+      left:18px;
+      right:18px;
+      top:574px;
+      gap:10px;
+    }
+    #barrage-ui .action-tile{
+      min-height:52px;
+      padding:11px 30px 10px 14px;
+      background:#101114;
+      border-color:rgba(246,248,250,.16);
+      box-shadow:3px 3px 0 rgba(0,0,0,.42);
+    }
+    #barrage-ui button.action-tile:hover{
+      border-color:rgba(142,239,255,.42);
+      box-shadow:3px 3px 0 rgba(0,0,0,.42),0 0 18px rgba(142,239,255,.10);
+    }
+    #barrage-ui .action-tile:nth-child(2){
+      background:#f5f3ea;
+      border-color:#f5f3ea;
+    }
+    #barrage-ui .action-tile:nth-child(2) b,
+    #barrage-ui .action-tile:nth-child(2)::after{
+      color:#08090a;
+    }
+    #barrage-ui .action-tile:nth-child(2) span{
+      color:#4a5158;
+    }
+    #barrage-ui .action-tile b{
+      font-size:13px;
+    }
+    #barrage-ui .action-tile span{
+      margin-top:7px;
+      font-size:10px;
+    }
+    @keyframes zzzHomePanelIn{
+      from{opacity:1;transform:translateY(14px) skewY(-1deg)}
+      to{opacity:1;transform:translateY(0) skewY(0)}
+    }
+    @keyframes zzzShipFloat{
+      0%,100%{transform:translateY(0) rotate(-1deg)}
+      50%{transform:translateY(-8px) rotate(1deg)}
+    }
+    @keyframes zzzTapeFlow{
+      from{background-position:0 0}
+      to{background-position:40px 0}
+    }
+    @keyframes zzzButtonPulse{
+      0%,100%{box-shadow:7px 7px 0 #08090a,0 18px 34px rgba(0,0,0,.38),0 0 18px rgba(142,239,255,.14)}
+      50%{box-shadow:7px 7px 0 #08090a,0 18px 34px rgba(0,0,0,.38),0 0 34px rgba(142,239,255,.26)}
+    }
+    @keyframes zzzStartIn{
+      from{opacity:1;transform:translateY(16px) rotate(-3deg) skewY(-1deg)}
+      to{opacity:1;transform:translateY(0) rotate(-1deg) skewY(0)}
+    }
+    @keyframes zzzDecalPop{
+      from{opacity:1;transform:translateY(-8px) rotate(-4deg) scale(.96)}
+      to{opacity:1;transform:translateY(0) rotate(-2deg) scale(1)}
+    }
+    @keyframes zzzDataBlink{
+      0%,92%,100%{opacity:.22}
+      94%{opacity:.46}
+      96%{opacity:.12}
+    }
+    #barrage-ui .home-hub::before{animation:zzzHomePanelIn .42s cubic-bezier(.2,.9,.2,1) both}
+    #barrage-ui .brand-lockup{animation:zzzHomePanelIn .34s cubic-bezier(.2,.9,.2,1) both}
+    #barrage-ui .wallet-chip{animation:zzzHomePanelIn .40s cubic-bezier(.2,.9,.2,1) .04s both}
+    #barrage-ui .mission-tag{animation:zzzDecalPop .34s cubic-bezier(.2,.9,.2,1) .08s both}
+    #barrage-ui .home-decal-a{animation:zzzDecalPop .34s cubic-bezier(.2,.9,.2,1) .13s both}
+    #barrage-ui .home-decal-b{animation:zzzHomePanelIn .34s cubic-bezier(.2,.9,.2,1) .18s both}
+    #barrage-ui .record-pill{animation:zzzHomePanelIn .34s cubic-bezier(.2,.9,.2,1) .10s both}
+    #barrage-ui .record-pill:nth-child(2){animation-delay:.15s}
+    #barrage-ui .loadout-panel{animation:zzzHomePanelIn .38s cubic-bezier(.2,.9,.2,1) .18s both}
+    #barrage-ui .action-tile{animation:zzzHomePanelIn .32s cubic-bezier(.2,.9,.2,1) .24s both}
+    #barrage-ui .action-tile:nth-child(2){animation-delay:.28s}
+    #barrage-ui .action-tile:nth-child(3){animation-delay:.32s}
+    #barrage-ui .action-tile:nth-child(4){animation-delay:.36s}
+    #barrage-ui .ship-showcase{animation:zzzShipFloat 4.2s ease-in-out infinite}
+    #barrage-ui .hollow-tape{animation:zzzTapeFlow 1.2s linear infinite}
+    #barrage-ui .home-dots{animation:zzzDataBlink 2.4s steps(1,end) infinite}
+    #barrage-ui .primary-start{animation:zzzStartIn .36s cubic-bezier(.2,.9,.2,1) .20s both,zzzButtonPulse 2.6s ease-in-out 1.0s infinite}
+
+    /* Rebuild from the old canvas UI: same silhouettes, monochrome finish. */
+    #barrage-ui .home-screen{
+      background:
+        linear-gradient(180deg,rgba(9,11,16,.70),rgba(4,5,8,.86)),
+        repeating-linear-gradient(0deg,rgba(246,248,250,.030) 0 1px,transparent 1px 18px);
+    }
+    #barrage-ui .home-screen::before{
+      opacity:.18;
+      background:
+        linear-gradient(rgba(142,239,255,.075) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(246,248,250,.055) 1px,transparent 1px);
+      background-size:36px 36px;
+      transform:perspective(330px) rotateX(59deg) translateY(48px) scale(1.48);
+    }
+    #barrage-ui .home-screen::after{
+      bottom:344px;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(142,239,255,.62),rgba(246,248,250,.24),transparent);
+      box-shadow:0 0 24px rgba(142,239,255,.16);
+    }
+    #barrage-ui .home-hub{
+      padding:0;
+    }
+    #barrage-ui .home-hub::before{
+      left:14px;
+      right:14px;
+      top:78px;
+      height:276px;
+      border-color:rgba(142,239,255,.64);
+      background:
+        linear-gradient(90deg,rgba(142,239,255,.56) 0 3px,transparent 3px),
+        linear-gradient(180deg,rgba(142,239,255,.075),rgba(9,17,22,.42));
+      box-shadow:inset 0 0 0 1px rgba(246,248,250,.08),inset 0 -74px 0 rgba(0,0,0,.24),0 20px 44px rgba(0,0,0,.28);
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+      animation:zzzHomePanelIn .34s cubic-bezier(.2,.9,.2,1) both;
+    }
+    #barrage-ui .home-hub::after{
+      content:"";
+      position:absolute;
+      z-index:1;
+      left:0;
+      right:0;
+      top:354px;
+      bottom:0;
+      background:
+        linear-gradient(180deg,rgba(4,5,8,.92),rgba(4,5,8,.98)),
+        repeating-linear-gradient(0deg,rgba(246,248,250,.026) 0 1px,transparent 1px 18px);
+      pointer-events:none;
+    }
+    #barrage-ui .home-header{
+      left:0;
+      right:0;
+      top:0;
+      height:70px;
+      display:block;
+      pointer-events:none;
+    }
+    #barrage-ui .brand-lockup{
+      position:absolute;
+      left:0;
+      top:0;
+      width:282px;
+      height:70px;
+      padding:19px 58px 0 18px;
+      border-color:rgba(246,248,250,.22);
+      border-left:4px solid rgba(184,167,255,.78);
+      background:linear-gradient(180deg,#090a0f,#06070b);
+      box-shadow:6px 6px 0 rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.07);
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+    }
+    #barrage-ui .brand-lockup::before{
+      left:18px;
+      top:5px;
+      bottom:auto;
+      width:118px;
+      height:3px;
+      background:linear-gradient(90deg,#d8e2ea,#8eefff,transparent);
+    }
+    #barrage-ui .brand-lockup::after{
+      content:">>>";
+      right:13px;
+      left:auto;
+      bottom:22px;
+      width:auto;
+      height:auto;
+      color:rgba(216,226,234,.78);
+      background:none;
+      box-shadow:none;
+      font-size:24px;
+      line-height:1;
+      letter-spacing:0;
+      font-weight:900;
+      transform:none;
+    }
+    #barrage-ui .brand-lockup span{
+      color:#f6f8fa;
+      font-size:37px;
+      line-height:.82;
+      text-shadow:-2px -1px 0 rgba(142,239,255,.72),2px 2px 0 rgba(255,93,126,.58),0 0 18px rgba(142,239,255,.18);
+      transform:skewX(-7deg);
+    }
+    #barrage-ui .brand-lockup small{
+      display:none;
+    }
+    #barrage-ui .wallet-chip{
+      position:absolute;
+      right:0;
+      top:10px;
+      width:108px;
+      height:50px;
+      padding:9px 34px 0 10px;
+      text-align:left;
+      border-color:rgba(246,248,250,.20);
+      border-left:4px solid rgba(184,167,255,.78);
+      background:linear-gradient(180deg,#101318,#07080b);
+      box-shadow:4px 4px 0 rgba(0,0,0,.50),inset 0 1px 0 rgba(255,255,255,.06);
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    }
+    #barrage-ui .wallet-chip::after{
+      content:"";
+      position:absolute;
+      right:10px;
+      top:15px;
+      width:18px;
+      height:18px;
+      border:2px solid rgba(142,239,255,.75);
+      background:linear-gradient(135deg,rgba(142,239,255,.28),rgba(216,226,234,.05));
+      transform:rotate(45deg);
+      box-shadow:0 0 14px rgba(142,239,255,.28);
+    }
+    #barrage-ui .wallet-chip b{
+      color:#d8e2ea;
+      font-size:8px;
+    }
+    #barrage-ui .wallet-chip span{
+      margin-top:6px;
+      color:#f6f8fa;
+      font-size:17px;
+    }
+    #barrage-ui .hangar-visual{
+      left:14px;
+      right:14px;
+      top:78px;
+      height:276px;
+      pointer-events:none;
+    }
+    #barrage-ui .hangar-visual::after{
+      left:184px;
+      right:16px;
+      bottom:58px;
+      height:98px;
+      opacity:.82;
+      background:
+        radial-gradient(ellipse at 50% 50%,rgba(142,239,255,.30),transparent 58%),
+        repeating-radial-gradient(circle at 50% 50%,rgba(142,239,255,.72) 0 2px,transparent 2px 20px);
+      filter:none;
+      mask-image:radial-gradient(circle at 50% 50%,#000 0 63%,transparent 64%);
+    }
+    #barrage-ui .hangar-rails{
+      left:34px;
+      right:26px;
+      top:38px;
+      bottom:84px;
+      border-top-color:rgba(142,239,255,.24);
+      border-bottom-color:rgba(246,248,250,.12);
+    }
+    #barrage-ui .home-dots,
+    #barrage-ui .hollow-tape{
+      display:none;
+    }
+    #barrage-ui .hangar-status{
+      right:30px;
+      left:30px;
+      top:248px;
+      width:auto;
+      height:24px;
+      padding:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:7px;
+      color:rgba(216,226,234,.62);
+      background:linear-gradient(180deg,rgba(5,6,7,.90),rgba(5,6,7,.70));
+      border:1px solid rgba(246,248,250,.12);
+      box-shadow:3px 3px 0 rgba(0,0,0,.52);
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .hangar-status b,
+    #barrage-ui .hangar-status span{
+      margin:0;
+      color:rgba(216,226,234,.64);
+      font-size:10px;
+      line-height:1;
+    }
+    #barrage-ui .mission-tag{
+      left:70px;
+      top:92px;
+      height:30px;
+      min-width:104px;
+      padding:0 18px;
+      color:#070808;
+      background:linear-gradient(180deg,#f6f8fa,#cfd7dd);
+      box-shadow:4px 4px 0 rgba(0,0,0,.48);
+      transform:none;
+      font-size:13px;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .mission-tag::after{
+      display:none;
+    }
+    #barrage-ui .record-stack{
+      left:auto;
+      right:30px;
+      top:96px;
+      width:108px;
+      gap:0;
+    }
+    #barrage-ui .record-pill{
+      min-height:58px;
+      padding:9px 10px;
+      background:linear-gradient(180deg,rgba(9,11,17,.96),rgba(5,6,7,.88));
+      border-color:rgba(216,226,234,.22);
+      border-left:4px solid rgba(184,167,255,.72);
+      box-shadow:4px 4px 0 rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.05);
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .record-pill b{
+      color:#cfd7dd;
+      font-size:9px;
+    }
+    #barrage-ui .record-pill span{
+      margin-top:6px;
+      color:#f6f8fa;
+      font-size:16px;
+      line-height:1;
+    }
+    #barrage-ui .record-pill small{
+      display:block;
+      margin-top:6px;
+      color:#8eefff;
+      font-size:10px;
+      font-weight:900;
+      line-height:1;
+    }
+    #barrage-ui .loadout-panel{
+      left:32px;
+      right:32px;
+      top:268px;
+      height:54px;
+      padding:9px 14px;
+      grid-template-columns:1fr 86px;
+      border:1px solid rgba(246,248,250,.16);
+      background:linear-gradient(180deg,rgba(5,7,10,.96),rgba(8,13,17,.90));
+      color:#f6f8fa;
+      box-shadow:4px 4px 0 rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.05);
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    }
+    #barrage-ui .loadout-copy b{
+      color:#cfd7dd;
+      font-size:9px;
+    }
+    #barrage-ui .loadout-copy h1{
+      margin-top:4px;
+      color:#f6f8fa;
+      font-size:21px;
+      line-height:.96;
+      max-width:186px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .loadout-copy p{
+      margin-top:4px;
+      color:#8eefff;
+      font-size:10px;
+      line-height:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .base-sync{
+      align-self:center;
+      color:#cfd7dd;
+      font-size:9px;
+    }
+    #barrage-ui .sync-track{
+      height:7px;
+      border-color:rgba(216,226,234,.34);
+      background:rgba(5,6,7,.84);
+    }
+    #barrage-ui .sync-track i{
+      background:linear-gradient(90deg,#d8e2ea,#8eefff);
+      box-shadow:0 0 12px rgba(142,239,255,.28);
+    }
+    #barrage-ui .primary-start{
+      z-index:3;
+      left:95px;
+      top:366px;
+      width:200px;
+      height:50px;
+      color:#060708;
+      border:1px solid rgba(246,248,250,.82);
+      background:linear-gradient(180deg,#f7f9fb,#cdd5dc);
+      box-shadow:5px 5px 0 rgba(184,167,255,.62),0 16px 32px rgba(0,0,0,.38),0 0 28px rgba(142,239,255,.16);
+      transform:none;
+      clip-path:polygon(15px 0,100% 0,100% calc(100% - 15px),calc(100% - 15px) 100%,0 100%,0 15px);
+      animation:zzzStartIn .30s cubic-bezier(.2,.9,.2,1) .16s both,zzzButtonPulse 2.8s ease-in-out 1s infinite;
+    }
+    #barrage-ui .primary-start:hover{
+      background:#fff;
+      box-shadow:5px 5px 0 rgba(184,167,255,.70),0 16px 32px rgba(0,0,0,.40),0 0 30px rgba(142,239,255,.22);
+    }
+    #barrage-ui .primary-start span{
+      font-size:31px;
+      line-height:.92;
+      text-shadow:none;
+    }
+    #barrage-ui .primary-start span::before{
+      content:"";
+    }
+    #barrage-ui .primary-start small{
+      margin-top:4px;
+      color:rgba(6,7,8,.68);
+      font-size:10px;
+    }
+    #barrage-ui .home-actions{
+      z-index:3;
+      left:24px;
+      right:auto;
+      top:432px;
+      width:342px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px 18px;
+    }
+    #barrage-ui .action-tile{
+      min-height:54px;
+      height:54px;
+      padding:10px 28px 9px 15px;
+      border-color:rgba(246,248,250,.16);
+      border-left:4px solid var(--accent);
+      background:linear-gradient(180deg,rgba(246,248,250,.070),rgba(5,7,10,.78));
+      box-shadow:4px 4px 0 rgba(0,0,0,.44);
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    }
+    #barrage-ui .action-tile:nth-child(2){
+      background:linear-gradient(180deg,rgba(246,248,250,.070),rgba(5,7,10,.78));
+      border-color:rgba(246,248,250,.16);
+      border-left-color:var(--accent);
+    }
+    #barrage-ui .action-tile:nth-child(2) b,
+    #barrage-ui .action-tile:nth-child(2)::after{
+      color:#f6f8fa;
+    }
+    #barrage-ui .action-tile:nth-child(2) span{
+      color:rgba(216,226,234,.66);
+    }
+    #barrage-ui .action-tile b{
+      color:var(--accent);
+      font-size:13px;
+      line-height:1;
+    }
+    #barrage-ui .action-tile span{
+      margin-top:8px;
+      color:rgba(216,226,234,.66);
+      font-size:10px;
+      line-height:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .action-tile::after{
+      top:18px;
+      color:var(--accent);
+    }
+    #barrage-ui button.action-tile:hover{
+      border-color:rgba(142,239,255,.45);
+      box-shadow:4px 4px 0 rgba(0,0,0,.44),0 0 18px rgba(142,239,255,.14);
+    }
+    /* Clean home rebuild: left info, right circular 3D frame viewer. */
+    #barrage-ui .home-screen{
+      background:transparent;
+    }
+    #barrage-ui .home-screen::before{
+      opacity:1;
+      inset:0;
+      background:
+        linear-gradient(180deg,rgba(5,7,11,.98),rgba(4,5,8,.99)),
+        repeating-linear-gradient(0deg,rgba(246,248,250,.026) 0 1px,transparent 1px 18px);
+      transform:none;
+      mask-image:radial-gradient(circle 92px at 78% 30%,transparent 0 88px,#000 90px);
+      -webkit-mask-image:radial-gradient(circle 92px at 78% 30%,transparent 0 88px,#000 90px);
+    }
+    #barrage-ui .home-hub::before{
+      left:14px;
+      right:14px;
+      top:78px;
+      height:258px;
+      border-color:rgba(142,239,255,.48);
+      background:
+        linear-gradient(90deg,rgba(142,239,255,.58) 0 3px,transparent 3px),
+        linear-gradient(180deg,rgba(10,17,22,.72),rgba(6,8,12,.88));
+      box-shadow:inset 0 0 0 1px rgba(246,248,250,.06),0 18px 40px rgba(0,0,0,.30);
+      mask-image:radial-gradient(circle 92px at calc(100% - 86px) 130px,transparent 0 88px,#000 90px);
+      -webkit-mask-image:radial-gradient(circle 92px at calc(100% - 86px) 130px,transparent 0 88px,#000 90px);
+    }
+    #barrage-ui .home-hub::after{
+      top:336px;
+      background:
+        linear-gradient(180deg,rgba(4,5,8,.95),rgba(4,5,8,.99)),
+        repeating-linear-gradient(0deg,rgba(246,248,250,.024) 0 1px,transparent 1px 18px);
+    }
+    #barrage-ui .hangar-visual{
+      left:14px;
+      right:14px;
+      top:78px;
+      height:258px;
+    }
+    #barrage-ui .hangar-visual::before{
+      content:"";
+      position:absolute;
+      z-index:2;
+      right:-8px;
+      top:50px;
+      width:160px;
+      height:160px;
+      border-radius:50%;
+      background:
+        radial-gradient(circle at 50% 50%,rgba(142,239,255,.18) 0 4px,transparent 5px 30px,rgba(142,239,255,.10) 31px 32px,transparent 33px 56px,rgba(142,239,255,.20) 57px 59px,transparent 60px),
+        radial-gradient(circle at 50% 50%,rgba(142,239,255,.08),transparent 68%);
+      border:2px solid rgba(142,239,255,.68);
+      box-shadow:0 0 28px rgba(142,239,255,.18),inset 0 0 32px rgba(142,239,255,.12);
+      opacity:.96;
+    }
+    #barrage-ui .hangar-visual::after{
+      z-index:3;
+      left:auto;
+      right:8px;
+      top:66px;
+      bottom:auto;
+      width:128px;
+      height:128px;
+      opacity:.90;
+      border-radius:50%;
+      background:
+        linear-gradient(rgba(142,239,255,.45),rgba(142,239,255,.45)) center/1px 100% no-repeat,
+        linear-gradient(90deg,rgba(142,239,255,.45),rgba(142,239,255,.45)) center/100% 1px no-repeat;
+      border:1px solid rgba(142,239,255,.24);
+      mask-image:none;
+      filter:none;
+      pointer-events:none;
+    }
+    #barrage-ui .hangar-rails{
+      left:30px;
+      right:205px;
+      top:58px;
+      bottom:54px;
+      border-top-color:rgba(216,226,234,.16);
+      border-bottom-color:rgba(216,226,234,.08);
+    }
+    #barrage-ui .mission-tag{
+      left:30px;
+      top:96px;
+      min-width:96px;
+      height:28px;
+      padding:0 15px;
+      box-shadow:3px 3px 0 rgba(0,0,0,.46);
+      font-size:12px;
+    }
+    #barrage-ui .record-stack{
+      left:30px;
+      right:auto;
+      top:134px;
+      width:156px;
+    }
+    #barrage-ui .record-pill{
+      min-height:52px;
+      padding:9px 11px;
+      border-left-color:rgba(142,239,255,.68);
+      box-shadow:3px 3px 0 rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    #barrage-ui .record-pill span{
+      font-size:18px;
+    }
+    #barrage-ui .loadout-panel{
+      left:30px;
+      right:auto;
+      top:196px;
+      width:166px;
+      height:82px;
+      padding:10px 12px;
+      display:block;
+      background:linear-gradient(180deg,rgba(8,12,16,.96),rgba(5,7,10,.92));
+      box-shadow:3px 3px 0 rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    #barrage-ui .loadout-copy h1{
+      max-width:138px;
+      font-size:19px;
+    }
+    #barrage-ui .loadout-copy p{
+      max-width:138px;
+      line-height:1.25;
+      white-space:normal;
+    }
+    #barrage-ui .base-sync{
+      display:none;
+    }
+    #barrage-ui .hangar-status{
+      left:30px;
+      right:30px;
+      top:302px;
+      height:23px;
+      justify-content:flex-start;
+      padding:0 12px;
+      box-shadow:2px 2px 0 rgba(0,0,0,.42);
+    }
+    #barrage-ui .primary-start{
+      top:356px;
+    }
+    #barrage-ui .home-actions{
+      top:426px;
+    }
+    #barrage-ui .hud::before{
+      height:52px;
+      background:rgba(5,6,7,.90);
+    }
+    #barrage-ui .hud::after{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:548px;
+      bottom:0;
+      background:rgba(5,6,7,.92);
+      border-top:1px solid rgba(216,226,234,.18);
+      pointer-events:none;
+    }
+    #barrage-ui .hud-topbar{
+      left:8px;
+      right:8px;
+      top:6px;
+      height:46px;
+      grid-template-columns:88px minmax(0,1fr) 124px;
+      gap:0;
+      align-items:start;
+    }
+    #barrage-ui .pause-control{
+      width:88px;
+      height:30px;
+      padding:0 10px 0 12px;
+      grid-template-columns:16px 1fr;
+      gap:6px;
+      font-size:12px;
+      border-color:rgba(216,226,234,.20);
+      background:linear-gradient(180deg,rgba(216,226,234,.075),rgba(5,6,7,.82));
+      box-shadow:none;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .pause-control::before{
+      width:13px;
+      height:12px;
+      border-left-width:3px;
+      border-right-width:3px;
+    }
+    #barrage-ui .hud-wave{
+      justify-self:center;
+      width:124px;
+      height:42px;
+      padding:7px 0 0;
+      border:0;
+      background:none;
+      box-shadow:none;
+      clip-path:none;
+      overflow:visible;
+      text-align:center;
+    }
+    #barrage-ui .hud-wave::before{
+      content:"";
+      position:absolute;
+      left:14px;
+      top:1px;
+      width:96px;
+      height:24px;
+      background:linear-gradient(180deg,rgba(216,226,234,.09),rgba(5,6,7,.82));
+      border:1px solid rgba(216,226,234,.18);
+      border-left:3px solid rgba(255,93,126,.72);
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .hud-wave::after{
+      content:"";
+      position:absolute;
+      left:0;
+      top:28px;
+      width:124px;
+      height:14px;
+      background:linear-gradient(180deg,rgba(216,226,234,.055),rgba(5,6,7,.76));
+      border:1px solid rgba(216,226,234,.13);
+      clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+    }
+    #barrage-ui .hud-wave b,
+    #barrage-ui .hud-wave > span{
+      position:relative;
+      z-index:2;
+      display:inline-block;
+      margin:0;
+      color:#f6f8fa;
+      font-size:14px;
+      line-height:1;
+      vertical-align:middle;
+    }
+    #barrage-ui .hud-wave > span{
+      margin-left:6px;
+      font-size:16px;
+    }
+    #barrage-ui .wave-timer{
+      position:absolute;
+      z-index:2;
+      left:4px;
+      right:4px;
+      top:31px;
+      height:8px;
+      margin:0;
+      border:0;
+      background:transparent;
+      clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);
+    }
+    #barrage-ui .wave-timer i{
+      background:rgba(142,239,255,.34);
+      box-shadow:none;
+    }
+    #barrage-ui .hud-wave small{
+      position:absolute;
+      z-index:3;
+      left:0;
+      right:0;
+      top:30px;
+      margin:0;
+      color:rgba(216,226,234,.74);
+      font-size:9px;
+      line-height:14px;
+    }
+    #barrage-ui .hud-wave small span{
+      color:rgba(216,226,234,.88);
+      font-size:9px;
+    }
+    #barrage-ui .hud-counter{
+      width:124px;
+      height:42px;
+      padding:7px 10px 6px 13px;
+      border-color:rgba(216,226,234,.18);
+      border-left:3px solid rgba(142,239,255,.72);
+      background:linear-gradient(180deg,rgba(216,226,234,.070),rgba(5,6,7,.82));
+      box-shadow:none;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .hud-counter::after{
+      opacity:.34;
+    }
+    #barrage-ui .counter-line{
+      grid-template-columns:46px minmax(0,1fr);
+      height:14px;
+      gap:5px;
+    }
+    #barrage-ui .counter-line + .counter-line{
+      margin-top:3px;
+      padding-top:4px;
+    }
+    #barrage-ui .counter-line b{
+      color:rgba(216,226,234,.60);
+      font-size:9px;
+    }
+    #barrage-ui .counter-line span{
+      font-size:14px;
+    }
+    #barrage-ui .hud-dock{
+      left:0;
+      right:0;
+      bottom:0;
+      height:152px;
+      padding:0;
+      border:0;
+      background:rgba(5,6,7,.92);
+      clip-path:none;
+      display:block;
+      box-shadow:none;
+    }
+    #barrage-ui .hud-dock::before{
+      left:0;
+      right:0;
+      top:0;
+      height:1px;
+      background:rgba(216,226,234,.20);
+      opacity:1;
+    }
+    #barrage-ui .hud-meters{
+      position:absolute;
+      left:12px;
+      right:12px;
+      top:29px;
+      display:grid;
+      gap:6px;
+    }
+    #barrage-ui .meter-row{
+      height:14px;
+      grid-template-columns:46px minmax(0,1fr) 76px;
+      gap:8px;
+      font-size:10px;
+    }
+    #barrage-ui .meter-row strong{
+      font-size:10px;
+    }
+    #barrage-ui .meter-track{
+      height:10px;
+      background:rgba(216,226,234,.050);
+      border-color:rgba(216,226,234,.14);
+      box-shadow:none;
+    }
+    #barrage-ui .meter-track i{
+      box-shadow:none;
+    }
+    #barrage-ui .meter-row.is-primary{
+      height:17px;
+      grid-template-columns:46px minmax(0,1fr) 76px;
+    }
+    #barrage-ui .meter-row.is-primary .meter-track{
+      height:12px;
+    }
+    #barrage-ui .run-chips{
+      position:absolute;
+      left:12px;
+      right:12px;
+      top:95px;
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:7px;
+    }
+    #barrage-ui .run-chip{
+      height:24px;
+      padding:0 10px;
+      border-color:rgba(216,226,234,.14);
+      background:linear-gradient(180deg,rgba(216,226,234,.060),rgba(5,6,7,.78));
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    }
+    #barrage-ui .run-chip b{
+      color:rgba(216,226,234,.62);
+      font-size:9px;
+    }
+    #barrage-ui .run-chip span{
+      font-size:15px;
+    }
+    #barrage-ui .skill-control{
+      position:absolute;
+      z-index:3;
+      left:136px;
+      top:122px;
+      width:118px;
+      height:22px;
+      padding:0 8px;
+      display:grid;
+      place-items:center;
+      color:rgba(216,226,234,.78);
+      border-color:rgba(142,239,255,.24);
+      background:linear-gradient(180deg,rgba(142,239,255,.075),rgba(5,6,7,.82));
+      box-shadow:none;
+      font-size:12px;
+      line-height:1;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    }
+    #barrage-ui .upgrade-overlay{
+      background:
+        linear-gradient(180deg,rgba(4,6,12,.97),rgba(3,4,7,.98)),
+        repeating-linear-gradient(0deg,rgba(246,248,250,.025) 0 1px,transparent 1px 18px);
+    }
+    #barrage-ui .level-dialog{
+      left:0;
+      right:0;
+      top:0;
+      bottom:0;
+      padding:0;
+      border:0;
+      background:linear-gradient(180deg,rgba(4,6,12,.98),rgba(4,6,12,.94));
+      clip-path:none;
+      box-shadow:none;
+    }
+    #barrage-ui .level-dialog::before{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:0;
+      height:110px;
+      background:linear-gradient(180deg,rgba(216,226,234,.085),rgba(216,226,234,.025));
+      border-bottom:1px solid rgba(216,226,234,.16);
+      pointer-events:none;
+    }
+    #barrage-ui .level-dialog::after{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:198px;
+      bottom:0;
+      background:rgba(4,6,12,.56);
+      pointer-events:none;
+    }
+    #barrage-ui .level-head{
+      position:absolute;
+      z-index:2;
+      left:0;
+      right:0;
+      top:0;
+      height:128px;
+      display:block;
+      margin:0;
+      padding:22px 14px 0;
+      text-align:center;
+    }
+    #barrage-ui .level-title{
+      font-size:25px;
+      line-height:1;
+      color:#f6f8fa;
+      text-shadow:0 0 14px rgba(142,239,255,.22),2px 2px 0 rgba(0,0,0,.50);
+    }
+    #barrage-ui .level-note{
+      margin-top:10px;
+      color:rgba(216,226,234,.68);
+      font-size:12px;
+      line-height:1;
+    }
+    #barrage-ui .level-sp{
+      position:absolute;
+      left:auto;
+      right:20px;
+      top:18px;
+      min-width:74px;
+      height:28px;
+      transform:none;
+      color:#d8e2ea;
+      border-color:rgba(216,226,234,.22);
+      background:rgba(246,248,250,.055);
+      box-shadow:0 0 18px rgba(142,239,255,.08);
+      font-size:11px;
+    }
+    #barrage-ui .level-dialog .upgrade-grid{
+      position:absolute;
+      z-index:2;
+      left:20px;
+      right:20px;
+      top:226px;
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:7px;
+    }
+    #barrage-ui .level-dialog .upgrade-card{
+      position:relative;
+      height:250px;
+      min-height:250px;
+      padding:82px 9px 52px;
+      text-align:center;
+      border:1px solid rgba(216,226,234,.18);
+      border-left:1px solid rgba(216,226,234,.18);
+      background:linear-gradient(180deg,rgba(246,248,250,.080),rgba(7,9,12,.82));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 16px 34px rgba(0,0,0,.24);
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .level-dialog .upgrade-card::before{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:0;
+      height:68px;
+      background:
+        radial-gradient(circle at 50% 34%,color-mix(in srgb,var(--accent),transparent 72%),transparent 48%),
+        linear-gradient(180deg,color-mix(in srgb,var(--accent),transparent 90%),rgba(246,248,250,.030));
+      border-bottom:1px solid rgba(216,226,234,.12);
+    }
+    #barrage-ui .level-dialog .upgrade-card::after{
+      content:"";
+      position:absolute;
+      left:8px;
+      right:8px;
+      top:97px;
+      bottom:auto;
+      width:auto;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(216,226,234,.22),transparent);
+    }
+    #barrage-ui .level-dialog .upgrade-card b{
+      position:absolute;
+      left:10px;
+      right:10px;
+      top:15px;
+      min-height:38px;
+      display:grid;
+      place-items:center;
+      color:var(--accent);
+      font-size:10px;
+      line-height:1.1;
+      background:rgba(5,6,7,.40);
+      border:1px solid color-mix(in srgb,var(--accent),transparent 62%);
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    }
+    #barrage-ui .level-dialog .upgrade-card span{
+      margin:0;
+      min-height:32px;
+      display:grid;
+      place-items:center;
+      color:#f6f8fa;
+      font-size:13px;
+      line-height:1.15;
+    }
+    #barrage-ui .level-dialog .upgrade-card small{
+      display:block;
+      margin-top:12px;
+      max-height:78px;
+      overflow:hidden;
+      color:rgba(216,226,234,.66);
+      font-size:10px;
+      line-height:1.35;
+    }
+    #barrage-ui .level-dialog .upgrade-card button{
+      left:10px;
+      right:10px;
+      top:auto;
+      bottom:13px;
+      width:auto;
+      height:38px;
+      min-width:0;
+      transform:none;
+      color:#f6f8fa;
+      border-color:rgba(216,226,234,.26);
+      background:rgba(246,248,250,.070);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .level-dialog .upgrade-card button:active{
+      transform:translateY(1px);
+    }
+    #barrage-ui .basic-dialog{
+      pointer-events:auto;
+      position:absolute;
+      left:0;
+      right:0;
+      top:0;
+      bottom:0;
+      padding:0;
+      border:0;
+      background:linear-gradient(180deg,rgba(4,6,12,.98),rgba(4,6,12,.94));
+      clip-path:none;
+      box-shadow:none;
+    }
+    #barrage-ui .basic-dialog::before{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:0;
+      height:112px;
+      background:linear-gradient(180deg,rgba(216,226,234,.085),rgba(216,226,234,.025));
+      border-bottom:1px solid rgba(216,226,234,.16);
+      pointer-events:none;
+    }
+    #barrage-ui .basic-head{
+      position:absolute;
+      z-index:2;
+      left:0;
+      right:0;
+      top:0;
+      height:112px;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:10px;
+      align-items:start;
+      padding:22px 14px 0;
+    }
+    #barrage-ui .basic-actions{
+      display:grid;
+      grid-template-columns:72px 72px;
+      gap:7px;
+      align-items:start;
+    }
+    #barrage-ui .basic-actions button{
+      height:28px;
+      padding:0 10px;
+      font-size:11px;
+      box-shadow:none;
+    }
+    #barrage-ui .basic-upgrade-list{
+      position:absolute;
+      z-index:2;
+      left:14px;
+      right:14px;
+      top:124px;
+      bottom:14px;
+      display:grid;
+      grid-template-columns:1fr;
+      align-content:start;
+      gap:8px;
+      overflow-y:auto;
+      padding-right:4px;
+      pointer-events:auto;
+    }
+    #barrage-ui .basic-upgrade-list::-webkit-scrollbar{width:6px}
+    #barrage-ui .basic-upgrade-list::-webkit-scrollbar-thumb{background:rgba(246,248,250,.22)}
+    #barrage-ui .run-basic-path{
+      min-height:136px;
+    }
+    #barrage-ui .run-basic-path .upgrade-link{
+      font-size:9px;
+      writing-mode:vertical-rl;
+      letter-spacing:0;
+    }
+    #barrage-ui .run-basic-card{
+      min-height:132px;
+      padding:12px 58px 10px 10px;
+    }
+    #barrage-ui .run-basic-card span{
+      font-size:14px;
+      line-height:1.12;
+    }
+    #barrage-ui .run-basic-card small{
+      font-size:9px;
+      line-height:1.25;
+    }
+    #barrage-ui .run-basic-card button{
+      right:6px;
+      min-width:48px;
+      padding:0 6px;
+    }
+    #barrage-ui .run-basic-card.cap-open{
+      border-color:rgba(142,239,255,.58);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 0 18px rgba(142,239,255,.10);
+    }
+    #barrage-ui .run-basic-card.cap-open::before{
+      content:"上位解放";
+      position:absolute;
+      right:9px;
+      top:8px;
+      height:18px;
+      display:grid;
+      place-items:center;
+      padding:0 7px;
+      color:#08090a;
+      background:#8eefff;
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+      clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+    }
+    /* Final mobile pass: full ship preview, thumb-zone HUD, no center vignette. */
+    #barrage-ui .home-screen{
+      background:
+        linear-gradient(180deg,rgba(4,6,10,.38),rgba(4,5,8,.10) 36%,rgba(4,5,8,.90) 58%,rgba(4,5,8,.98));
+    }
+    #barrage-ui .home-screen::before{
+      opacity:.34;
+      background:
+        linear-gradient(180deg,rgba(246,248,250,.04),transparent 42%),
+        repeating-linear-gradient(0deg,rgba(246,248,250,.030) 0 1px,transparent 1px 18px);
+      transform:none;
+      mask-image:none;
+      -webkit-mask-image:none;
+      pointer-events:none;
+    }
+    #barrage-ui .home-screen::after{
+      bottom:314px;
+      opacity:.34;
+    }
+    #barrage-ui .home-hub::before{
+      left:14px;
+      right:14px;
+      top:76px;
+      height:312px;
+      border-color:rgba(142,239,255,.28);
+      background:
+        linear-gradient(90deg,rgba(142,239,255,.36) 0 3px,transparent 3px),
+        linear-gradient(180deg,rgba(142,239,255,.10),rgba(8,10,14,.10));
+      box-shadow:inset 0 0 0 1px rgba(246,248,250,.07),0 18px 36px rgba(0,0,0,.20);
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+      mask-image:none;
+      -webkit-mask-image:none;
+      pointer-events:none;
+    }
+    #barrage-ui .home-hub::after{
+      top:388px;
+      background:
+        linear-gradient(180deg,rgba(4,5,8,.72),rgba(4,5,8,.99)),
+        repeating-linear-gradient(0deg,rgba(246,248,250,.024) 0 1px,transparent 1px 18px);
+    }
+    #barrage-ui .hangar-visual{
+      top:76px;
+      height:312px;
+      overflow:hidden;
+    }
+    #barrage-ui .hangar-visual::before{
+      display:none;
+    }
+    #barrage-ui .hangar-visual::after{
+      content:"";
+      left:32px;
+      right:32px;
+      top:auto;
+      bottom:24px;
+      width:auto;
+      height:82px;
+      border:0;
+      border-radius:0;
+      background:
+        radial-gradient(ellipse at 50% 50%,rgba(142,239,255,.20),transparent 58%),
+        linear-gradient(90deg,transparent,rgba(246,248,250,.16),transparent);
+      opacity:.55;
+      mask-image:none;
+      -webkit-mask-image:none;
+      filter:none;
+      pointer-events:none;
+    }
+    #barrage-ui .hangar-rails{
+      left:28px;
+      right:28px;
+      top:50px;
+      bottom:76px;
+      opacity:.78;
+    }
+    #barrage-ui .mission-tag{
+      left:28px;
+      top:96px;
+      transform:none;
+    }
+    #barrage-ui .record-stack{
+      left:auto;
+      right:28px;
+      top:96px;
+      width:122px;
+    }
+    #barrage-ui .loadout-panel{
+      left:24px;
+      right:24px;
+      top:396px;
+      height:74px;
+      grid-template-columns:minmax(0,1fr) 84px;
+    }
+    #barrage-ui .loadout-copy h1{
+      max-width:214px;
+      font-size:23px;
+    }
+    #barrage-ui .primary-start{
+      left:28px;
+      top:478px;
+      width:334px;
+      height:60px;
+      transform:none;
+    }
+    #barrage-ui .primary-start span{
+      font-size:36px;
+    }
+    #barrage-ui .home-actions{
+      left:18px;
+      right:18px;
+      top:548px;
+      width:auto;
+      grid-template-columns:1fr 1fr;
+      gap:6px 9px;
+    }
+    #barrage-ui .action-tile{
+      min-height:40px;
+      height:40px;
+      padding:8px 24px 8px 12px;
+    }
+    #barrage-ui .action-tile span{
+      margin-top:5px;
+      font-size:9px;
+    }
+    #barrage-ui .page-stage{
+      padding:14px 14px 76px;
+    }
+    #barrage-ui .page-back{
+      position:absolute;
+      z-index:5;
+      right:18px;
+      bottom:16px;
+      width:118px;
+      height:46px;
+      box-shadow:0 14px 28px rgba(0,0,0,.32);
+    }
+    #barrage-ui .catalog-grid,
+    #barrage-ui .garage-panel,
+    #barrage-ui .gacha-panel,
+    #barrage-ui .ranking-list{
+      bottom:76px;
+    }
+    #barrage-ui .hud::before{
+      height:64px;
+      background:linear-gradient(180deg,rgba(5,6,7,.46),rgba(5,6,7,.16) 58%,transparent);
+    }
+    #barrage-ui .hud::after{
+      top:auto;
+      bottom:0;
+      height:176px;
+      background:linear-gradient(180deg,transparent,rgba(5,6,7,.58) 22%,rgba(5,6,7,.91));
+      border-top:1px solid rgba(216,226,234,.12);
+    }
+    #barrage-ui .hud-topbar{
+      left:10px;
+      right:10px;
+      top:8px;
+      height:46px;
+      grid-template-columns:132px minmax(0,1fr);
+      gap:8px;
+      pointer-events:none;
+    }
+    #barrage-ui .hud-wave{
+      justify-self:start;
+      width:132px;
+      height:44px;
+    }
+    #barrage-ui .hud-counter{
+      justify-self:end;
+      width:132px;
+      height:44px;
+      padding:7px 10px 6px 12px;
+    }
+    #barrage-ui .hud-dock{
+      left:10px;
+      right:10px;
+      bottom:8px;
+      height:166px;
+      padding:10px;
+      display:grid;
+      grid-template-columns:1fr;
+      grid-template-rows:auto auto 44px;
+      gap:8px;
+      align-items:stretch;
+      background:linear-gradient(180deg,rgba(10,13,17,.66),rgba(5,6,7,.92));
+      border-color:rgba(216,226,234,.16);
+      pointer-events:auto;
+    }
+    #barrage-ui .hud-meters,
+    #barrage-ui .run-chips{
+      position:relative;
+      left:auto;
+      right:auto;
+      top:auto;
+    }
+    #barrage-ui .hud-meters{
+      display:grid;
+      gap:6px;
+    }
+    #barrage-ui .meter-row{
+      grid-template-columns:50px minmax(0,1fr) 74px;
+      height:16px;
+    }
+    #barrage-ui .meter-row.is-primary{
+      grid-template-columns:50px minmax(0,1fr) 74px;
+      height:19px;
+    }
+    #barrage-ui .run-chips{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:6px;
+    }
+    #barrage-ui .run-chip{
+      height:26px;
+      padding:0 8px;
+    }
+    #barrage-ui .run-chip b{
+      font-size:8px;
+    }
+    #barrage-ui .run-chip span{
+      font-size:13px;
+    }
+    #barrage-ui .hud-actions{
+      display:grid;
+      grid-template-columns:112px minmax(0,1fr);
+      gap:8px;
+      min-width:0;
+    }
+    #barrage-ui .hud-actions .pause-control,
+    #barrage-ui .hud-actions .skill-control{
+      position:relative;
+      left:auto;
+      right:auto;
+      top:auto;
+      bottom:auto;
+      width:auto;
+      height:44px;
+      min-width:0;
+      padding:0 12px;
+      display:grid;
+      place-items:center;
+      font-size:13px;
+      line-height:1;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+    }
+    #barrage-ui .hud-actions .pause-control{
+      grid-template-columns:18px 1fr;
+      gap:7px;
+    }
+    #barrage-ui .hud-actions .skill-control{
+      color:#f6f8fa;
+      border-color:rgba(142,239,255,.32);
+      background:linear-gradient(180deg,rgba(142,239,255,.11),rgba(5,6,7,.82));
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .hud.has-bp .run-chip:nth-child(3),
+    #barrage-ui .hud.has-bp .skill-control{
+      border-color:rgba(142,239,255,.58);
+      box-shadow:0 0 16px rgba(142,239,255,.14);
+    }
+    #barrage-ui .hud.has-bp .run-chip:nth-child(3) span{
+      color:var(--ui-cyan);
+      text-shadow:0 0 10px rgba(142,239,255,.38);
+    }
+    #barrage-ui .basic-actions{
+      position:absolute;
+      left:14px;
+      right:14px;
+      bottom:14px;
+      display:grid;
+      grid-template-columns:1fr 132px;
+      gap:9px;
+      z-index:4;
+    }
+    #barrage-ui .basic-actions .level-sp{
+      position:static;
+      min-width:0;
+      width:auto;
+      height:42px;
+      transform:none;
+    }
+    #barrage-ui .basic-actions button{
+      height:42px;
+      font-size:13px;
+    }
+    #barrage-ui .basic-upgrade-list{
+      bottom:72px;
+    }
+    @keyframes zzzButtonPulse{
+      0%,100%{box-shadow:5px 5px 0 rgba(184,167,255,.62),0 16px 32px rgba(0,0,0,.38),0 0 20px rgba(142,239,255,.14)}
+      50%{box-shadow:5px 5px 0 rgba(184,167,255,.76),0 16px 32px rgba(0,0,0,.38),0 0 34px rgba(142,239,255,.24)}
+    }
+    @keyframes zzzStartIn{
+      from{opacity:1;transform:translateY(16px) skewY(-1deg)}
+      to{opacity:1;transform:translateY(0) skewY(0)}
+    }
+    @media (prefers-reduced-motion: reduce){
+      #barrage-ui .home-hub::before,
+      #barrage-ui .brand-lockup,
+      #barrage-ui .wallet-chip,
+      #barrage-ui .mission-tag,
+      #barrage-ui .home-decal,
+      #barrage-ui .record-pill,
+      #barrage-ui .loadout-panel,
+      #barrage-ui .action-tile,
+      #barrage-ui .ship-showcase,
+      #barrage-ui .hollow-tape,
+      #barrage-ui .home-dots,
+      #barrage-ui .primary-start{animation:none}
+    }
+  `;
+  document.head.appendChild(style);
+  const root = document.createElement('div');
+  root.id = 'barrage-ui';
+  document.body.appendChild(root);
+  return {root, refs:{}};
+}
+
+function renderUi2(){
+  const rankingRows = state.mode === 'ranking' ? getRankingRows(10) : [];
+  const homeUpgradeTotal = Object.keys(HOME_UPGRADE_DEFS).reduce((sum, id) => sum + homeUpgradeLevel(id), 0);
+  const ship = currentShip();
+  const gachaActive = state.mode === 'gacha';
+  const garageActive = state.mode === 'garage';
+  const equippedSummary = (gachaActive || garageActive) ? renderEquippedCosmetics() : '';
+  const gachaResult = gachaActive ? renderGachaResult() : '';
+  const tokenReward = calculateTokenReward();
+  ui.root.innerHTML = `
+    <div class="screen home-screen ${state.mode==='home'?'on':''}" data-screen="home">
+      <div class="ui-stage home-hub">
+        <div class="home-header">
+          <div class="brand-lockup"><span>BARRAGE</span><small>PIPE ASSAULT</small></div>
+          <div class="wallet-chip"><b>TOKEN</b><span>${formatNumber(state.tokens)}</span></div>
+        </div>
+        <div class="hangar-visual">
+          <div class="home-dots"></div>
+          <div class="hollow-tape"></div>
+          <div class="hangar-status"><b>CHECKPOINT</b><span>BEST WAVE ${Math.max(1, state.bestWave + 10)}+</span></div>
+          <div class="hangar-rails"></div>
+        </div>
+        <div class="mission-tag">SELECTED</div>
+        <div class="record-stack">
+          <div class="record-pill"><b>HIGH SCORE</b><span>WAVE ${state.bestWave}</span><small>${formatNumber(state.highScore)}</small></div>
+        </div>
+        <div class="loadout-panel">
+          <div class="loadout-copy">
+            <b>選択中フレーム</b>
+            <h1>${ship.name}</h1>
+            <p>${ship.role} / ${equippedPartCount()} PARTS</p>
+          </div>
+          <div class="base-sync">
+            <span>BASE Lv.</span>
+            <div class="sync-track"><i style="width:${Math.min(100, 12 + homeUpgradeTotal * 8)}%"></i></div>
+            <strong>Lv.${homeUpgradeTotal}</strong>
+          </div>
+        </div>
+        <button class="primary-start" data-action="start"><span>スタート</span><small>READY</small></button>
+        <div class="home-actions">
+          <button class="action-tile" data-action="store" style="--accent:#d8e2ea"><b>ストア</b><span>機体を購入</span></button>
+          <button class="action-tile" data-action="garage" style="--accent:#8eefff"><b>ガレージ</b><span>機体と装備を変更</span></button>
+          <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>アップグレード</b><span>ベース強化を開く</span></button>
+          <button class="action-tile" data-action="gacha" style="--accent:#d8e2ea"><b>サプライ抽選</b><span>スキンとクロマコート</span></button>
+          <button class="action-tile" data-action="ranking" style="--accent:#8eefff"><b>ランキング</b><span>ハイスコア記録</span></button>
+          <div class="action-tile is-quiet" style="--accent:#f6f8fa"><b>オプション</b><span>操作とサウンド</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="screen ${state.mode==='ranking'?'on':''}">
+      <div class="ui-stage page-stage">
+        <div class="page-header">
+          <div class="page-title glass-panel">
+            <h1>ランキング</h1>
+            <p>LOCAL TOP 10 / GUEST</p>
+          </div>
+          <button class="page-back" data-action="home">戻る</button>
+        </div>
+        <div class="ranking-list">
+          ${renderRankingRows(rankingRows)}
+        </div>
+      </div>
+    </div>
+    <div class="screen ${state.mode==='store'?'on':''}">
+      <div class="ui-stage page-stage">
+        <div class="page-header">
+          <div class="page-title glass-panel">
+            <h1>ストア</h1>
+            <p>トークン ${formatNumber(state.tokens)} / 機体購入</p>
+          </div>
+          <button class="page-back" data-action="home">戻る</button>
+        </div>
+        <div class="catalog-grid ship-store-list">
+          ${state.mode === 'store' ? renderStoreShips() : ''}
+        </div>
+      </div>
+    </div>
+    <div class="screen ${state.mode==='garage'?'on':''}">
+      <div class="ui-stage page-stage">
+        <div class="page-header">
+          <div class="page-title glass-panel">
+            <h1>ガレージ</h1>
+            <p>${ship.name} / ${equippedPartCount()} PARTS</p>
+          </div>
+          <button class="page-back" data-action="home">戻る</button>
+        </div>
+        <div class="garage-panel">
+          ${garageActive ? renderGaragePanel(equippedSummary) : ''}
+        </div>
+      </div>
+    </div>
+    <div class="screen ${state.mode==='gacha'?'on':''}">
+      <div class="ui-stage page-stage">
+        <div class="page-header">
+          <div class="page-title glass-panel">
+            <h1>サプライ抽選</h1>
+            <p>${GACHA_COST}T / 所持 ${gachaActive ? Object.keys(state.cosmetics.owned).length : 0}/${COSMETIC_ITEMS.length}</p>
+          </div>
+          <button class="page-back" data-action="home">戻る</button>
+        </div>
+        <div class="gacha-panel">
+          <button class="gacha-roll" ${state.tokens < GACHA_COST ? 'disabled' : ''} data-action="rollGacha">抽選する</button>
+          ${gachaResult}
+          <div class="equipped-grid">${equippedSummary}</div>
+          <div class="cosmetic-list">
+            ${gachaActive ? renderCosmeticInventory() : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen ${state.mode==='homeUpgrade'?'on':''}">
+      <div class="ui-stage page-stage">
+        <div class="page-header">
+          <div class="page-title glass-panel">
+            <h1>強化</h1>
+            <p>トークン ${formatNumber(state.tokens)} / 下位10で上位解放</p>
+          </div>
+          <button class="page-back" data-action="home">戻る</button>
+        </div>
+        <div class="catalog-grid upgrade-path-list">
+          ${state.mode === 'homeUpgrade' ? renderHomeUpgradePaths() : ''}
+        </div>
+      </div>
+    </div>
+    <div class="hud ${state.mode==='play'||state.mode==='levelup'||state.mode==='basicUpgrade'?'on':''} ${state.mode==='levelup'||state.mode==='basicUpgrade'?'leveling':''} ${state.hp / Math.max(1, state.maxHp) < .30 ? 'critical' : ''} ${state.basicPoints > 0 ? 'has-bp' : ''}" data-ref="hud">
+      <div class="hud-topbar">
+        <div class="hud-stat hud-wave">
+          <b>WAVE</b>
+          <span data-ref="wave">${state.wave}</span>
+          <div class="wave-timer"><i data-ref="waveProgress" style="width:${Math.min(100, state.waveTime / waveDuration() * 100)}%"></i></div>
+          <small>次WAVEまで <span data-ref="time">${waveSeconds()}秒</span></small>
+        </div>
+        <div class="hud-counter">
+          <div class="counter-line"><b>スコア</b><span data-ref="score">${formatNumber(state.score)}</span></div>
+          <div class="counter-line"><b>トークン</b><span data-ref="tokenTop">+${formatNumber(tokenReward)}</span></div>
+        </div>
+      </div>
+      <div class="hud-dock">
+        <div class="hud-meters">
+          <div class="meter-row is-primary" style="--meter-a:#ff5d7e;--meter-b:#ffc3ce">
+            <span>HP</span>
+            <div class="meter-track"><i data-ref="hp" style="width:${Math.max(0, state.hp / state.maxHp * 100)}%"></i></div>
+            <strong data-ref="hpText">${Math.ceil(state.hp)}/${state.maxHp}</strong>
+          </div>
+          <div class="meter-row" style="--meter-a:#8eefff;--meter-b:#d8fbff">
+            <span>ENERGY</span>
+            <div class="meter-track"><i data-ref="energy" style="width:${Math.max(0, state.energy)}%"></i></div>
+            <strong data-ref="energyText">${Math.floor(state.energy)}%</strong>
+          </div>
+          <div class="meter-row" style="--meter-a:#9dffd9;--meter-b:#d8e2ea">
+            <span data-ref="xpLabel">XP Lv.${state.level}</span>
+            <div class="meter-track"><i data-ref="xp" style="width:${Math.min(100, state.xp / xpThreshold() * 100)}%"></i></div>
+            <strong data-ref="xpText">${state.skillPoints}SP</strong>
+          </div>
+        </div>
+        <div class="run-chips">
+          <div class="run-chip"><b>LV</b><span data-ref="levelChip">${state.level}</span></div>
+          <div class="run-chip"><b>SP</b><span data-ref="specialPointChip">${state.skillPoints}</span></div>
+          <div class="run-chip"><b>BP</b><span data-ref="bpChip">${state.basicPoints}</span></div>
+          <div class="run-chip"><b>TOKEN</b><span data-ref="tokenPreview">+${formatNumber(tokenReward)}</span></div>
+        </div>
+        <div class="hud-actions">
+          <button class="pause-control" data-action="pause"><span>ポーズ</span></button>
+          <button class="skill-control" data-ref="skillControl" data-action="openUpgrade">基礎強化 ${state.basicPoints}BP</button>
+        </div>
+      </div>
+    </div>
+    <div class="upgrade-overlay ${state.mode==='levelup'?'on':''}">
+      <div class="level-dialog glass-panel">
+        <div class="level-head">
+          <div>
+            <div class="level-title">特殊強化</div>
+            <div class="level-note">XPレベルアップで1つ取得。3択は特殊強化だけ</div>
+          </div>
+          <div class="level-sp">SP ${state.skillPoints}</div>
+        </div>
+        <div class="upgrade-grid">
+          ${state.upgradeOptions.map(id => {
+            const d = runUpgradeDef(id);
+            const lv = runUpgradeLevel(id);
+            const max = specialUpgradeDef(id)?.max;
+            return `
+              <div class="upgrade-card" style="--accent:${colorCss(d.color)}">
+                <b>${d.icon} / Lv.${lv}${max ? `/${max}` : ''}</b>
+                <span>${d.name}</span>
+                <small>${d.text}</small>
+                <button data-action="pickUpgrade:${id}">取得</button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="upgrade-overlay ${state.mode==='basicUpgrade'?'on':''}">
+      <div class="basic-dialog glass-panel">
+        <div class="basic-head">
+          <div>
+            <div class="level-title">基礎強化</div>
+            <div class="level-note">BPを消費して好きな項目を強化。天井到達で右側の上位強化が解放</div>
+          </div>
+        </div>
+        <div class="basic-actions">
+          <div class="level-sp">BP ${state.basicPoints}</div>
+          <button data-action="resume">戻る</button>
+        </div>
+        <div class="basic-upgrade-list">
+          ${state.mode === 'basicUpgrade' ? renderRunBasicUpgradePaths() : ''}
+        </div>
+      </div>
+    </div>
+    <div class="screen modal-screen ${state.mode==='pause'?'on':''}">
+      <div class="ui-stage">
+        <div class="dialog-card glass-panel">
+          <div class="dialog-title">ポーズ</div>
+          <div class="dialog-actions">
+            <button data-action="resume">再開</button>
+            <button data-action="home">ホーム</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen modal-screen ${state.mode==='dead'?'on':''}">
+      <div class="ui-stage">
+        <div class="dialog-card glass-panel">
+          <div class="dialog-title">ゲームオーバー</div>
+          <div class="result-grid">
+            <div class="result-stat"><b>スコア</b><span>${formatNumber(state.score)}</span></div>
+            <div class="result-stat"><b>ウェーブ</b><span>${state.wave}</span></div>
+            <div class="result-stat"><b>獲得</b><span>+${formatNumber(state.runTokenGain)}</span></div>
+          </div>
+          <div class="dialog-actions">
+            <button data-action="start">リトライ</button>
+            <button data-action="home">ホーム</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  ui.refs = Object.fromEntries([...ui.root.querySelectorAll('[data-ref]')].map(el => [el.dataset.ref, el]));
+  for(const key of Object.keys(hudCache)) delete hudCache[key];
+  for(const button of ui.root.querySelectorAll('[data-action]:not(:disabled)')){
+    button.addEventListener('click', e => {
+      e.preventDefault();
+      handleAction(button.dataset.action);
+    });
+  }
+  syncUiBounds();
+  uiDirty = false;
+}
+
+function renderRankingRows(rows){
+  if(!rows.length) return '<div class="ranking-empty">NO RECORD</div>';
+  return rows.map(row => `
+    <div class="ranking-row">
+      <b>#${row.rank}</b>
+      <span>${escapeHtml(row.name || 'PLAYER')}</span>
+      <strong>${formatNumber(row.score)}</strong>
+      <small>WAVE ${Math.max(1, Math.floor(Number(row.wave) || 1))}</small>
+    </div>
+  `).join('');
+}
+
+function equippedPartCount(){
+  const ship = currentShip();
+  let count = 0;
+  for(const type of PART_TYPES){
+    const slots = shipSlotCount(type, ship);
+    const equipped = state.garage?.equippedParts?.[type] || [];
+    for(let i=0;i<slots;i++){
+      if(equipped[i]) count++;
+    }
+  }
+  return count;
+}
+
+function shipSlotsText(ship){
+  return PART_TYPES
+    .map(type => `${PART_TYPE_LABELS[type]}${shipSlotCount(type, ship)}`)
+    .join(' / ');
+}
+
+function shipMultText(ship){
+  const rows = [
+    ['HP', ship.mult.hp],
+    ['火力', ship.mult.damage],
+    ['連射', ship.mult.fireRate],
+    ['機動', ship.mult.speed],
+    ['防御', ship.mult.defense]
+  ];
+  return rows
+    .filter(([, value]) => value && Math.abs(value - 1) > .001)
+    .map(([label, value]) => `${label}${value > 1 ? '+' : ''}${Math.round((value - 1) * 100)}%`)
+    .join(' / ') || '標準性能';
+}
+
+function renderStoreShips(){
+  return SHIP_DEFS.map(ship => {
+    const owned = shipOwned(ship.id);
+    const selected = currentShip().id === ship.id;
+    const canBuy = !owned && state.tokens >= ship.cost;
+    const buttonLabel = selected ? '使用中' : owned ? '選択' : `${formatNumber(ship.cost)}T`;
+    const action = owned ? `equipShip:${ship.id}` : `buyShip:${ship.id}`;
+    return `
+      <div class="ship-card ${owned ? 'owned' : 'locked'} ${selected ? 'selected' : ''}" style="--accent:${ship.color}">
+        <div class="ship-card-head">
+          <b>${owned ? 'OWNED' : 'STORE'}</b>
+          <strong>${ship.name}</strong>
+          <small>${ship.role}</small>
+        </div>
+        <div class="ship-card-body">
+          <span>${shipSlotsText(ship)}</span>
+          <em>${shipMultText(ship)}</em>
+          <i>パーツ効果 x${Number(ship.partPower || 1).toFixed(2)}</i>
+        </div>
+        <button ${selected || (!owned && !canBuy) ? 'disabled' : ''} data-action="${action}">${buttonLabel}</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderGaragePanel(equippedSummary){
+  const ship = currentShip();
+  return `
+    <div class="garage-summary" style="--accent:${ship.color}">
+      <b>ACTIVE FRAME</b>
+      <strong>${ship.name}</strong>
+      <span>${ship.role}</span>
+      <small>${shipSlotsText(ship)} / パーツ補正 x${Number(ship.partPower || 1).toFixed(2)}</small>
+      <em>${shipMultText(ship)}</em>
+    </div>
+    <div class="garage-ship-strip">
+      ${renderGarageShipPicker()}
+    </div>
+    ${PART_TYPES.map(type => renderPartSection(type)).join('')}
+    <div class="garage-skin-section">
+      <div class="garage-section-head"><b>スキン</b><span>全機体共通</span></div>
+      <div class="equipped-grid">${equippedSummary}</div>
+      <div class="cosmetic-list garage-cosmetics">${renderCosmeticInventory()}</div>
+    </div>
+  `;
+}
+
+function renderGarageShipPicker(){
+  return SHIP_DEFS.map(ship => {
+    const owned = shipOwned(ship.id);
+    const selected = currentShip().id === ship.id;
+    return `
+      <button class="garage-ship ${selected ? 'selected' : ''} ${owned ? '' : 'locked'}" ${owned && !selected ? '' : 'disabled'} data-action="equipShip:${ship.id}" style="--accent:${ship.color}">
+        <b>${ship.name}</b>
+        <span>${owned ? selected ? '使用中' : '選択' : `${formatNumber(ship.cost)}T`}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+function renderPartSection(type){
+  const slots = shipSlotCount(type);
+  return `
+    <div class="part-section">
+      <div class="garage-section-head">
+        <b>${PART_TYPE_LABELS[type]}</b>
+        <span>${slots ? `${slots} SLOT` : 'SLOTなし'}</span>
+      </div>
+      <div class="part-slot-grid ${slots ? '' : 'empty'}">
+        ${slots ? Array.from({length:slots}, (_, i) => renderPartSlot(type, i)).join('') : '<div class="part-empty">この機体には搭載できない</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderPartSlot(type, index){
+  const equipped = state.garage?.equippedParts?.[type]?.[index] || null;
+  const current = PART_BY_ID[equipped];
+  const options = PART_DEFS.filter(part => part.type === type && state.garage.ownedParts[part.id]);
+  return `
+    <div class="part-slot" style="--accent:${colorCss(current?.color || COLORS.cyan)}">
+      <b>${PART_TYPE_LABELS[type]} ${index + 1}</b>
+      <span>${current?.name || '未装備'}</span>
+      <small>${current ? `${current.text} / ${partBuffText(current)}` : '効果なし'}</small>
+      <div class="part-picker">
+        <button class="${!current ? 'selected' : ''}" ${!current ? 'disabled' : ''} data-action="equipPart:${type}:${index}:none">なし</button>
+        ${options.map(part => {
+          const selected = part.id === equipped;
+          return `<button class="${selected ? 'selected' : ''}" ${selected ? 'disabled' : ''} data-action="equipPart:${type}:${index}:${part.id}">${part.name}</button>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderHomeUpgradePaths(){
+  return HOME_UPGRADE_PATHS.map(path => `
+    <div class="upgrade-path">
+      ${renderHomeUpgradeCard(path.base)}
+      <div class="upgrade-link ${homeUpgradeLevel(path.base.id) >= HOME_UPGRADE_CAP ? 'open' : ''}">></div>
+      ${renderHomeUpgradeCard(path.advanced)}
+    </div>
+  `).join('');
+}
+
+function renderHomeUpgradeCard(def){
+  const fullDef = homeUpgradeDef(def.id);
+  const lv = homeUpgradeLevel(def.id);
+  const unlocked = isHomeUpgradeUnlocked(def.id);
+  const maxed = isHomeUpgradeMaxed(def.id);
+  const cost = homeUpgradeCost(def.id);
+  const canBuy = unlocked && !maxed && Number.isFinite(cost) && state.tokens >= cost;
+  const tierLabel = fullDef.tier === 'base' ? `${lv}/${HOME_UPGRADE_CAP}` : `Lv.${lv}`;
+  const buttonLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : `${formatNumber(cost)}T`;
+  const note = fullDef.tier === 'base' ? '上限あり' : `${homeUpgradeDef(fullDef.parent).name} 10/10で解放`;
+  return `
+    <div class="upgrade-card ${!unlocked ? 'locked' : ''} ${maxed ? 'maxed' : ''}" style="--accent:${colorCss(fullDef.color)}">
+      <b>${fullDef.icon} / ${tierLabel}</b>
+      <span>${fullDef.name}</span>
+      <small>${fullDef.text}</small>
+      <em>${note}</em>
+      <button ${canBuy ? '' : 'disabled'} data-action="buyHome:${fullDef.id}">${buttonLabel}</button>
+    </div>
+  `;
+}
+
+function renderRunBasicUpgradePaths(){
+  return HOME_UPGRADE_PATHS.map(path => {
+    const open = runBasicLevel(path.base.id) >= HOME_UPGRADE_CAP;
+    return `
+      <div class="upgrade-path run-basic-path ${open ? 'unlocked' : ''}">
+        ${renderRunBasicUpgradeCard(path.base)}
+        <div class="upgrade-link ${open ? 'open' : ''}">${open ? 'OPEN' : 'LOCK'}</div>
+        ${renderRunBasicUpgradeCard(path.advanced)}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderRunBasicUpgradeCard(def){
+  const fullDef = homeUpgradeDef(def.id);
+  const lv = runBasicLevel(def.id);
+  const unlocked = isRunBasicUnlocked(def.id);
+  const maxed = isRunBasicMaxed(def.id);
+  const cost = runBasicUpgradeCost(def.id);
+  const canBuy = unlocked && !maxed && Number.isFinite(cost) && state.basicPoints >= cost;
+  const tierLabel = fullDef.tier === 'base' ? `${lv}/${HOME_UPGRADE_CAP}` : `Lv.${lv}`;
+  const buttonLabel = !unlocked ? 'LOCK' : maxed ? '天井' : `${cost}BP`;
+  const note = fullDef.tier === 'base'
+    ? maxed ? '天井到達 / 上位解放' : '天井あり / まずここを強化'
+    : `${homeUpgradeDef(fullDef.parent).name}が天井で解放`;
+  return `
+    <div class="upgrade-card run-basic-card ${!unlocked ? 'locked' : ''} ${maxed ? 'maxed cap-open' : ''}" style="--accent:${colorCss(fullDef.color)}">
+      <b>${fullDef.icon} / ${tierLabel}</b>
+      <span>${fullDef.name}</span>
+      <small>${fullDef.text}</small>
+      <em>${note}</em>
+      <button ${canBuy ? '' : 'disabled'} data-action="buyRunBasic:${fullDef.id}">${buttonLabel}</button>
+    </div>
+  `;
+}
+
+function renderEquippedCosmetics(){
+  return Object.keys(DEFAULT_COSMETICS).map(type => {
+    const item = equippedCosmetic(type);
+    const rarity = COSMETIC_RARITY_BY_ID[item.rarity];
+    return `
+      <div class="equipped-card" style="--accent:${rarity.color}">
+        <b>${COSMETIC_TYPE_LABELS[type]}</b>
+        <span>${item.name}</span>
+        <small>${rarity.name}</small>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderGachaResult(){
+  if(!state.lastGacha) return '<div class="gacha-result empty">未抽選</div>';
+  const item = cosmeticItem(state.lastGacha.id);
+  const rarity = COSMETIC_RARITY_BY_ID[item.rarity];
+  const duplicateText = state.lastGacha.duplicate ? ` / 重複 +${rarity.refund}T` : '';
+  return `
+    <div class="gacha-result" style="--accent:${rarity.color}">
+      <b>${rarity.name}${duplicateText}</b>
+      <span>${item.name}</span>
+      <small>${COSMETIC_TYPE_LABELS[item.type]}</small>
+    </div>
+  `;
+}
+
+function renderCosmeticInventory(){
+  return COSMETIC_ITEMS.map(item => {
+    const owned = Number(state.cosmetics.owned[item.id]) || 0;
+    const rarity = COSMETIC_RARITY_BY_ID[item.rarity];
+    const equipped = state.cosmetics.equipped[item.type] === item.id;
+    return `
+      <div class="cosmetic-row ${owned ? '' : 'locked'} ${equipped ? 'equipped' : ''}" style="--accent:${rarity.color}">
+        <b>${rarity.name}</b>
+        <span>${item.name}</span>
+        <small>${COSMETIC_TYPE_LABELS[item.type]} / ${cosmeticBuffText(item)}${owned > 1 ? ` x${owned}` : ''}</small>
+        <button ${owned && !equipped ? '' : 'disabled'} data-action="equipCosmetic:${item.id}">${equipped ? '装備中' : owned ? '装備' : '未所持'}</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function cosmeticBuffText(item){
+  return Object.entries(item.buff || {})
+    .map(([key, value]) => `${COSMETIC_BUFF_LABELS[key] || key}+${(value * 100).toFixed(1)}%`)
+    .join(' / ');
+}
+
+function partBuffText(part){
+  return Object.entries(part.buff || {})
+    .map(([key, value]) => `${COSMETIC_BUFF_LABELS[key] || key}+${(value * 100).toFixed(1)}%`)
+    .join(' / ');
+}
+
+function escapeHtml(value){
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function updateHud(){
+  if(state.mode !== 'play' || uiDirty) return;
+  const now = performance.now();
+  if(now < state.nextHudAt) return;
+  state.nextHudAt = now + 100;
+  const tokenReward = calculateTokenReward();
+  const threshold = xpThreshold();
+  const hudClass = `hud on${state.hp / Math.max(1, state.maxHp) < .30 ? ' critical' : ''}${state.basicPoints > 0 ? ' has-bp' : ''}`;
+  if(ui.refs.hud && hudCache.hudClass !== hudClass){
+    hudCache.hudClass = hudClass;
+    ui.refs.hud.className = hudClass;
+  }
+  setHudText('wave', state.wave);
+  setHudText('score', formatNumber(state.score));
+  setHudText('time', `${waveSeconds()}秒`);
+  setHudText('tokenTop', `+${formatNumber(tokenReward)}`);
+  setHudWidth('waveProgress', Math.min(100, state.waveTime / waveDuration() * 100));
+  setHudWidth('hp', Math.max(0, state.hp / state.maxHp * 100));
+  setHudWidth('energy', Math.max(0, state.energy));
+  setHudText('hpText', `${Math.max(0, Math.ceil(state.hp))}/${state.maxHp}`);
+  setHudText('energyText', `${Math.max(0, Math.floor(state.energy))}%`);
+  setHudWidth('xp', Math.min(100, state.xp / threshold * 100));
+  setHudText('xpLabel', `XP Lv.${state.level}`);
+  setHudText('xpText', `${state.skillPoints}SP`);
+  setHudText('levelChip', state.level);
+  setHudText('specialPointChip', state.skillPoints);
+  setHudText('bpChip', state.basicPoints);
+  setHudText('tokenPreview', `+${formatNumber(tokenReward)}`);
+  setHudText('skillControl', `基礎強化 ${state.basicPoints}BP`);
+}
+
+function setHudText(ref, value){
+  if(!ui.refs[ref]) return;
+  const next = String(value);
+  if(hudCache[ref] === next) return;
+  hudCache[ref] = next;
+  ui.refs[ref].textContent = next;
+}
+
+function setHudWidth(ref, value){
+  if(!ui.refs[ref]) return;
+  const next = `${Math.round(value)}%`;
+  if(hudCache[`${ref}Width`] === next) return;
+  hudCache[`${ref}Width`] = next;
+  ui.refs[ref].style.width = next;
+}
+
+function handleAction(action){
+  if(action === 'start') startRun();
+  else if(action === 'store') setMode('store');
+  else if(action === 'garage') setMode('garage');
+  else if(action === 'homeUpgrade') setMode('homeUpgrade');
+  else if(action === 'ranking') setMode('ranking');
+  else if(action === 'gacha') setMode('gacha');
+  else if(action === 'rollGacha') rollGacha();
+  else if(action.startsWith('buyShip:')) buyShip(action.slice(8));
+  else if(action.startsWith('equipShip:')) equipShip(action.slice(10));
+  else if(action.startsWith('equipPart:')) {
+    const [, type, index, id] = action.split(':');
+    equipPart(type, index, id);
+  }
+  else if(action.startsWith('equipCosmetic:')) equipCosmetic(action.slice(14));
+  else if(action.startsWith('buyHome:')) buyHomeUpgrade(action.slice(8));
+  else if(action.startsWith('buyRunBasic:')) buyRunBasicUpgrade(action.slice(12));
+  else if(action.startsWith('pickUpgrade:')) applyRunUpgrade(action.slice(12));
+  else if(action === 'openUpgrade' && state.mode === 'play') setMode('basicUpgrade');
+  else if(action === 'pause' && state.mode === 'play') setMode('pause');
+  else if(action === 'resume' && (state.mode === 'pause' || state.mode === 'basicUpgrade')) setMode('play');
+  else if(action === 'home') {
+    clearRunObjects();
+    setMode('home');
+  }
+}
+
+function setMode(mode){
+  state.mode = mode;
+  uiDirty = true;
+  renderUi2();
+  syncCanvasVisibility();
+}
+
+function startRun(){
+  clearRunObjects();
+  homeShip.root.visible = false;
+  player.root.visible = true;
+  state.mode = 'play';
+  state.wave = 1;
+  state.waveTime = 0;
+  state.score = 0;
+  state.xp = 0;
+  state.level = 1;
+  state.skillPoints = 0;
+  state.basicPoints = 0;
+  state.basicPointMeter = 0;
+  state.statLevels = freshStatMap();
+  state.specialUpgrades = freshSpecialUpgradeMap();
+  state.upgradeOptions = [];
+  state.runTokenGain = 0;
+  state.runTime = 0;
+  state.kills = 0;
+  state.maxHp = hpMax();
+  state.hp = state.maxHp;
+  state.energy = 100;
+  state.roll = 0;
+  state.rollVel = 0;
+  player.root.position.x = 0;
+  camera.position.set(0, CAMERA_BASE_Y, CAMERA_BASE_Z);
+  camera.lookAt(0, CAMERA_LOOK_Y, CAMERA_LOOK_Z);
+  state.spawnTimer = .45;
+  state.bossAlive = false;
+  state.nextHudAt = 0;
+  uiDirty = true;
+  renderUi2();
+  syncCanvasVisibility();
+}
+
+function clearRunObjects(){
+  for(const e of enemies) releaseEnemyObject(e);
+  enemies.length = 0;
+  bullets.length = 0;
+  particles.length = 0;
+  bulletsDirty = true;
+  particlesDirty = true;
+  bulletMesh.count = 0;
+  particleMesh.count = 0;
+  syncBulletInstances();
+  syncParticleInstances();
+  state.bossAlive = false;
+}
+
+function bindInput(){
+  window.addEventListener('resize', resize);
+  window.addEventListener('keydown', e => {
+    if(e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.keyboard = -1;
+    if(e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.keyboard = 1;
+    if(e.key === 'Enter' && (state.mode === 'home' || state.mode === 'dead')) startRun();
+    if(e.key === 'Escape') state.mode === 'play' ? setMode('pause') : state.mode === 'pause' ? setMode('play') : null;
+  });
+  window.addEventListener('keyup', e => {
+    if(['ArrowLeft','a','A','ArrowRight','d','D'].includes(e.key)) state.keyboard = 0;
+  });
+  canvas.addEventListener('pointerdown', e => {
+    if(state.mode !== 'play') return;
+    activePointer = e.pointerId;
+    canvas.setPointerCapture?.(e.pointerId);
+    updatePointerControl(e);
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if(activePointer !== e.pointerId) return;
+    updatePointerControl(e);
+    e.preventDefault();
+  });
+  const end = e => {
+    if(activePointer === e.pointerId){
+      activePointer = null;
+      state.pointer = 0;
+      canvas.releasePointerCapture?.(e.pointerId);
+    }
+  };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function updatePointerControl(e){
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / Math.max(1, rect.width);
+  state.pointer = clamp((x - .5) / CONTROL_POINTER_RANGE, -1, 1);
+}
+
+function resize(){
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(1, rect.width || W);
+  const h = Math.max(1, rect.height || H);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  syncUiBounds();
+}
+
+function syncUiBounds(){
+  if(!ui?.root) return;
+  const rect = canvas.getBoundingClientRect();
+  ui.root.style.left = `${rect.left}px`;
+  ui.root.style.top = `${rect.top}px`;
+  ui.root.style.width = `${rect.width}px`;
+  ui.root.style.height = `${rect.height}px`;
+  ui.root.style.setProperty('--ui-scale', `${Math.min(rect.width / W, rect.height / H)}`);
+}
+
+function syncCanvasVisibility(){
+  const shouldShow = ['home', 'play', 'levelup', 'pause', 'dead'].includes(state.mode);
+  canvas.style.visibility = shouldShow ? 'visible' : 'hidden';
+  canvas.style.clipPath = '';
+  canvas.style.webkitClipPath = '';
+  if(shouldShow){
+    canvas3dActive = true;
+  }else if(canvas3dActive){
+    renderer.clear();
+    canvas3dActive = false;
+  }
+}
+
+function loop(now){
+  if(state.mode === 'play' || state.mode === 'home') requestAnimationFrame(loop);
+  else setTimeout(() => requestAnimationFrame(loop), 120);
+  const dt = Math.min(.033, Math.max(.001, (now - (state.last || now)) / 1000));
+  state.last = now;
+  update(dt, now * .001);
+  render(now * .001);
+}
+
+function update(dt, t){
+  state.input = clamp(state.keyboard + state.pointer, -1, 1);
+  if(state.mode === 'home'){
+    updateHomePreview(dt, t);
+  }else if(state.mode === 'play'){
+    updatePlay(dt, t);
+    updateStage(dt, t);
+    updateParticles(dt);
+  }
+  updateHud();
+}
+
+function updatePlay(dt, t){
+  const speedLevel = statLevel('speed');
+  const moveMult = loadoutMult('speed');
+  const targetVel = state.input * CONTROL_TURN_SPEED * (1 + speedLevel * .035) * moveMult;
+  state.rollVel += (targetVel - state.rollVel) * Math.min(1, dt * CONTROL_RESPONSE * (1 + speedLevel * .02 + loadoutBuff('speed') * .55));
+  state.roll += state.rollVel * dt;
+  state.waveTime += dt;
+  state.runTime += dt;
+  state.score += Math.floor((24 + state.wave * 1.8) * dt);
+  state.energy = Math.min(100, state.energy + dt * 12);
+  state.shake = Math.max(0, state.shake - dt * 6);
+  const regen = regenPerSecond();
+  if(regen > 0 && state.hp < state.maxHp){
+    state.hp = Math.min(state.maxHp, state.hp + regen * dt);
+  }
+
+  if(state.waveTime >= waveDuration()){
+    state.wave++;
+    state.waveTime = 0;
+    state.spawnTimer = Math.min(state.spawnTimer, .35);
+    if(state.wave % 10 === 0) spawnBoss();
+  }
+
+  state.firing -= dt;
+  if(state.firing <= 0 && bullets.length < MAX_BULLETS){
+    const fireBoost = (1 + statLevel('fireRate') * .085) * barrelFireBoost() * loadoutMult('fireRate');
+    state.firing = Math.max(.055, (.18 - Math.min(.08, state.wave * .0014)) / fireBoost);
+    fireShot();
+  }
+
+  state.spawnTimer -= dt;
+  if(state.spawnTimer <= 0 && enemies.length < MAX_ENEMIES && !state.bossAlive){
+    spawnEnemyPack();
+    state.spawnTimer = spawnInterval();
+  }
+
+  updateBullets(dt);
+  updateEnemies(dt, t);
+  syncBulletInstances();
+  if(state.hp <= 0){
+    saveRun();
+    setMode('dead');
+  }
+}
+
+function updateHomePreview(dt, t){
+  ringPhase = (ringPhase + 6.5 * dt) % PIPE_RING_LOOP;
+  for(let i=0;i<stage.starLayers.length;i++){
+    const layer = stage.starLayers[i];
+    const loop = layer.userData.loop || PIPE_RING_LOOP;
+    const scroll = layer.userData.scroll || 8;
+    layer.position.z = (ringPhase * scroll / 22) % loop;
+    layer.rotation.z = Math.sin(t * (.12 + i * .035)) * .025;
+    if(layer.userData.twinkle && layer.material){
+      const wave = .5 + .5 * Math.sin(t * (.45 + i * .13) + layer.userData.phase);
+      layer.material.opacity = layer.userData.baseOpacity * (1 - layer.userData.twinkle + layer.userData.twinkle * wave);
+    }
+  }
+
+  world.rotation.z = Math.sin(t * .18) * .025;
+  pipeRoot.rotation.z = Math.sin(t * .28) * .018;
+
+  player.root.visible = false;
+  homeShip.root.visible = true;
+  homeShip.root.position.set(
+    Math.sin(t * .65) * .10,
+    -1.06 + Math.sin(t * 1.15) * .10,
+    -8.35
+  );
+  homeShip.root.rotation.x = -.11 + Math.sin(t * .55) * .018;
+  homeShip.root.rotation.y = .04 + Math.sin(t * .42) * .018;
+  homeShip.root.rotation.z = -.24 + Math.sin(t * .80) * .026;
+  homeShip.root.scale.setScalar(2.65 + Math.sin(t * 1.2) * .030);
+  homeShip.core.scale.setScalar(1.08 + Math.sin(t * 9) * .12);
+  homeShip.materials.edge.opacity = .92;
+  homeShip.materials.goldLine.opacity = .82;
+  homeShip.materials.roseLine.opacity = .78;
+  homeShip.materials.shadow.opacity = .07;
+  if(homeShip.materials.hull.emissive){
+    homeShip.materials.hull.emissiveIntensity = 1.55;
+  }
+  if(homeShip.materials.wing.emissive){
+    homeShip.materials.wing.emissiveIntensity = 1.05;
+  }
+  if(homeShip.materials.panel.emissive){
+    homeShip.materials.panel.emissiveIntensity = .90;
+  }
+  if(homeShip.materials.glass.emissiveIntensity !== undefined) homeShip.materials.glass.emissiveIntensity = 1.85;
+
+  ambient.intensity += (1.7 - ambient.intensity) * Math.min(1, dt * 4.8);
+  keyLight.intensity += (22 - keyLight.intensity) * Math.min(1, dt * 4.8);
+  rimLight.intensity += (9.5 - rimLight.intensity) * Math.min(1, dt * 4.8);
+  keyLight.position.set(2.4, -3.6, 7.5);
+  rimLight.position.set(5.6, 1.2, -8);
+  camera.position.x += (0 - camera.position.x) * Math.min(1, dt * 5.2);
+  camera.position.y += (CAMERA_BASE_Y + .45 - camera.position.y) * Math.min(1, dt * 5.2);
+  camera.position.z += (10.8 - camera.position.z) * Math.min(1, dt * 5.2);
+  cameraHomeTarget.set(0, -1.22, -8.65);
+  camera.lookAt(cameraHomeTarget);
+}
+
+function updateStage(dt, t){
+  homeShip.root.visible = false;
+  player.root.visible = true;
+  ambient.intensity += (1.25 - ambient.intensity) * Math.min(1, dt * 6);
+  keyLight.intensity += (13 - keyLight.intensity) * Math.min(1, dt * 6);
+  rimLight.intensity += (9 - rimLight.intensity) * Math.min(1, dt * 6);
+  keyLight.position.set(0, -2, 6);
+  rimLight.position.set(-6, 4, -18);
+  shared.materials.player.emissiveIntensity = .72;
+  shared.materials.playerPlate.emissiveIntensity = .42;
+  shared.materials.playerWing.emissiveIntensity = .52;
+
+  const speed = state.mode === 'play' ? (14 + Math.min(18, state.wave * .35)) : 8;
+  ringPhase = (ringPhase + speed * dt) % PIPE_RING_LOOP;
+  for(let i=0;i<stage.starLayers.length;i++){
+    const layer = stage.starLayers[i];
+    const loop = layer.userData.loop || PIPE_RING_LOOP;
+    const scroll = layer.userData.scroll || 8;
+    layer.position.z = (ringPhase * scroll / 18) % loop;
+    layer.rotation.z = -state.roll * (.05 + i * .035) + Math.sin(t * (.10 + i * .03)) * .015;
+    if(layer.userData.twinkle && layer.material){
+      const wave = .5 + .5 * Math.sin(t * (.45 + i * .13) + layer.userData.phase);
+      layer.material.opacity = layer.userData.baseOpacity * (1 - layer.userData.twinkle + layer.userData.twinkle * wave);
+    }
+  }
+  world.rotation.z = -state.roll;
+  pipeRoot.rotation.z = Math.sin(t * .4) * .018;
+
+  player.root.position.y = PLAYER_Y;
+  player.root.position.z = PLAYER_Z;
+  player.root.scale.setScalar(2.12);
+  player.root.rotation.x = -.13;
+  player.root.rotation.y = 0;
+
+  const bank = -state.input * PLAYER_BANK_SCALE - state.rollVel * .06;
+  player.root.rotation.z += (bank - player.root.rotation.z) * Math.min(1, dt * 5.8);
+  player.root.position.x += ((state.input * PLAYER_DRIFT_SCALE) - player.root.position.x) * Math.min(1, dt * 5.6);
+  player.core.scale.setScalar(1 + Math.sin(t * 12) * .10);
+
+  if(state.shake > 0){
+    camera.position.x = (Math.random() - .5) * state.shake * .08;
+    camera.position.y = CAMERA_BASE_Y + (Math.random() - .5) * state.shake * .05;
+  }else{
+    camera.position.x += (0 - camera.position.x) * Math.min(1, dt * 8);
+    camera.position.y += (CAMERA_BASE_Y - camera.position.y) * Math.min(1, dt * 8);
+  }
+  camera.position.z += (CAMERA_BASE_Z - camera.position.z) * Math.min(1, dt * 8);
+  camera.lookAt(0, CAMERA_LOOK_Y, CAMERA_LOOK_Z);
+}
+
+function updateBullets(dt){
+  if(!bullets.length) return;
+  for(let i=bullets.length-1;i>=0;i--){
+    const b = bullets[i];
+    b.z -= b.speed * dt;
+    b.life -= dt;
+    if(b.life <= 0 || b.z < PIPE_Z_FAR){
+      bullets.splice(i, 1);
+    }
+  }
+  bulletsDirty = true;
+}
+
+function updateEnemies(dt, t){
+  for(let i=enemies.length-1;i>=0;i--){
+    const e = enemies[i];
+    if(e.boss){
+      e.z += (e.targetZ - e.z) * Math.min(1, dt * .55);
+      e.angle += Math.sin(t * .7 + e.phase) * dt * .22;
+      e.fire -= dt;
+      if(e.fire <= 0){
+        e.fire = Math.max(.55, 1.25 - state.wave * .006);
+        spawnBossShard(e);
+      }
+    }else{
+      e.z += e.speed * dt;
+      e.angle += Math.sin(t * e.wobble + e.phase) * dt * e.drift;
+    }
+    const rollDistance = angleDistance(e.angle, state.roll);
+    const visible = rollDistance < ENEMY_VISIBLE_ARC || (e.boss && e.z <= BOSS_SIGHT_Z);
+    e.root.visible = visible;
+    e.hitFlash = Math.max(0, (e.hitFlash || 0) - dt * 5.8);
+  if(visible){
+      setPipePosition(e.root, e.angle, e.z, e.boss ? .68 : .88);
+      const presence = enemyDepthPresence(e);
+      e.root.scale.setScalar(enemyVisualScale(e, t, presence) * (1 + (e.hitFlash || 0) * .20));
+      setEnemyOpacity(e.root, enemyVisualOpacity(e, presence));
+      setEnemyFlash(e.root, e.hitFlash || 0);
+      syncEnemyDetail(e);
+      animateEnemyObject(e, dt, t);
+      e.root.rotation.x += dt * e.spinX;
+      e.root.rotation.y += dt * e.spinY;
+      e.root.rotation.z += dt * e.spinZ;
+    }
+
+    if(bullets.length && hitEnemyWithBullets(e, i)) continue;
+
+    const nearPlayer = e.z > PLAYER_Z - .40;
+    const danger = rollDistance < (e.boss ? .40 : .22 + e.radius * .09);
+    if(nearPlayer){
+      if(danger){
+        const counterDamage = collisionDamageAmount(e);
+        if(counterDamage > 0){
+          e.hp -= counterDamage;
+          e.hitFlash = 1;
+          burst(e.angle, e.z, 0xffd36a, e.boss ? 3 : 2);
+          if(e.hp <= 0){
+            defeatEnemy(e, i);
+            continue;
+          }
+        }
+        damagePlayer(e.damage);
+      }
+      removeEnemy(i, false);
+      continue;
+    }
+    if(e.z > PIPE_Z_NEAR + 4) removeEnemy(i, false);
+  }
+}
+
+function hitEnemyWithBullets(enemy, enemyIndex){
+  for(let i=bullets.length-1;i>=0;i--){
+    const b = bullets[i];
+    const dz = Math.abs(enemy.z - b.z);
+    if(dz > (enemy.boss ? 1.7 : .72 + enemy.radius)) continue;
+    const da = angleDistance(enemy.angle, b.angle);
+    if(da > (enemy.boss ? .38 : .16 + enemy.radius * .08)) continue;
+    enemy.hp -= b.damage;
+    enemy.hitFlash = 1;
+    burst(enemy.angle, enemy.z, b.crit ? 0xffd36a : enemy.type.color, enemy.boss ? 3 : 1);
+    bullets.splice(i, 1);
+    bulletsDirty = true;
+    if(enemy.hp <= 0){
+      defeatEnemy(enemy, enemyIndex);
+      return true;
+    }
+  }
+  return false;
+}
+
+function defeatEnemy(enemy, enemyIndex){
+  state.score += enemy.boss ? 5200 + state.wave * 140 : 90 + state.wave * 12;
+  state.kills++;
+  grantXp(enemy.boss ? 95 + state.wave * 8 : 18 + state.wave * 2);
+  if(enemy.boss){
+    state.bossAlive = false;
+    state.energy = Math.min(100, state.energy + 28);
+  }
+  removeEnemy(enemyIndex, true);
+}
+
+function damagePlayer(amount){
+  if(amount <= 0) return;
+  const evade = evasionChance();
+  if(evade > 0 && Math.random() < evade){
+    state.shake = Math.max(state.shake, .38);
+    burst(state.roll, PLAYER_Z - .3, 0x1ed6ff, 2);
+    return;
+  }
+  const taken = Math.max(1, Math.ceil(amount * defenseMultiplier()));
+  state.hp -= taken;
+  state.shake = 1;
+  burst(state.roll, PLAYER_Z - .3, 0xff3b62, 2);
+}
+
+function fireShot(){
+  const baseDamage = (7 + state.wave * .45) * statMult('damage', .10) * bulletSpeedDamageMult() * (1 + cosmeticBuff('damage') + loadoutBuff('damage')) * shipMult('damage');
+  const speed = 45 * (1 + statLevel('bulletSpeed') * .045 + cosmeticBuff('bulletSpeed') + loadoutBuff('bulletSpeed'));
+  const life = (3 + statLevel('range') * .13 + statLevel('bulletSpeed') * .035) * (1 + loadoutBuff('range'));
+
+  if(specialUpgradeLevel('barrelShotgun') > 0){
+    for(const offset of SHOTGUN_OFFSETS) pushBullet(offset, baseDamage, speed, life, .86, .82, .42);
+  }else if(specialUpgradeLevel('barrelSniper') > 0){
+    pushBullet(0, baseDamage, speed, life, 3.25, 1.72, 1.55);
+  }else if(specialUpgradeLevel('barrelMultishot') > 0){
+    for(const offset of MULTISHOT_OFFSETS) pushBullet(offset, baseDamage, speed, life, .74, 1, .96);
+  }else if(specialUpgradeLevel('barrelDouble') > 0){
+    const offsets = DOUBLE_BARREL_OFFSETS[Math.min(2, specialUpgradeLevel('barrelDouble') - 1)] || DOUBLE_BARREL_OFFSETS[0];
+    for(const offset of offsets) pushBullet(offset, baseDamage, speed, life, .82, 1.03, 1);
+  }else if(specialUpgradeLevel('barrelGatling') > 0){
+    pushBullet(0, baseDamage, speed, life, .66, 1.10, .92);
+  }else{
+    pushBullet(0, baseDamage, speed, life);
+  }
+  bulletsDirty = true;
+}
+
+function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedMult = 1, lifeMult = 1, radial = PLAYER_RADIAL){
+  if(bullets.length >= MAX_BULLETS) return;
+  const angle = normalizeAngle(state.roll + angleOffset);
+  const crit = Math.random() < (critChance() + cosmeticBuff('crit'));
+  bullets.push({
+    angle,
+    sin: Math.sin(angle),
+    cos: Math.cos(angle),
+    z: PLAYER_Z - .72,
+    radial,
+    speed: speed * speedMult,
+    damage: Math.ceil(baseDamage * damageMult * (crit ? critDamageMult() : 1)),
+    crit,
+    life: life * lifeMult
+  });
+}
+
+function spawnEnemyPack(){
+  const count = Math.min(5, 1 + Math.floor(state.wave / 9) + (Math.random() < .38 ? 1 : 0));
+  for(let i=0;i<count && enemies.length<MAX_ENEMIES;i++){
+    spawnEnemy(Math.random() * .85 + i * .08);
+  }
+}
+
+function spawnEnemy(offset = 0){
+  const type = pickEnemyType();
+  const root = acquireEnemyObject(type, false);
+  const wavePower = Math.pow(1.035, state.wave - 1);
+  const enemy = {
+    root,
+    type,
+    boss:false,
+    angle: randomPipeAngle() + offset,
+    z: PIPE_Z_FAR + 24 - Math.random() * 18,
+    hp: Math.ceil(type.hp * wavePower * (1 + state.wave * .022)),
+    damage: Math.ceil(type.damage * (1 + state.wave * .018)),
+    speed: 12.5 + Math.min(8.5, state.wave * .11) + Math.random() * 2.2,
+    radius: type.radius,
+    baseScale: 1,
+    phase: Math.random() * TAU,
+    drift: .09 + Math.random() * .08,
+    wobble: .8 + Math.random() * .6,
+    spinX: (Math.random() - .5) * 1.8,
+    spinY: (Math.random() - .5) * 1.8,
+    spinZ: (Math.random() - .5) * 2.4
+  };
+  enemy.spawnZ = enemy.z;
+  enemies.push(enemy);
+  enemyRoot.add(root);
+  setPipePosition(root, enemy.angle, enemy.z, .88);
+  applyEnemyVisual(enemy, 0);
+}
+
+function spawnBoss(){
+  if(state.bossAlive) return;
+  state.bossAlive = true;
+  const type = { id:'boss', name:'トライ・レイド', color:0xff3b62, radius:1.4 };
+  const root = acquireEnemyObject(type, true);
+  const enemy = {
+    root,
+    type,
+    boss:true,
+    angle: state.roll + (Math.random() - .5) * .8,
+    z: BOSS_SIGHT_Z,
+    targetZ: -18,
+    hp: Math.ceil((220 + state.wave * 38) * Math.pow(1.035, state.wave - 10)),
+    damage: 42 + Math.floor(state.wave * 1.2),
+    radius:1.4,
+    baseScale:1.55,
+    speed:0,
+    phase:Math.random() * TAU,
+    fire:1.4,
+    spinX:.45,
+    spinY:.72,
+    spinZ:.34
+  };
+  enemy.spawnZ = enemy.z;
+  enemies.push(enemy);
+  enemyRoot.add(root);
+  setPipePosition(root, enemy.angle, enemy.z, .68);
+  applyEnemyVisual(enemy, 0);
+}
+
+function spawnBossShard(boss){
+  for(let i=-1;i<=1;i++){
+    if(enemies.length >= MAX_ENEMIES) return;
+    const type = ENEMY_TYPES[1];
+    const root = acquireEnemyObject(type, false);
+    const shard = {
+      root,
+      type,
+      boss:false,
+      angle: boss.angle + i * .28 + (Math.random() - .5) * .16,
+      z: boss.z + 1.5,
+      hp: Math.ceil(8 + state.wave * .6),
+      damage: Math.ceil(18 + state.wave * .4),
+      speed: 24 + Math.min(8, state.wave * .08),
+      radius:.42,
+      baseScale:.72,
+      phase:Math.random() * TAU,
+      drift:.035,
+      wobble:1,
+      spinX:1.5,
+      spinY:.7,
+      spinZ:2.1
+    };
+    shard.spawnZ = shard.z;
+    enemies.push(shard);
+    enemyRoot.add(root);
+    setPipePosition(root, shard.angle, shard.z, .88);
+    applyEnemyVisual(shard, 0);
+  }
+}
+
+function acquireEnemyObject(type, boss = false){
+  const key = boss ? 'boss' : type.id;
+  const pool = enemyPools.get(key);
+  const root = pool?.pop() || makeEnemyObject(type, boss);
+  root.visible = true;
+  root.position.set(0, 0, 0);
+  root.rotation.set(0, 0, 0);
+  root.scale.setScalar(1);
+  if(root.userData){
+    root.userData.detailVisible = null;
+    root.userData.opacity = null;
+    if(root.userData.core) root.userData.core.visible = true;
+    if(root.userData.glow) root.userData.glow.visible = true;
+  }
+  return root;
+}
+
+function releaseEnemyObject(enemy){
+  enemyRoot.remove(enemy.root);
+  const key = enemy.boss ? 'boss' : enemy.type.id;
+  const pool = enemyPools.get(key) || [];
+  enemy.root.visible = false;
+  setEnemyFlash(enemy.root, 0);
+  if(pool.length < ENEMY_POOL_LIMIT){
+    pool.push(enemy.root);
+    enemyPools.set(key, pool);
+  }
+}
+
+function makeEnemyObject(type, boss = false){
+  const root = new THREE.Group();
+  const key = boss ? 'boss' : type.id;
+  const geo = boss ? shared.geometries.boss : shared.geometries[type.id];
+  const mesh = new THREE.Mesh(geo, shared.enemyMaterials.get(key));
+  const edges = new THREE.LineSegments(
+    shared.edgeGeometries.get(key),
+    shared.edgeMaterials.get(key)
+  );
+  root.userData.rings = [];
+  root.userData.detailParts = [];
+  mesh.scale.setScalar(boss ? .92 : .88);
+  root.add(mesh, edges);
+  decorateEnemyObject(root, type, boss, key);
+  if(boss){
+    const halo = addEnemyRing(root, 1.62, shared.edgeMaterials.get('boss'), Math.PI / 2, 0, 0, .42);
+    halo.rotation.x = Math.PI / 2;
+    const outerHalo = addEnemyRing(root, 2.28, shared.edgeMaterials.get('boss'), Math.PI / 2, 0, Math.PI / 3, -.34);
+    outerHalo.rotation.x = Math.PI / 2;
+    outerHalo.rotation.z = Math.PI / 3;
+    const sightRing = new THREE.Line(makeRingCircleGeometry(3.05, LOW_POWER_DEVICE ? 44 : 52), shared.materials.bossSight);
+    sightRing.rotation.x = Math.PI / 2;
+    sightRing.position.z = -.08;
+    root.add(sightRing);
+  }
+  prepareEnemyVisualMaterials(root);
+  return root;
+}
+
+function decorateEnemyObject(root, type, boss, key){
+  const coreGeometry = boss ? shared.geometries.bossCore : shared.geometries.enemyCore;
+  const core = new THREE.Mesh(coreGeometry, shared.coreMaterials.get(key));
+  const glow = new THREE.Mesh(shared.geometries.enemyGlow, shared.glowMaterials.get(key));
+  const coreScale = boss ? 1.05 : type.id === 'orb' ? .78 : .62;
+  const glowScale = boss ? 1.85 : type.id === 'orb' ? 1.05 : .92;
+  core.scale.setScalar(coreScale);
+  glow.scale.setScalar(glowScale);
+  root.userData.core = core;
+  root.userData.glow = glow;
+  root.userData.coreBase = coreScale;
+  root.userData.glowBase = glowScale;
+  root.add(glow, core);
+
+  if(boss){
+    addEnemyRing(root, 1.06, shared.edgeMaterials.get(key), 0, Math.PI / 2, 0, .95);
+    addEnemyRing(root, 1.22, shared.edgeMaterials.get(key), Math.PI / 2, 0, Math.PI / 6, -.78);
+    addEnemyRing(root, 1.00, shared.materials.bossSight, .72, .38, 0, .56);
+    for(let i=0;i<3;i++){
+      const a = TAU * i / 3 - Math.PI / 2;
+      addEnemyBlade(root, a, 1.10, shared.geometries.bossBlade, shared.materials.enemyArmorLight, 1, 1.05, 1.0);
+      addEnemyBlade(root, a + .10, .78, shared.geometries.enemyBlade, shared.glowMaterials.get(key), .72, 1.1, .85);
+    }
+    return;
+  }
+
+  const sides = type.id === 'orb' ? 4 : Math.max(3, type.sides || 4);
+  const ringMat = shared.edgeMaterials.get(key);
+  addEnemyRing(root, .72, ringMat, 0, 0, 0, type.id === 'orb' ? .58 : .36);
+  addEnemyRing(root, .62, ringMat, Math.PI / 2, 0, 0, type.id === 'tri' ? -.55 : -.42);
+  if(type.id !== 'orb'){
+    addEnemyRing(root, .52, ringMat, 0, Math.PI / 2, .25, .48);
+  }
+
+  for(let i=0;i<sides;i++){
+    const a = TAU * i / sides - Math.PI / 2;
+    const useSpike = type.id === 'tri';
+    addEnemyBlade(
+      root,
+      a,
+      useSpike ? .70 : .62,
+      useSpike ? shared.geometries.enemySpike : shared.geometries.enemyBlade,
+      i % 2 === 0 ? shared.materials.enemyArmorLight : shared.materials.enemyArmor,
+      useSpike ? .95 : .78,
+      type.id === 'orb' ? .72 : .92,
+      .86
+    );
+  }
+}
+
+function prepareEnemyVisualMaterials(root){
+  root.userData.opacityMaterials = [];
+  root.traverse(child => {
+    if(!child.material) return;
+    const materials = Array.isArray(child.material)
+      ? child.material.map(material => material.clone())
+      : [child.material.clone()];
+    child.material = Array.isArray(child.material) ? materials : materials[0];
+    for(const material of materials){
+      material.userData.baseOpacity = typeof material.opacity === 'number' ? material.opacity : 1;
+      if(material.color) material.userData.baseColor = material.color.clone();
+      if(material.emissive) material.userData.baseEmissive = material.emissive.clone();
+      if(typeof material.emissiveIntensity === 'number') material.userData.baseEmissiveIntensity = material.emissiveIntensity;
+      material.transparent = true;
+      material.depthWrite = false;
+      root.userData.opacityMaterials.push(material);
+    }
+  });
+}
+
+function addEnemyRing(root, radius, material, rx = 0, ry = 0, rz = 0, spin = .35){
+  const ring = new THREE.Line(shared.geometries.enemyRing, material);
+  ring.scale.setScalar(radius);
+  ring.rotation.set(rx, ry, rz);
+  ring.userData.spin = spin;
+  root.userData.rings.push(ring);
+  root.userData.detailParts.push(ring);
+  root.add(ring);
+  return ring;
+}
+
+function addEnemyBlade(root, angle, radius, geometry, material, sx = 1, sy = 1, sz = 1){
+  const blade = new THREE.Mesh(geometry, material);
+  blade.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
+  blade.rotation.z = angle - Math.PI / 2;
+  blade.scale.set(sx, sy, sz);
+  root.userData.detailParts.push(blade);
+  root.add(blade);
+  return blade;
+}
+
+function removeEnemy(index, killed){
+  const e = enemies[index];
+  if(!e) return;
+  if(killed) burst(e.angle, e.z, e.type.color, e.boss ? 8 : 3);
+  releaseEnemyObject(e);
+  enemies.splice(index, 1);
+}
+
+function burst(angle, z, color, amount = 1){
+  const count = Math.min(MAX_PARTICLES - particles.length, amount * 3);
+  for(let i=0;i<count;i++){
+    const p = {
+      color,
+      angle: angle + (Math.random() - .5) * .42,
+      z: z + (Math.random() - .5) * 1.2,
+      radial: .65 + Math.random() * .18,
+      va: (Math.random() - .5) * 1.2,
+      vz: (Math.random() - .5) * 10,
+      life: .55 + Math.random() * .35,
+      maxLife: .9
+    };
+    particles.push(p);
+  }
+  particlesDirty = true;
+}
+
+function updateParticles(dt){
+  let changed = particles.length > 0;
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.life -= dt;
+    p.angle += p.va * dt;
+    p.z += p.vz * dt;
+    if(p.life <= 0){
+      particles.splice(i, 1);
+    }
   }
   if(changed){
-    saveMeta();
-    upsertRankingEntry();
-  }
-  return changed;
-}
-const hasGoogleClientId = () => !!(GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.includes('YOUR_'));
-const googleAccountSaveKey = sub => `${SAVE_KEY}:google:${sub}`;
-const activeSaveKey = () => accountState.profile?.sub ? googleAccountSaveKey(accountState.profile.sub) : SAVE_KEY;
-function loadAccountSession(){
-  try{
-    const raw=localStorage.getItem(GOOGLE_PROFILE_KEY);
-    if(!raw) return;
-    const profile=JSON.parse(raw);
-    if(profile?.sub) accountState.profile=profile;
-  }catch(e){
-    try{localStorage.removeItem(GOOGLE_PROFILE_KEY);}catch(_){}
-  }
-}
-function persistAccountSession(){
-  try{
-    if(accountState.profile) localStorage.setItem(GOOGLE_PROFILE_KEY,JSON.stringify(accountState.profile));
-    else localStorage.removeItem(GOOGLE_PROFILE_KEY);
-  }catch(e){}
-}
-function decodeGoogleJwtPayload(token){
-  const part=String(token||'').split('.')[1];
-  if(!part) return null;
-  const base64=part.replace(/-/g,'+').replace(/_/g,'/');
-  const padded=base64.padEnd(Math.ceil(base64.length/4)*4,'=');
-  const binary=atob(padded);
-  const json=decodeURIComponent(Array.from(binary,c=>`%${c.charCodeAt(0).toString(16).padStart(2,'0')}`).join(''));
-  return JSON.parse(json);
-}
-function normalizeGoogleProfile(payload){
-  if(!payload?.sub) return null;
-  if(payload.aud && String(payload.aud)!==GOOGLE_CLIENT_ID) return null;
-  if(payload.iss && !['accounts.google.com','https://accounts.google.com'].includes(String(payload.iss))) return null;
-  if(payload.exp && Number(payload.exp)*1000<Date.now()) return null;
-  return {
-    sub:String(payload.sub),
-    email:String(payload.email||''),
-    name:String(payload.name||payload.email||'Google User'),
-    gameName:sanitizePlayerName(payload.given_name||payload.name||payload.email||'PLAYER'),
-    picture:String(payload.picture||''),
-    linkedAt:Date.now()
-  };
-}
-function loadGoogleIdentityScript(){
-  if(globalThis.google?.accounts?.id) return Promise.resolve(true);
-  if(googleIdentityPromise) return googleIdentityPromise;
-  googleIdentityPromise=new Promise((resolve,reject)=>{
-    const existing=document.querySelector(`script[src="${GOOGLE_SCRIPT_SRC}"]`);
-    if(existing){
-      existing.addEventListener('load',()=>resolve(true),{once:true});
-      existing.addEventListener('error',reject,{once:true});
-      return;
-    }
-    const script=document.createElement('script');
-    script.src=GOOGLE_SCRIPT_SRC;
-    script.async=true;
-    script.defer=true;
-    script.onload=()=>resolve(true);
-    script.onerror=()=>reject(new Error('google identity script failed'));
-    document.head.appendChild(script);
-  });
-  return googleIdentityPromise;
-}
-async function initGoogleIdentity(){
-  if(!hasGoogleClientId()) return false;
-  if(googleIdentityReady) return true;
-  if(googleIdentityInitPromise) return googleIdentityInitPromise;
-  googleIdentityLoading=true;
-  accountState.loading=true;
-  googleIdentityInitPromise=(async()=>{
-    try{
-      await loadGoogleIdentityScript();
-      globalThis.google.accounts.id.initialize({
-        client_id:GOOGLE_CLIENT_ID,
-        callback:handleGoogleCredential,
-        auto_select:false,
-        cancel_on_tap_outside:true
-      });
-      googleIdentityReady=true;
-      accountState.ready=true;
-      accountState.message='READY';
-      return true;
-    }catch(e){
-      accountState.message='LOGIN ERROR';
-      return false;
-    }finally{
-      googleIdentityLoading=false;
-      accountState.loading=false;
-    }
-  })();
-  return googleIdentityInitPromise;
-}
-async function startGoogleSignIn(){
-  if(accountState.profile){signOutGoogle();return;}
-  if(!hasGoogleClientId()){
-    accountState.message='CLIENT ID 未設定';
-    addFloat(W/2,286,'Google Client ID 未設定',HOYO_UI.rose,11);
-    shake(3);
-    return;
-  }
-  if(!navigator.onLine){
-    accountState.message='OFFLINE';
-    addFloat(W/2,286,'オンライン時にログインできます',HOYO_UI.rose,11);
-    shake(3);
-    return;
-  }
-  accountState.message='LOADING';
-  accountState.loading=true;
-  const ready=await initGoogleIdentity();
-  if(!ready){
-    accountState.loading=false;
-    addFloat(W/2,286,'Googleログインを読み込めません',HOYO_UI.rose,11);
-    shake(3);
-    return;
-  }
-  globalThis.google.accounts.id.prompt(notification=>{
-    accountState.loading=false;
-    if(notification?.isNotDisplayed?.() || notification?.isSkippedMoment?.()){
-      accountState.message='ログイン画面を表示できません';
-      addFloat(W/2,286,'Googleログイン画面を表示できません',HOYO_UI.rose,10);
-    }
-  });
-}
-function handleGoogleCredential(response){
-  try{
-    const payload=decodeGoogleJwtPayload(response?.credential);
-    const profile=normalizeGoogleProfile(payload);
-    if(!profile) throw new Error('invalid profile');
-    if(accountState.profile?.sub===profile.sub && accountState.profile.gameName) profile.gameName=accountState.profile.gameName;
-    accountState.profile=profile;
-    accountState.message='LINKED';
-    persistAccountSession();
-    resetProgressForGoogleLogin(profile);
-    addFloat(W/2,286,`${profile.name} とリンク / データ初期化`,HOYO_UI.jade,11);
-    playSfx('upgrade');
-  }catch(e){
-    accountState.message='LOGIN FAILED';
-    addFloat(W/2,286,'Googleログイン失敗',HOYO_UI.rose,11);
-    shake(3);
-  }
-}
-function signOutGoogle(){
-  saveMeta();
-  const name=accountState.profile?.name || 'Google';
-  accountState.profile=null;
-  accountState.message='SIGNED OUT';
-  persistAccountSession();
-  try{globalThis.google?.accounts?.id?.disableAutoSelect?.();}catch(e){}
-  loadMeta();
-  addFloat(W/2,286,`${name} からログアウト`,HOYO_UI.gold,11);
-  playSfx('select');
-}
-function sanitizePlayerName(name){
-  const cleaned=String(name||'').replace(/[\u0000-\u001f\u007f]/g,'').replace(/\s+/g,' ').trim();
-  const chars=Array.from(cleaned);
-  return (chars.length?chars.slice(0,14).join(''):'PLAYER');
-}
-function currentPlayerName(){
-  return sanitizePlayerName(accountState.profile?.gameName || accountState.profile?.name || 'GUEST');
-}
-function rankingPlayerId(){
-  return accountState.profile?.sub ? `google:${accountState.profile.sub}` : 'local:guest';
-}
-function loadRankingEntries(){
-  try{
-    const raw=localStorage.getItem(RANKING_KEY);
-    const rows=JSON.parse(raw||'[]');
-    if(!Array.isArray(rows)) return [];
-    return rows.filter(r=>r&&r.id&&Number.isFinite(Number(r.score))).map(r=>({
-      id:String(r.id),
-      name:sanitizePlayerName(r.name||'PLAYER'),
-      score:Math.max(0,Math.floor(Number(r.score)||0)),
-      wave:Math.max(1,Math.floor(Number(r.wave)||1)),
-      ship:String(r.ship||''),
-      core:String(r.core||''),
-      linked:!!r.linked,
-      updatedAt:Number(r.updatedAt)||0
-    }));
-  }catch(e){
-    return [];
-  }
-}
-function saveRankingEntries(entries){
-  try{localStorage.setItem(RANKING_KEY,JSON.stringify(entries.slice(0,RANKING_LIMIT)));}catch(e){}
-}
-function removeRankingEntryById(id){
-  if(!id) return;
-  saveRankingEntries(loadRankingEntries().filter(r=>r.id!==id));
-}
-function sortRankingEntries(entries){
-  return entries.sort((a,b)=>(b.score-a.score)||(b.wave-a.wave)||(b.updatedAt-a.updatedAt));
-}
-function currentRankingEntry(){
-  normalizeHighScore();
-  return {
-    id:rankingPlayerId(),
-    name:currentPlayerName(),
-    score:Math.max(0,Math.floor(Number(meta.highScore?.score)||0)),
-    wave:Math.max(1,Math.floor(Number(meta.highScore?.wave)||Number(meta.bestWave)||1)),
-    ship:meta.selectedShip,
-    core:meta.selectedCore,
-    linked:!!accountState.profile?.sub,
-    updatedAt:Date.now()
-  };
-}
-function upsertRankingEntry(forceName=false){
-  const entry=currentRankingEntry();
-  if(entry.score<=0 && entry.wave<=1) return;
-  const entries=loadRankingEntries();
-  const idx=entries.findIndex(r=>r.id===entry.id);
-  if(idx>=0){
-    const old=entries[idx];
-    const better=entry.score>old.score || (entry.score===old.score&&entry.wave>old.wave);
-    if(forceName || better){
-      entries[idx]=better ? entry : {...old,name:entry.name,linked:entry.linked,ship:entry.ship,core:entry.core,updatedAt:Date.now()};
-    }
-  }else{
-    entries.push(entry);
-  }
-  saveRankingEntries(sortRankingEntries(entries));
-}
-function rankingRows(){
-  const entries=loadRankingEntries();
-  const current=currentRankingEntry();
-  const idx=entries.findIndex(r=>r.id===current.id);
-  if(current.score>0 || current.wave>1){
-    if(idx>=0) entries[idx]={...entries[idx],name:current.name,linked:current.linked};
-    else entries.push(current);
-  }
-  return sortRankingEntries(entries).slice(0,10);
-}
-function setGameUserName(){
-  if(!accountState.profile){
-    startGoogleSignIn();
-    return;
-  }
-  const current=currentPlayerName();
-  const next=window.prompt('ゲーム内ユーザーネーム',current);
-  if(next===null) return;
-  const name=sanitizePlayerName(next);
-  accountState.profile={...accountState.profile,gameName:name};
-  persistAccountSession();
-  upsertRankingEntry(true);
-  addFloat(W/2,286,`${name} に変更`,HOYO_UI.jade,11);
-  playSfx('select');
-}
-function resetProgressForGoogleLogin(profile){
-  const keepSettings={...DEFAULT_SETTINGS,...(meta.settings||{})};
-  meta=freshMeta(keepSettings);
-  normalizeSettings();
-  normalizeMounts();
-  normalizeHighScore();
-  storeTab='ship';
-  storePages={ship:0,core:0,part:0,drone:0};
-  warehouseTab='ship';
-  codexTab='special';
-  codexPage=0;
-  clearPendingStorePurchase();
-  invalidateLoadoutCache();
-  const fresh=JSON.stringify(meta);
-  try{
-    localStorage.setItem(SAVE_KEY,fresh);
-    localStorage.setItem(googleAccountSaveKey(profile.sub),fresh);
-  }catch(e){}
-  removeRankingEntryById('local:guest');
-  removeRankingEntryById(`google:${profile.sub}`);
-}
-function loadMeta(){
-  let shouldSave=false;
-  try{
-    const raw=localStorage.getItem(activeSaveKey());
-    if(raw){
-      const saved=JSON.parse(raw);
-      if(saved.saveResetVersion!==SAVE_RESET_VERSION){
-        meta=freshMeta();
-        shouldSave=true;
-      }else{
-        const legacyLoad=!('selectedCore' in saved);
-        meta.tokens=Number(saved.tokens)||0;
-        for(const d of BODY_UPGRADE_DEFS) meta.upgrades[d.id]=Number(saved.upgrades?.[d.id])||0;
-        for(const d of BASIC_STAT_DEFS) meta.homeUpgrades[d.id]=Number(saved.homeUpgrades?.[d.id])||0;
-        meta.selectedShip=saved.selectedShip || 'coreOnly';
-        meta.selectedCore=saved.selectedCore || 'basic';
-        meta.ownedShips={coreOnly:true,...(saved.ownedShips||{})};
-        meta.ownedCores={basic:true,...(saved.ownedCores||{})};
-        meta.ownedParts={...(saved.ownedParts||{})};
-        meta.ownedDrones={...(saved.ownedDrones||{})};
-        meta.coreLevels={basic:0,...(saved.coreLevels||{})};
-        meta.droneLevels={...(saved.droneLevels||{})};
-        meta.mountedParts={...(saved.mountedParts||{})};
-        meta.grants={...(saved.grants||{})};
-        meta.highScore={...(saved.highScore||{})};
-        meta.bestWave=Number(saved.bestWave)||Number(saved.highScore?.wave)||1;
-        meta.saveResetVersion=SAVE_RESET_VERSION;
-        meta.settings={...DEFAULT_SETTINGS,...(saved.settings||{})};
-        if(!meta.grants[DEMO_GRANT_KEY]){
-          meta.tokens+=DEMO_START_TOKENS;
-          meta.grants[DEMO_GRANT_KEY]=true;
-          shouldSave=true;
-        }
-        normalizeSettings();
-        if(legacyLoad) meta.selectedShip='coreOnly';
-        if(!meta.ownedShips[meta.selectedShip]) meta.selectedShip='coreOnly';
-        if(!meta.ownedCores[meta.selectedCore]) meta.selectedCore='basic';
-        normalizeMounts();
-      }
-    }else{
-      shouldSave=true;
-    }
-  }catch(e){
-    meta=freshMeta();
-    shouldSave=true;
-  }
-  normalizeSettings();
-  normalizeHighScore();
-  invalidateLoadoutCache();
-  if(shouldSave) saveMeta();
-}
-function saveMeta(){
-  invalidateLoadoutCache();
-  try{localStorage.setItem(activeSaveKey(),JSON.stringify(meta));}catch(e){}
-}
-function resetSaveData(){
-  const keepSettings={...DEFAULT_SETTINGS,...(meta.settings||{})};
-  meta=freshMeta(keepSettings);
-  normalizeSettings();
-  normalizeMounts();
-  storeTab='ship';
-  storePages={ship:0,core:0,part:0,drone:0};
-  warehouseTab='ship';
-  codexTab='special';
-  codexPage=0;
-  clearPendingStorePurchase();
-  saveMeta();
-  stopTouchMove();
-  resetConfirmFrames=0;
-  shake(4);
-  burst(W/2,560,HOYO_UI.rose,18);
-  addFloat(W/2,532,'セーブデータを初期化しました',HOYO_UI.rose,12);
-  playSfx('upgrade');
-}
-function normalizeSettings(){
-  meta.settings={...DEFAULT_SETTINGS,...(meta.settings||{})};
-  if(!['buttons','stick'].includes(meta.settings.touchControl)) meta.settings.touchControl='buttons';
-  for(const key of ['sound','music','sfx']) meta.settings[key]=meta.settings[key]!==false;
-  meta.settings.musicVolume=Math.max(0,Math.min(1,Number(meta.settings.musicVolume)||DEFAULT_SETTINGS.musicVolume));
-  meta.settings.sfxVolume=Math.max(0,Math.min(1,Number(meta.settings.sfxVolume)||DEFAULT_SETTINGS.sfxVolume));
-}
-function ensureAudioContext(){
-  if(audioState.ctx) return audioState.ctx;
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(!AudioCtx) return null;
-  audioState.ctx=new AudioCtx();
-  return audioState.ctx;
-}
-function unlockAudio(){
-  audioState.unlocked=true;
-  const ac=ensureAudioContext();
-  if(ac&&ac.state==='suspended') ac.resume().catch(()=>{});
-  if(state==='play') playBgm();
-}
-function pauseBgm(){
-  if(audioState.bgm) audioState.bgm.pause();
-}
-function resetBgmTrack(randomize=false){
-  pauseBgm();
-  audioState.bgm=null;
-  audioState.bgmMissing=false;
-  audioState.bgmAttempts=0;
-  if(randomize) audioState.track=Math.floor(Math.random()*AUDIO_ASSETS.bgm.length);
-}
-function playBgm(){
-  if(!audioState.unlocked||!meta.settings.sound||!meta.settings.music||audioState.bgmMissing) return;
-  if(!audioState.bgm){
-    const src=AUDIO_ASSETS.bgm[audioState.track%AUDIO_ASSETS.bgm.length];
-    const bgm=new Audio(src);
-    bgm.loop=true;
-    bgm.preload='auto';
-    bgm.volume=meta.settings.musicVolume;
-    bgm.addEventListener('error',()=>{
-      audioState.bgm=null;
-      audioState.bgmAttempts++;
-      if(audioState.bgmAttempts>=AUDIO_ASSETS.bgm.length){
-        audioState.bgmMissing=true;
-        return;
-      }
-      audioState.track=(audioState.track+1)%AUDIO_ASSETS.bgm.length;
-      playBgm();
-    },{once:true});
-    audioState.bgm=bgm;
-  }
-  audioState.bgm.volume=meta.settings.musicVolume;
-  audioState.bgm.play().catch(()=>{});
-}
-function updateAudioSettings(){
-  normalizeSettings();
-  if(audioState.bgm) audioState.bgm.volume=meta.settings.musicVolume;
-  if(meta.settings.sound&&meta.settings.music&&state==='play') playBgm();
-  else pauseBgm();
-  saveMeta();
-}
-function setAudioToggle(key){
-  meta.settings[key]=!meta.settings[key];
-  updateAudioSettings();
-  playSfx(meta.settings[key]?'select':'denied');
-}
-function playSfx(name){
-  if(!audioState.unlocked||!meta.settings.sound||!meta.settings.sfx) return;
-  const now=performance.now();
-  const throttle=name==='shot'?72:(name==='hit'?48:0);
-  if(throttle&&now-(audioState.lastSfx[name]||0)<throttle) return;
-  audioState.lastSfx[name]=now;
-  const ac=ensureAudioContext();
-  if(!ac) return;
-  if(ac.state==='suspended') ac.resume().catch(()=>{});
-  const p=SFX_PRESETS[name]||SFX_PRESETS.select;
-  const t=ac.currentTime;
-  const gain=ac.createGain();
-  const osc=ac.createOscillator();
-  osc.type=p.type;
-  osc.frequency.setValueAtTime(p.f,t);
-  osc.frequency.exponentialRampToValueAtTime(Math.max(20,p.to),t+p.d);
-  gain.gain.setValueAtTime(.0001,t);
-  gain.gain.exponentialRampToValueAtTime(p.gain*meta.settings.sfxVolume,t+.012);
-  gain.gain.exponentialRampToValueAtTime(.0001,t+p.d);
-  osc.connect(gain);
-  gain.connect(ac.destination);
-  osc.start(t);
-  osc.stop(t+p.d+.025);
-}
-const touchControlMode = () => meta.settings?.touchControl==='stick' ? 'stick' : 'buttons';
-function setTouchControlMode(mode){
-  meta.settings={...DEFAULT_SETTINGS,...(meta.settings||{})};
-  meta.settings.touchControl=mode==='stick' ? 'stick' : 'buttons';
-  saveMeta();
-  stopTouchMove();
-  playSfx('select');
-  addFloat(W/2,142,meta.settings.touchControl==='stick'?'スティック操作':'タップ操作','#00f0ff',11);
-}
-function calculateTokenPayout(){
-  const scoreBonus=Math.floor(score/TOKEN_SCORE_UNIT);
-  const coinBonus=coins*RUN_TOKEN_COIN_MULT;
-  const waveBonus=Math.max(0,wave-runStartWave)*RUN_TOKEN_WAVE_BONUS;
-  const timeBonus=Math.floor((frame/FPS)*RUN_TOKEN_TIME_BONUS);
-  const rawGain=scoreBonus+coinBonus+waveBonus+timeBonus;
-  return Math.max(0,Math.floor(rawGain/RUN_TOKEN_PAYOUT_DIVISOR));
-}
-function awardTokens(){
-  const gain=calculateTokenPayout();
-  if(gain<=0) return;
-  meta.tokens+=gain;
-  tokensEarned+=gain;
-  saveMeta();
-}
-function buyBodyUpgrade(id){
-  const cost=bodyUpgradeCost(id);
-  if(meta.tokens<cost){
-    addFloat(W/2,H-130,`トークン ${cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  meta.tokens-=cost;
-  meta.upgrades[id]++;
-  saveMeta();
-  playSfx('upgrade');
-  const d=BODY_UPGRADE_DEFS.find(v=>v.id===id);
-  burst(W/2,H-180,d.color,14);
-  addFloat(W/2,H-150,`${d.icon} ${d.name} アップ`,d.color,12);
-}
-function buyHomeUpgrade(id){
-  const cost=homeUpgradeCost(id);
-  if(meta.tokens<cost){
-    addFloat(W/2,300,`トークン ${cost} 必要`,'#b8a7ff',11);
-    shake(3); return;
-  }
-  meta.tokens-=cost;
-  meta.homeUpgrades[id]=(meta.homeUpgrades[id]||0)+1;
-  saveMeta();
-  playSfx('upgrade');
-  const d=BASIC_STAT_BY_ID[id];
-  burst(W/2,300,d.color,14);
-  addFloat(W/2,280,`${d.icon} ${d.name} Lv.${meta.homeUpgrades[id]}`,d.color,12);
-}
-function homeStatBonus(id){
-  const lv=meta.homeUpgrades[id]||0;
-  if(lv===0) return '未アップ';
-  if(id==='regen') return `+${(lv*REGEN_STEP).toFixed(1)}HP/s`;
-  if(id==='critChance') return `会心 +${(lv*CRIT_STEP*100).toFixed(0)}%`;
-  if(id==='range') return `補正距離 ×${Math.pow(BASIC_STAT_GROWTH,lv).toFixed(2)}`;
-  return `×${Math.pow(BASIC_STAT_GROWTH,lv).toFixed(2)}`;
-}
-function normalizeMounts(){
-  for(const ship of SHIP_DEFS){
-    const mount=meta.mountedParts[ship.id] || {};
-    for(const type of ['turret','armor','drone','coreBoost']){
-      const limit=ship.slots[type]||0;
-      mount[type]=(mount[type]||[]).filter(pid=>{
-        const p=PART_BY_ID[pid];
-        return p&&p.type===type&&meta.ownedParts[pid];
-      }).slice(0,limit);
-    }
-    meta.mountedParts[ship.id]=mount;
-  }
-}
-function partMountedShip(partId){
-  for(const ship of SHIP_DEFS){
-    const mount=mountedForShip(ship.id);
-    for(const list of Object.values(mount)) if(list.includes(partId)) return ship.id;
-  }
-  return null;
-}
-function clearPendingStorePurchase(){
-  pendingStorePurchase=null;
-}
-function clearPendingInventorySale(){
-  pendingInventorySale=null;
-}
-function setPendingStorePurchase(action){
-  clearPendingInventorySale();
-  pendingStorePurchase=action;
-  uiConfirmAt=uiNow();
-  addFloat(W/2,156,`${action.title}しますか？`,action.color,11);
-  playSfx('select');
-}
-function isPendingStorePurchase(kind,id=null){
-  return pendingStorePurchase?.kind===kind && (id===null || pendingStorePurchase.id===id);
-}
-function sumCoreUpgradeInvestment(id){
-  const lv=Math.max(0,Number(meta.coreLevels?.[id])||0);
-  let total=0;
-  for(let i=0;i<lv;i++) total+=coreUpgradeCostAtLevel(i);
-  return total;
-}
-function sumDroneUpgradeInvestment(id){
-  const lv=droneLevel(id);
-  let total=0;
-  for(let i=0;i<lv;i++) total+=droneUpgradeCostAtLevel(id,i);
-  return total;
-}
-function inventorySaleDef(kind,id){
-  if(kind==='ship') return SHIP_BY_ID[id];
-  if(kind==='core') return CORE_BY_ID[id];
-  if(kind==='part') return PART_BY_ID[id];
-  if(kind==='drone') return DRONE_BY_ID[id];
-  return null;
-}
-function inventoryInvestment(kind,id){
-  const d=inventorySaleDef(kind,id);
-  if(!d) return 0;
-  if(kind==='core') return (d.cost||0)+sumCoreUpgradeInvestment(id);
-  if(kind==='drone') return (d.cost||0)+sumDroneUpgradeInvestment(id);
-  return d.cost||0;
-}
-function inventorySaleValue(kind,id){
-  return Math.floor(inventoryInvestment(kind,id)*.8);
-}
-function canSellInventory(kind,id){
-  if(kind==='ship') return id!=='coreOnly'&&!!meta.ownedShips[id]&&inventorySaleValue(kind,id)>0;
-  if(kind==='core') return id!=='basic'&&!!meta.ownedCores[id]&&inventorySaleValue(kind,id)>0;
-  if(kind==='part') return !!meta.ownedParts[id]&&inventorySaleValue(kind,id)>0;
-  if(kind==='drone') return !!meta.ownedDrones[id]&&inventorySaleValue(kind,id)>0;
-  return false;
-}
-function setPendingInventorySale(kind,id,source){
-  const d=inventorySaleDef(kind,id);
-  if(!d||!canSellInventory(kind,id)) return false;
-  clearPendingStorePurchase();
-  pendingInventorySale={
-    kind,id,source,
-    icon:d.icon||'SL',
-    color:d.color||HOYO_UI.rose,
-    title:kind==='drone'?d.name:displayName(kind,d),
-    value:inventorySaleValue(kind,id),
-    invested:inventoryInvestment(kind,id)
-  };
-  uiConfirmAt=uiNow();
-  addFloat(W/2,156,`${pendingInventorySale.title} を売却？`,pendingInventorySale.color,11);
-  playSfx('select');
-  return true;
-}
-function removePartFromAllMounts(id){
-  for(const shipId of Object.keys(meta.mountedParts||{})){
-    const mount=meta.mountedParts[shipId]||{};
-    for(const type of SLOT_ORDER) mount[type]=(mount[type]||[]).filter(pid=>pid!==id);
-  }
-}
-function sellInventoryItem(kind,id){
-  if(!canSellInventory(kind,id)){
-    clearPendingInventorySale();
-    shake(3);
-    return;
-  }
-  const d=inventorySaleDef(kind,id);
-  const value=inventorySaleValue(kind,id);
-  if(kind==='ship'){
-    delete meta.ownedShips[id];
-    delete meta.mountedParts[id];
-    if(meta.selectedShip===id) meta.selectedShip='coreOnly';
-    meta.ownedShips.coreOnly=true;
-  }else if(kind==='core'){
-    delete meta.ownedCores[id];
-    delete meta.coreLevels[id];
-    if(meta.selectedCore===id) meta.selectedCore='basic';
-    meta.ownedCores.basic=true;
-    meta.coreLevels.basic=meta.coreLevels.basic||0;
-  }else if(kind==='part'){
-    delete meta.ownedParts[id];
-    removePartFromAllMounts(id);
-  }else if(kind==='drone'){
-    delete meta.ownedDrones[id];
-    delete meta.droneLevels[id];
-  }
-  meta.tokens+=value;
-  normalizeMounts();
-  clearPendingInventorySale();
-  invalidateLoadoutCache();
-  saveMeta();
-  burst(W/2,170,d.color||HOYO_UI.gold,14);
-  addFloat(W/2,156,`売却 +${formatCompactNumber(value)} トークン`,HOYO_UI.gold,11);
-  playSfx('upgrade');
-}
-function buyOrSelectShip(id){
-  const ship=SHIP_BY_ID[id];
-  if(!ship) return;
-  if(meta.ownedShips[id]){
-    meta.selectedShip=id;
-    normalizeMounts();
-    saveMeta();
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`${ship.icon} ${displayName('ship',ship)} セレクト`,ship.color,11);
-    return;
-  }
-  if(meta.tokens<ship.cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${ship.cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  meta.tokens-=ship.cost;
-  meta.ownedShips[id]=true;
-  meta.selectedShip=id;
-  normalizeMounts();
-  clearPendingStorePurchase();
-  saveMeta();
-  burst(W/2,170,ship.color,16);
-  addFloat(W/2,156,`${ship.icon} ${displayName('ship',ship)} ゲット`,ship.color,11);
-}
-function requestShipPurchase(id){
-  const ship=SHIP_BY_ID[id];
-  if(!ship) return;
-  if(meta.ownedShips[id]){
-    buyOrSelectShip(id);
-    return;
-  }
-  if(meta.tokens<ship.cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${ship.cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  setPendingStorePurchase({
-    kind:'ship',
-    id,
-    tab:'ship',
-    icon:ship.icon,
-    color:ship.color,
-    cost:ship.cost,
-    title:`${displayName('ship',ship)} を購入`,
-    desc:'購入するとすぐセレクトされます。'
-  });
-}
-function buyOrMountCore(id){
-  const core=CORE_BY_ID[id];
-  if(!core) return;
-  if(meta.ownedCores[id]){
-    meta.selectedCore=id;
-    saveMeta();
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`${core.icon} ${displayName('core',core)} セット`,core.color,11);
-    return;
-  }
-  if(meta.tokens<core.cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${core.cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  meta.tokens-=core.cost;
-  meta.ownedCores[id]=true;
-  meta.coreLevels[id]=0;
-  meta.selectedCore=id;
-  clearPendingStorePurchase();
-  saveMeta();
-  burst(W/2,170,core.color,16);
-  addFloat(W/2,156,`${core.icon} ${displayName('core',core)} ゲット`,core.color,11);
-}
-function requestCorePurchase(id){
-  const core=CORE_BY_ID[id];
-  if(!core) return;
-  if(meta.ownedCores[id]){
-    buyOrMountCore(id);
-    return;
-  }
-  if(meta.tokens<core.cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${core.cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  setPendingStorePurchase({
-    kind:'core',
-    id,
-    tab:'core',
-    icon:core.icon,
-    color:core.color,
-    cost:core.cost,
-    title:`${displayName('core',core)} を購入`,
-    desc:'購入するとすぐセットされます。'
-  });
-}
-function upgradeMountedCore(){
-  const cost=coreUpgradeCost();
-  const core=selectedCoreDef();
-  if(meta.tokens<cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  meta.tokens-=cost;
-  meta.coreLevels[core.id]=(meta.coreLevels[core.id]||0)+1;
-  clearPendingStorePurchase();
-  saveMeta();
-  burst(W/2,170,core.color,16);
-  addFloat(W/2,156,`${core.icon} コア Lv.${meta.coreLevels[core.id]}`,core.color,11);
-}
-function requestCoreUpgrade(){
-  const cost=coreUpgradeCost();
-  const core=selectedCoreDef();
-  if(meta.tokens<cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  setPendingStorePurchase({
-    kind:'coreUpgrade',
-    id:core.id,
-    tab:'core',
-    icon:core.icon,
-    color:core.color,
-    cost,
-    title:`${displayName('core',core)} を強化`,
-    desc:`Lv.${selectedCoreLevel()} > Lv.${selectedCoreLevel()+1}`
-  });
-}
-function buyPart(id){
-  const part=PART_BY_ID[id];
-  if(!part||meta.ownedParts[id]) return;
-  if(meta.tokens<part.cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${part.cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  meta.tokens-=part.cost;
-  meta.ownedParts[id]=true;
-  normalizeMounts();
-  const ship=selectedShipDef();
-  const mount=meta.mountedParts[ship.id] || {};
-  const list=mount[part.type] || [];
-  const limit=ship.slots[part.type]||0;
-  const autoMounted=limit>0&&list.length<limit;
-  if(autoMounted){
-    list.push(id);
-    mount[part.type]=list;
-    meta.mountedParts[ship.id]=mount;
-  }
-  clearPendingStorePurchase();
-  saveMeta();
-  burst(W/2,170,part.color,16);
-  addFloat(W/2,156,`${part.icon} ${displayName('part',part)} ${autoMounted?'オートセット':'ゲット'}`,part.color,11);
-}
-function requestPartPurchase(id){
-  const part=PART_BY_ID[id];
-  if(!part||meta.ownedParts[id]) return;
-  if(meta.tokens<part.cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${part.cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  setPendingStorePurchase({
-    kind:'part',
-    id,
-    tab:'part',
-    icon:part.icon,
-    color:part.color,
-    cost:part.cost,
-    title:`${displayName('part',part)} を購入`,
-    desc:'空きスロットがあれば自動セットされます。'
-  });
-}
-function buyDrone(id){
-  const drone=DRONE_BY_ID[id];
-  if(!drone||meta.ownedDrones[id]) return;
-  if(meta.tokens<drone.cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${drone.cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  meta.tokens-=drone.cost;
-  meta.ownedDrones[id]=true;
-  meta.droneLevels[id]=0;
-  clearPendingStorePurchase();
-  saveMeta();
-  burst(W/2,170,drone.color,16);
-  addFloat(W/2,156,`${drone.icon} ${drone.name} 起動`,drone.color,11);
-}
-function requestDronePurchase(id){
-  const drone=DRONE_BY_ID[id];
-  if(!drone) return;
-  if(meta.ownedDrones[id]){
-    requestDroneUpgrade(id);
-    return;
-  }
-  if(meta.tokens<drone.cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${drone.cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  setPendingStorePurchase({
-    kind:'drone',
-    id,
-    tab:'drone',
-    icon:drone.icon,
-    color:drone.color,
-    cost:drone.cost,
-    title:`${drone.name} を購入`,
-    desc:'戦闘中に支援ドローンとして自動射撃します。'
-  });
-}
-function upgradeDrone(id){
-  const drone=DRONE_BY_ID[id];
-  if(!drone||!meta.ownedDrones[id]) return;
-  const cost=droneUpgradeCost(id);
-  if(meta.tokens<cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  meta.tokens-=cost;
-  meta.droneLevels[id]=droneLevel(id)+1;
-  clearPendingStorePurchase();
-  saveMeta();
-  burst(W/2,170,drone.color,16);
-  addFloat(W/2,156,`${drone.icon} Lv.${meta.droneLevels[id]}`,drone.color,11);
-}
-function requestDroneUpgrade(id){
-  const drone=DRONE_BY_ID[id];
-  if(!drone||!meta.ownedDrones[id]) return;
-  const cost=droneUpgradeCost(id);
-  if(meta.tokens<cost){
-    clearPendingStorePurchase();
-    addFloat(W/2,156,`トークン ${cost} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  setPendingStorePurchase({
-    kind:'droneUpgrade',
-    id,
-    tab:'drone',
-    icon:drone.icon,
-    color:drone.color,
-    cost,
-    title:`${drone.name} を強化`,
-    desc:`Lv.${droneLevel(id)} > Lv.${droneLevel(id)+1} / 火力 +18%`
-  });
-}
-function confirmStorePurchase(){
-  const action=pendingStorePurchase;
-  if(!action) return;
-  if(action.kind==='ship') buyOrSelectShip(action.id);
-  else if(action.kind==='core') buyOrMountCore(action.id);
-  else if(action.kind==='coreUpgrade') upgradeMountedCore();
-  else if(action.kind==='part') buyPart(action.id);
-  else if(action.kind==='drone') buyDrone(action.id);
-  else if(action.kind==='droneUpgrade') upgradeDrone(action.id);
-}
-function toggleMountPart(id){
-  const part=PART_BY_ID[id];
-  if(!part||!meta.ownedParts[id]) return;
-  normalizeMounts();
-  const ship=selectedShipDef();
-  const mount=meta.mountedParts[ship.id] || {};
-  const list=mount[part.type] || [];
-  if(list.includes(id)){
-    mount[part.type]=list.filter(pid=>pid!==id);
-    meta.mountedParts[ship.id]=mount;
-    saveMeta();
-    addFloat(W/2,156,`${part.icon} 解除`,part.color,11);
-    return;
-  }
-  const otherShip=partMountedShip(id);
-  if(otherShip){
-    const other=meta.mountedParts[otherShip];
-    other[part.type]=(other[part.type]||[]).filter(pid=>pid!==id);
-  }
-  const limit=ship.slots[part.type]||0;
-  if(list.length>=limit){
-    addFloat(W/2,156,`${partTypeName(part.type)} スロット満杯`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  list.push(id);
-  mount[part.type]=list;
-  meta.mountedParts[ship.id]=mount;
-  saveMeta();
-  addFloat(W/2,156,`${part.icon} セット`,part.color,11);
-}
-
-// ─────────────────────────────────────
-//  ユーティリティ
-// ─────────────────────────────────────
-function h2r(hex,a){
-  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${a})`;
-}
-const uiNow = () => (globalThis.performance?.now?.() ?? Date.now()) * .001;
-const clamp01 = v => Math.max(0,Math.min(1,v));
-const easeOutCubic = t => 1 - Math.pow(1-clamp01(t),3);
-const alphaColor = (color,a) => String(color).startsWith('#') ? h2r(color,a) : color;
-function uiProgress(start,dur=.34,delay=0){
-  return easeOutCubic((uiNow()-start-delay)/dur);
-}
-function setHomeState(next){
-  if(homeState===next) return;
-  clearPendingStorePurchase();
-  clearPendingInventorySale();
-  homeState=next;
-  uiViewOpenedAt=uiNow();
-  if(next==='store') uiStoreTabAt=uiViewOpenedAt;
-  if(next==='warehouse') uiWarehouseTabAt=uiViewOpenedAt;
-}
-function drawUiSweep(x,y,w,h,accent=HOYO_UI.gold,strength=.55,offset=0){
-  if(w<=0||h<=0) return;
-  const t=uiNow();
-  const sx=x+((t*120+offset)%(w+96))-96;
-  ctx.save();
-  cutPanel(x,y,w,h,12);
-  ctx.clip();
-  ctx.globalCompositeOperation='lighter';
-  const g=ctx.createLinearGradient(sx,y,sx+88,y+h*.25);
-  g.addColorStop(0,'rgba(255,255,255,0)');
-  g.addColorStop(.48,alphaColor(accent,.20*strength));
-  g.addColorStop(1,'rgba(255,255,255,0)');
-  ctx.fillStyle=g;
-  ctx.fillRect(sx,y-4,88,h+8);
-  ctx.restore();
-}
-function drawUiEntrance(index,start,fn,step=.045){
-  const p=uiProgress(start,.34,index*step);
-  ctx.save();
-  ctx.globalAlpha*=.35+.65*p;
-  ctx.translate(0,(1-p)*12);
-  fn();
-  ctx.restore();
-}
-function displayName(kind,itemOrId){
-  const id=typeof itemOrId==='string'?itemOrId:itemOrId?.id;
-  return UI_COPY[kind]?.[id] || itemOrId?.name || id || '';
-}
-const statName = id => UI_COPY.stat[id] || basicSkillDef(id)?.name || id;
-const partTypeName = type => UI_COPY.partType[type] || type;
-const shipEffectText = shipOrId => SHIP_EFFECTS[typeof shipOrId==='string'?shipOrId:shipOrId?.id] || '';
-const partEffectText = partOrId => PART_EFFECTS[typeof partOrId==='string'?partOrId:partOrId?.id] || '';
-function rr(x,y,w,h,r){
-  ctx.beginPath();
-  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
-  ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
-  ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);
-  ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);
-  ctx.closePath();
-}
-function rrTop(x,y,w,h,r){
-  ctx.beginPath();
-  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
-  ctx.lineTo(x+w,y+h);ctx.lineTo(x,y+h);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);
-  ctx.closePath();
-}
-function cutPanel(x,y,w,h,cut=12){
-  ctx.beginPath();
-  ctx.moveTo(x+cut,y);ctx.lineTo(x+w,y);ctx.lineTo(x+w,y+h-cut);
-  ctx.lineTo(x+w-cut,y+h);ctx.lineTo(x,y+h);ctx.lineTo(x,y+cut);
-  ctx.closePath();
-}
-function drawCutPanel(x,y,w,h,accent=HOYO_UI.gold,active=false){
-  ctx.save();
-  cutPanel(x,y,w,h,active?15:10);
-  ctx.fillStyle=active?alphaColor(accent,.18):'rgba(12,15,17,.94)';
-  ctx.fill();
-  cutPanel(x+1,y+1,w-2,h-2,active?14:9);
-  ctx.fillStyle=active?'rgba(238,247,255,.070)':'rgba(238,247,255,.035)';
-  ctx.fill();
-
-  ctx.strokeStyle=active?alphaColor(accent,.88):'rgba(238,247,255,.20)';
-  ctx.lineWidth=active?1.8:1.05;
-  cutPanel(x,y,w,h,active?15:10);ctx.stroke();
-  if(active){
-    ctx.shadowColor=accent;
-    ctx.shadowBlur=6+Math.sin(uiNow()*4+x*.01)*2;
-    cutPanel(x+.5,y+.5,w-1,h-1,15);
-    ctx.strokeStyle=alphaColor(accent,.32);
-    ctx.lineWidth=1;
-    ctx.stroke();
-    ctx.shadowBlur=0;
-    drawUiSweep(x,y,w,h,accent,.7,x+y);
-  }
-  ctx.fillStyle=alphaColor(accent,active?.95:.58);
-  ctx.fillRect(x+1,y+4,4,Math.max(14,h-8));
-  ctx.fillRect(x+10,y+1,Math.min(38,w*.24),2);
-  ctx.fillStyle='rgba(0,0,0,.36)';
-  ctx.fillRect(x+7,y+h-3,Math.max(18,w-18),2);
-  ctx.restore();
-}
-function drawHoyoPanel(x,y,w,h,r=10,accent=HOYO_UI.gold){
-  drawCutPanel(x,y,w,h,accent,false);
-  ctx.fillStyle='rgba(255,247,232,.045)';
-  ctx.fillRect(x+16,y+16,w-32,1);
-  ctx.fillRect(x+16,y+h-18,w-32,1);
-}
-function drawHoyoChip(x,y,w,h,text,accent=HOYO_UI.gold){
-  cutPanel(x,y,w,h,6);
-  ctx.fillStyle=h2r(accent,.075);ctx.fill();
-  ctx.strokeStyle=h2r(accent,.36);ctx.lineWidth=1;cutPanel(x,y,w,h,6);ctx.stroke();
-  ctx.font=`bold 10px ${UI_FONT}`;
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(text,x+w/2,y+h/2+1);
-}
-function drawBarrageLogo(x,y,scale=1){
-  ctx.save();
-  ctx.translate(x,y);
-  ctx.scale(scale,scale);
-  cutPanel(0,0,244,68,18);
-  ctx.fillStyle='rgba(5,7,9,.98)';
-  ctx.fill();
-  ctx.strokeStyle='rgba(238,247,255,.28)';
-  ctx.lineWidth=1.2;
-  cutPanel(0,0,244,68,18);
-  ctx.stroke();
-  ctx.fillStyle=h2r(HOYO_UI.gold,.92);
-  ctx.fillRect(0,0,6,68);
-  ctx.fillRect(18,4,78,3);
-  ctx.fillStyle=h2r(HOYO_UI.blue,.80);
-  ctx.fillRect(78,64,108,3);
-  ctx.fillStyle=h2r(HOYO_UI.rose,.82);
-  ctx.fillRect(188,10,36,3);
-
-  ctx.save();
-  ctx.translate(20,36);
-  ctx.transform(1,0,-.13,1,0,0);
-  ctx.font=`900 39px ${DISPLAY_FONT}`;
-  ctx.textAlign='left';
-  ctx.textBaseline='middle';
-  ctx.lineWidth=5;
-  ctx.strokeStyle='rgba(0,0,0,.92)';
-  ctx.strokeText('BARRAGE',0,0,204);
-  ctx.fillStyle=h2r(HOYO_UI.blue,.76);
-  ctx.fillText('BARRAGE',-2,-1,204);
-  ctx.fillStyle=h2r(HOYO_UI.rose,.70);
-  ctx.fillText('BARRAGE',2,2,204);
-  ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText('BARRAGE',0,0,204);
-  ctx.restore();
-
-  ctx.strokeStyle=h2r(HOYO_UI.gold,.72);
-  ctx.lineWidth=2;
-  for(let i=0;i<3;i++){
-    const px=205+i*9;
-    ctx.beginPath();
-    ctx.moveTo(px,42);
-    ctx.lineTo(px+7,34);
-    ctx.lineTo(px,26);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-function shake(amp){ shakeT=14; shakeAmp=amp; }
-function removeAtFast(arr,i){
-  const last=arr.length-1;
-  if(i<0||i>last) return;
-  if(i!==last) arr[i]=arr[last];
-  arr.pop();
-}
-const projectileLoad = () => arrows.length + enemyBullets.length;
-function effectLoadScale(){
-  const load=projectileLoad()+particles.length;
-  return load>150?.35:(load>110?.55:(load>80?.75:1));
-}
-function addFloat(x,y,text,color,size=13){
-  if(floatTexts.length>=MAX_FLOAT_TEXTS) removeAtFast(floatTexts,0);
-  floatTexts.push({x,y,text,color,size,life:65,maxLife:65,vy:-0.9});
-}
-const waveSecondsLeft = () => {
-  return Math.max(0, Math.ceil((WAVE_DURATION_FRAMES - waveFrame) / FPS));
-};
-function startNextWave(){
-  wave++;
-  recordRunHighScore();
-  waveFrame=0;
-  waveBanner=120;
-  grantSkillPoint();
-  if(activeShipDef().id==='standard'&&hp<maxHp){
-    const heal=Math.max(12,Math.ceil(maxHp*.10));
-    hp=Math.min(maxHp,hp+heal);
-    addFloat(player.x,player.y-38,`AUTO REPAIR +${heal}`,HOYO_UI.jade,11);
-  }
-  if(wave%BOSS_WAVE_INTERVAL===0) spawnBoss();
-  addFloat(W/2,86,`WAVE ${wave} 開始`,HOYO_UI.rose,13);
-  playSfx('special');
-}
-function advanceWaveTimer(){
-  waveFrame++;
-  if(waveFrame>=WAVE_DURATION_FRAMES) startNextWave();
-}
-const distSq = (ax,ay,bx,by) => {
-  const dx=ax-bx, dy=ay-by;
-  return dx*dx+dy*dy;
-};
-function nearestEnemy(x,y,exclude=null,range=Infinity){
-  let near=null, nd2=range*range;
-  const bounded=Number.isFinite(range);
-  for(let i=0;i<enemies.length;i++){
-    const e=enemies[i];
-    if(e===exclude||e.dead) continue;
-    const dx=e.x-x, dy=e.y-y;
-    if(bounded&&(dx<-range||dx>range||dy<-range||dy>range)) continue;
-    const d2=dx*dx+dy*dy;
-    if(d2<nd2){nd2=d2;near=e;}
-  }
-  return near;
-}
-
-// ─────────────────────────────────────
-//  背景
-// ─────────────────────────────────────
-function initBg(){
-  bgBaseGradient=ctx.createLinearGradient(0,0,W,H);
-  bgBaseGradient.addColorStop(0,'#151211');
-  bgBaseGradient.addColorStop(.46,'#090b0f');
-  bgBaseGradient.addColorStop(1,'#030508');
-  bgNebulaA=ctx.createRadialGradient(W*.22,H*.17,8,W*.22,H*.17,230);
-  bgNebulaA.addColorStop(0,'rgba(184,167,255,.10)');
-  bgNebulaA.addColorStop(.42,'rgba(184,167,255,.035)');
-  bgNebulaA.addColorStop(1,'rgba(0,0,0,0)');
-  bgNebulaB=ctx.createRadialGradient(W*.88,H*.72,12,W*.88,H*.72,260);
-  bgNebulaB.addColorStop(0,'rgba(101,230,193,.090)');
-  bgNebulaB.addColorStop(.48,'rgba(130,215,255,.028)');
-  bgNebulaB.addColorStop(1,'rgba(0,0,0,0)');
-  bgScanGradient=ctx.createLinearGradient(0,0,0,H);
-  bgScanGradient.addColorStop(0,'rgba(255,247,232,.020)');
-  bgScanGradient.addColorStop(.5,'rgba(255,255,255,0)');
-  bgScanGradient.addColorStop(1,'rgba(255,247,232,.014)');
-  hudTopGradient=ctx.createLinearGradient(0,0,0,HUD_T+16);
-  hudTopGradient.addColorStop(0,'rgba(10,11,13,.94)');
-  hudTopGradient.addColorStop(.72,'rgba(10,11,13,.70)');
-  hudTopGradient.addColorStop(1,'rgba(10,11,13,0)');
-  hudBottomGradient=ctx.createLinearGradient(0,H-HUD_B-18,0,H);
-  hudBottomGradient.addColorStop(0,'rgba(7,8,10,0)');
-  hudBottomGradient.addColorStop(.4,'rgba(7,8,10,.84)');
-  hudBottomGradient.addColorStop(1,'rgba(7,8,10,.98)');
-  pauseButtonGradient=ctx.createLinearGradient(PAUSE_BTN.x,PAUSE_BTN.y,PAUSE_BTN.x+PAUSE_BTN.w,PAUSE_BTN.y+PAUSE_BTN.h);
-  pauseButtonGradient.addColorStop(0,'rgba(255,247,232,.12)');
-  pauseButtonGradient.addColorStop(.55,'rgba(21,20,18,.84)');
-  pauseButtonGradient.addColorStop(1,'rgba(5,8,13,.92)');
-  bgLines=[];
-  for(let x=0;x<=W;x+=BG_GRID_STEP) bgLines.push({t:'v',x});
-  for(let y=0;y<=H;y+=BG_GRID_STEP) bgLines.push({t:'h',y});
-  bgStars=[];
-  for(let i=0;i<BG_STAR_COUNT;i++) bgStars.push({
-    x:Math.random()*W, y:Math.random()*H,
-    r:Math.random()*1.5+.25,
-    layer:Math.random()<.72?0:1,
-    phase:Math.random()*Math.PI*2,
-    spd:Math.random()*.018+.006
-  });
-  bgBeams=[];
-  for(let i=0;i<BG_BEAM_COUNT;i++) bgBeams.push({
-    x:-W+Math.random()*W*2,
-    y:Math.random()*H,
-    len:90+Math.random()*170,
-    spd:.12+Math.random()*.32,
-    a:.025+Math.random()*.045,
-    c:Math.random()<.55?'184,167,255':'101,230,193'
-  });
-}
-function drawBg(){
-  const t=(globalThis.performance?.now?.() ?? Date.now())*.001;
-  const reduced=state==='play'&&projectileLoad()>115;
-  ctx.fillStyle=bgBaseGradient; ctx.fillRect(0,0,W,H);
-
-  ctx.save();
-  ctx.globalCompositeOperation='lighter';
-  ctx.fillStyle=bgNebulaA;ctx.fillRect(0,0,W,H);
-  ctx.fillStyle=bgNebulaB;ctx.fillRect(0,0,W,H);
-  ctx.restore();
-
-  ctx.fillStyle='rgba(255,247,232,.025)';
-  for(let y=28;y<H;y+=88){
-    ctx.fillRect(0,y,W,1);
-    ctx.fillRect(24,y+14,W-48,1);
-  }
-
-  const gridShift=(t*7)%BG_GRID_STEP;
-  ctx.strokeStyle='rgba(184,167,255,0.030)'; ctx.lineWidth=.5;
-  for(const l of bgLines){
-    ctx.beginPath();
-    if(l.t==='v'){
-      const x=(l.x+Math.sin(t*.22+l.x*.04)*2);
-      ctx.moveTo(x,0);ctx.lineTo(x,H);
-    }else{
-      const y=(l.y+gridShift)%H;
-      ctx.moveTo(0,y);ctx.lineTo(W,y);
-    }
-    ctx.stroke();
-  }
-
-  if(!reduced){
-    ctx.strokeStyle='rgba(101,230,193,0.024)'; ctx.setLineDash([6,20]); ctx.lineWidth=1;
-    for(let i=-5;i<18;i++){
-      const o=i*80+(t*10)%80;
-      ctx.beginPath();ctx.moveTo(o,0);ctx.lineTo(o+H,H);ctx.stroke();
-    }
-    ctx.setLineDash([]);
-  }
-
-  ctx.save();
-  ctx.globalCompositeOperation='lighter';
-  if(!reduced){
-    for(const b of bgBeams){
-      const x=((b.x+t*b.spd*120)%(W+260))-130;
-      ctx.strokeStyle=`rgba(${b.c},${b.a})`;
-      ctx.lineWidth=1.2;
-      ctx.beginPath();
-      ctx.moveTo(x,b.y);
-      ctx.lineTo(x+b.len,b.y+b.len*.35);
-      ctx.stroke();
-    }
-  }
-  ctx.restore();
-
-  const starStep=reduced?2:1;
-  for(let i=0;i<bgStars.length;i+=starStep){
-    const s=bgStars[i];
-    s.phase+=s.spd;
-    const drift=s.layer?((t*9+s.x*.02)%H):0;
-    const y=s.layer?(s.y+drift)%H:s.y;
-    const a=(s.layer?.13:.08)+Math.abs(Math.sin(s.phase))*(s.layer?.22:.14);
-    ctx.fillStyle=`rgba(255,247,232,${a})`;
-    const d=Math.max(1,s.r*1.4);
-    ctx.fillRect(s.x-d*.5,y-d*.5,d,d);
-  }
-
-  if(!reduced){
-    ctx.fillStyle=bgScanGradient;
-    for(let y=(t*24)%24;y<H;y+=24) ctx.fillRect(0,y,W,1);
-  }
-
-  ctx.strokeStyle='rgba(184,167,255,0.18)'; ctx.lineWidth=1.1;
-  const L=22;
-  for(const[cx,cy,sx,sy] of BG_CORNERS){
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+sx*L,cy);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx,cy+sy*L);ctx.stroke();
+    particlesDirty = true;
+    syncParticleInstances();
   }
 }
 
-// ─────────────────────────────────────
-//  プレイヤー
-// ─────────────────────────────────────
-function drawPlayer(){
-  if(player.prevX!==player.x){
-    ctx.strokeStyle='rgba(0,240,255,.16)';
-    ctx.lineWidth=4;
-    ctx.beginPath();ctx.moveTo(player.prevX,player.prevY);ctx.lineTo(player.x,player.y);ctx.stroke();
+function pickEnemyType(){
+  if(state.wave !== unlockedEnemyWave){
+    unlockedEnemyWave = state.wave;
+    unlockedEnemyTypes = ENEMY_TYPES.filter(t => state.wave >= t.unlock);
   }
-  if(invincible>0&&Math.floor(invincible/5)%2===0) return;
-  drawCraft(player.x,player.y,.72);
-}
-function poly(points){
-  ctx.beginPath();
-  for(let i=0;i<points.length;i++){
-    const p=points[i];
-    i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]);
-  }
-  ctx.closePath();
-}
-const SHIP_BODY_POINTS={
-  standard:[[0,-28],[18,-8],[24,10],[13,23],[4,16],[0,28],[-4,16],[-13,23],[-24,10],[-18,-8]],
-  striker:[[0,-40],[10,-13],[30,16],[8,9],[0,30],[-8,9],[-30,16],[-10,-13]],
-  sniper:[[0,-46],[8,-18],[15,-5],[32,13],[9,10],[3,34],[-3,34],[-9,10],[-32,13],[-15,-5],[-8,-18]],
-  guardian:[[0,-24],[25,-14],[33,5],[22,28],[7,22],[0,34],[-7,22],[-22,28],[-33,5],[-25,-14]],
-  mirage:[[0,-34],[17,-12],[35,15],[12,7],[5,30],[0,20],[-5,30],[-12,7],[-35,15],[-17,-12]],
-  carrier:[[0,-27],[34,-2],[28,20],[11,16],[0,34],[-11,16],[-28,20],[-34,-2]],
-  vanguard:[[0,-31],[21,-15],[30,8],[18,27],[6,20],[0,31],[-6,20],[-18,27],[-30,8],[-21,-15]],
-  oracle:[[0,-30],[16,-18],[29,2],[20,25],[7,20],[0,30],[-7,20],[-20,25],[-29,2],[-16,-18]],
-  eclipse:[[0,-38],[26,-7],[38,19],[10,12],[0,32],[-10,12],[-38,19],[-26,-7]],
-  titan:[[0,-28],[28,-18],[38,4],[30,31],[10,28],[0,36],[-10,28],[-30,31],[-38,4],[-28,-18]],
-  dominion:[[0,-34],[24,-14],[38,7],[25,28],[9,22],[0,35],[-9,22],[-25,28],[-38,7],[-24,-14]],
-  astral:[[0,-38],[18,-22],[31,-2],[39,18],[14,14],[4,34],[0,25],[-4,34],[-14,14],[-39,18],[-31,-2],[-18,-22]],
-  singularity:[[0,-33],[20,-20],[34,0],[27,24],[10,22],[0,34],[-10,22],[-27,24],[-34,0],[-20,-20]],
-  aphelion:[[0,-45],[13,-18],[33,8],[28,25],[8,16],[0,36],[-8,16],[-28,25],[-33,8],[-13,-18]],
-  omega:[[0,-39],[24,-20],[40,8],[21,21],[12,36],[0,26],[-12,36],[-21,21],[-40,8],[-24,-20]],
-  ultima:[[0,-45],[17,-25],[34,-7],[42,17],[18,17],[7,38],[0,28],[-7,38],[-18,17],[-42,17],[-34,-7],[-17,-25]],
-};
-function mirrorLine(x1,y1,x2,y2){
-  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(-x1,y1);ctx.lineTo(-x2,y2);ctx.stroke();
-}
-function mirrorPoly(points){
-  poly(points);ctx.fill();ctx.stroke();
-  poly(points.map(p=>[-p[0],p[1]]));ctx.fill();ctx.stroke();
-}
-function mirrorDot(x,y,r){
-  ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();
-  ctx.beginPath();ctx.arc(-x,y,r,0,TAU);ctx.fill();
-}
-function drawShipDesignAccents(id,ship,core,lightCraft){
-  const t=frame*.025;
-  const glow=lightCraft?0:9;
-  ctx.save();
-  ctx.globalCompositeOperation='lighter';
-  ctx.strokeStyle=h2r(core.color,.72);
-  ctx.fillStyle=h2r(ship.color,.22);
-  ctx.lineWidth=1.4;
-  ctx.shadowColor=core.color;
-  ctx.shadowBlur=glow;
-  switch(id){
-    case 'standard':
-      mirrorLine(6,-18,15,14);
-      mirrorLine(12,2,22,9);
-      ctx.fillStyle=h2r(core.color,.22);
-      mirrorDot(13,16,3);
-      break;
-    case 'striker':
-      ctx.strokeStyle=HOYO_UI.rose;ctx.lineWidth=2.4;
-      ctx.beginPath();ctx.moveTo(0,-43);ctx.lineTo(0,-7);ctx.stroke();
-      mirrorLine(8,-14,28,17);
-      mirrorLine(5,-28,16,-8);
-      break;
-    case 'sniper':
-      ctx.strokeStyle=HOYO_UI.blue;ctx.lineWidth=2.2;
-      ctx.beginPath();ctx.moveTo(0,-52);ctx.lineTo(0,20);ctx.stroke();
-      mirrorLine(7,-25,17,2);
-      mirrorLine(12,8,29,13);
-      break;
-    case 'guardian':
-      ctx.fillStyle=h2r(HOYO_UI.blue,.18);ctx.strokeStyle=HOYO_UI.blue;ctx.lineWidth=1.5;
-      mirrorPoly([[12,-16],[31,2],[24,25],[16,18]]);
-      ctx.beginPath();ctx.arc(0,4,19,0,TAU);ctx.stroke();
-      break;
-    case 'mirage':
-      ctx.globalAlpha=.45;
-      ctx.strokeStyle=HOYO_UI.jade;ctx.lineWidth=1.2;
-      mirrorLine(18,-13,40,16);
-      mirrorLine(9,7,30,28);
-      ctx.globalAlpha=1;
-      ctx.strokeStyle=h2r(core.color,.75);
-      ctx.beginPath();ctx.arc(0,0,18,t,t+Math.PI*1.1);ctx.stroke();
-      break;
-    case 'carrier':
-      ctx.fillStyle=h2r(HOYO_UI.gold,.18);ctx.strokeStyle=HOYO_UI.gold;ctx.lineWidth=1.3;
-      mirrorPoly([[17,-3],[36,2],[27,18],[16,14]]);
-      ctx.fillStyle=HOYO_UI.jade;
-      mirrorDot(23,4,3.2);mirrorDot(18,16,2.6);
-      break;
-    case 'vanguard':
-      ctx.strokeStyle=HOYO_UI.blue;ctx.lineWidth=1.7;
-      mirrorLine(8,-24,25,7);
-      mirrorLine(12,18,29,7);
-      ctx.fillStyle=h2r(HOYO_UI.gold,.24);
-      mirrorPoly([[7,-22],[17,-15],[11,-4],[4,-9]]);
-      break;
-    case 'oracle':
-      ctx.strokeStyle=HOYO_UI.jade;ctx.lineWidth=1.4;
-      ctx.beginPath();ctx.arc(0,0,24,t,t+Math.PI*1.35);ctx.stroke();
-      ctx.beginPath();ctx.arc(0,0,32,-t,-t+Math.PI*.72);ctx.stroke();
-      ctx.fillStyle=HOYO_UI.jade;
-      mirrorDot(18,-4,2.6);mirrorDot(13,19,2.4);
-      break;
-    case 'eclipse':
-      ctx.strokeStyle='#b96cff';ctx.lineWidth=1.8;
-      mirrorLine(6,-28,35,18);
-      mirrorLine(13,2,40,22);
-      ctx.fillStyle=h2r('#b96cff',.20);
-      mirrorPoly([[10,-15],[33,6],[20,11],[5,-1]]);
-      break;
-    case 'titan':
-      ctx.fillStyle=h2r(HOYO_UI.blue,.20);ctx.strokeStyle=HOYO_UI.blue;ctx.lineWidth=1.7;
-      mirrorPoly([[13,-19],[35,1],[28,28],[13,24]]);
-      ctx.strokeStyle=HOYO_UI.gold;
-      mirrorLine(8,-8,24,-2);
-      mirrorLine(8,9,25,18);
-      break;
-    case 'dominion':
-      ctx.strokeStyle=HOYO_UI.rose;ctx.lineWidth=2.1;
-      for(const ox of [-13,0,13]){ctx.beginPath();ctx.moveTo(ox,-34);ctx.lineTo(ox,-49);ctx.stroke();}
-      mirrorLine(11,-18,33,6);
-      mirrorLine(16,10,38,8);
-      break;
-    case 'astral':
-      ctx.strokeStyle='#eef7ff';ctx.lineWidth=1.4;
-      mirrorLine(5,-31,36,18);
-      mirrorLine(15,-18,42,4);
-      mirrorLine(4,28,15,11);
-      ctx.fillStyle=HOYO_UI.gold;
-      mirrorDot(23,-3,2.4);
-      break;
-    case 'singularity':
-      ctx.strokeStyle=HOYO_UI.gold;ctx.lineWidth=1.3;
-      ctx.beginPath();ctx.ellipse(0,2,31,16,t,0,TAU);ctx.stroke();
-      ctx.beginPath();ctx.ellipse(0,2,18,31,-t*.7,0,TAU);ctx.stroke();
-      ctx.fillStyle=h2r('#b96cff',.28);
-      mirrorDot(22,14,3);
-      break;
-    case 'aphelion':
-      ctx.strokeStyle='#ff7a3d';ctx.lineWidth=2.2;
-      ctx.beginPath();ctx.moveTo(0,-51);ctx.lineTo(0,-4);ctx.stroke();
-      mirrorLine(8,-20,31,9);
-      mirrorLine(14,15,31,28);
-      ctx.strokeStyle=HOYO_UI.gold;ctx.lineWidth=1.1;
-      ctx.beginPath();ctx.arc(0,-9,25,Math.PI*.08,Math.PI*.92);ctx.stroke();
-      break;
-    case 'omega':
-      ctx.strokeStyle=HOYO_UI.jade;ctx.lineWidth=1.7;
-      mirrorLine(5,-34,39,9);
-      mirrorLine(7,31,28,16);
-      ctx.beginPath();ctx.arc(0,0,23,t,t+Math.PI*1.7);ctx.stroke();
-      ctx.strokeStyle=HOYO_UI.blue;
-      ctx.beginPath();ctx.arc(0,0,31,-t,-t+Math.PI*1.1);ctx.stroke();
-      break;
-    case 'ultima':
-      ctx.strokeStyle='#eef7ff';ctx.lineWidth=1.7;
-      mirrorLine(4,-38,42,17);
-      mirrorLine(12,-24,31,-5);
-      mirrorLine(6,35,17,15);
-      ctx.strokeStyle=HOYO_UI.gold;
-      ctx.beginPath();ctx.arc(0,-3,24,t,t+Math.PI*1.5);ctx.stroke();
-      ctx.beginPath();ctx.arc(0,-3,34,-t,-t+Math.PI*.9);ctx.stroke();
-      ctx.fillStyle=HOYO_UI.gold;
-      mirrorDot(17,-20,2.8);mirrorDot(27,8,2.4);
-      break;
-    default:
-      mirrorLine(8,-18,18,14);
-      mirrorLine(10,4,20,10);
-      break;
-  }
-  ctx.restore();
-}
-function drawCraft(x,y,s=1,overrideShipId=null,overrideCoreId=null,options={}){
-  const ship=overrideShipId?(SHIP_BY_ID[overrideShipId]||SHIP_DEFS[0]):activeShipDef();
-  const core=overrideCoreId?(CORE_BY_ID[overrideCoreId]||CORE_DEFS[0]):activeCoreDef();
-  const mount=options.mount || mountedForShip(ship.id);
-  ctx.save();
-  ctx.translate(x,y);
-  ctx.scale(s,s);
-  ctx.lineJoin='round';
-  const lightCraft=s<.85;
-  ctx.shadowColor=core.color;ctx.shadowBlur=lightCraft?5:18;
-
-  if(ship.id!=='coreOnly'){
-    ctx.fillStyle=h2r(ship.color,.16);
-    ctx.strokeStyle=ship.color;
-    ctx.lineWidth=2;
-    poly(SHIP_BODY_POINTS[ship.id] || SHIP_BODY_POINTS.standard);
-    ctx.fill();ctx.stroke();
-    drawShipDesignAccents(ship.id,ship,core,lightCraft);
-    const heavy=ship.id==='guardian'||ship.id==='titan'||ship.id==='dominion';
-    const wide=ship.id==='carrier'||ship.id==='omega'||ship.id==='ultima';
-    const engineY=heavy?17:(ship.id==='sniper'?19:10);
-    const engineX=wide?22:(heavy?18:14);
-    const engineH=heavy?11:(ship.id==='striker'?18:14);
-    ctx.fillStyle=h2r(ship.color,.28);
-    ctx.beginPath();ctx.ellipse(-engineX,engineY,wide?6:5,engineH,0,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.ellipse(engineX,engineY,wide?6:5,engineH,0,0,Math.PI*2);ctx.fill();
-    const turretN=(mount.turret||[]).length;
-    const armorN=(mount.armor||[]).length;
-    const droneN=(mount.drone||[]).length;
-    const boostN=(mount.coreBoost||[]).length;
-    ctx.strokeStyle='#ff6020';ctx.lineWidth=2;ctx.shadowColor='#ff6020';ctx.shadowBlur=lightCraft?0:(turretN?10:0);
-    for(let i=0;i<turretN;i++){
-      const ox=(i-(turretN-1)/2)*12;
-      ctx.beginPath();ctx.moveTo(ox,-22);ctx.lineTo(ox,-36);ctx.stroke();
-    }
-    ctx.strokeStyle='#66ccff';ctx.lineWidth=armorN?2.2:1;
-    for(let i=0;i<armorN;i++){
-      const side=i%2===0?-1:1;
-      ctx.beginPath();ctx.moveTo(side*18,-2);ctx.lineTo(side*25,14);ctx.lineTo(side*16,24);ctx.stroke();
-    }
-    ctx.fillStyle='#9cff6a';ctx.shadowColor='#9cff6a';ctx.shadowBlur=lightCraft?0:(droneN?10:0);
-    for(let i=0;i<droneN;i++){
-      const side=i%2===0?-1:1;
-      ctx.beginPath();ctx.arc(side*(30+Math.floor(i/2)*8),-2+Math.floor(i/2)*14,3.5,0,Math.PI*2);ctx.fill();
-    }
-    if(boostN>0){
-      ctx.strokeStyle='#cc00ff';ctx.shadowColor='#cc00ff';ctx.shadowBlur=lightCraft?0:12;ctx.lineWidth=1.5;
-      ctx.beginPath();ctx.arc(0,0,17,0,Math.PI*2);ctx.stroke();
-    }
-  }else{
-    ctx.strokeStyle=h2r(core.color,.7);
-    ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.arc(0,0,22,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.arc(0,0,30,frame*.02,Math.PI*1.35+frame*.02);ctx.stroke();
-    ctx.strokeStyle=h2r(core.color,.42);
-    ctx.lineWidth=1.1;
-    for(let i=0;i<3;i++){
-      const a=frame*.026+i*TAU/3;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a)*12,Math.sin(a)*12);
-      ctx.lineTo(Math.cos(a)*25,Math.sin(a)*25);
-      ctx.stroke();
-    }
-    ctx.fillStyle=h2r(core.color,.20);
-    mirrorPoly([[3,-18],[8,-6],[3,1]]);
-  }
-
-  ctx.shadowColor=core.color;ctx.shadowBlur=lightCraft?6:20;
-  ctx.fillStyle=h2r(core.color,.28);
-  ctx.beginPath();ctx.arc(0,0,12,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle=core.color;ctx.lineWidth=2;
-  ctx.beginPath();ctx.arc(0,0,12,0,Math.PI*2);ctx.stroke();
-  ctx.fillStyle='#e8e8f0';
-  ctx.beginPath();ctx.arc(0,0,3.5,0,Math.PI*2);ctx.fill();
-  ctx.restore();
-}
-function fireAtTarget(x,y,target,scale,kind){
-  if(!target) return;
-  const dx=target.x-x, dy=target.y-y, len=Math.hypot(dx,dy)||1;
-  const spd=bulletSpd()*.85;
-  spawnArrow(x,y,0,{vx:dx/len*spd,vy:dy/len*spd,damageScale:scale,life:140,kind});
-}
-function updateSupportUnits(){
-  const drones=supportDroneCount();
-  if(drones>0){
-    droneTimer++;
-    const n=drones;
-    if(droneTimer>=Math.max(10,34-n*2)){
-      droneTimer=0;
-      const droneScale=.42*purchasedDroneDamageMult();
-      for(let i=0;i<n;i++){
-        const a=frame*.028+i*TAU/n;
-        const x=player.x+Math.cos(a)*32, y=player.y+Math.sin(a)*32;
-        fireAtTarget(x,y,nearestEnemy(x,y,null,260),droneScale,'drone');
-      }
-    }
-  }
-  const bits=interceptorCount();
-  if(bits>0){
-    bitTimer++;
-    const n=bits;
-    if(bitTimer>=Math.max(8,28-n*2)){
-      bitTimer=0;
-      for(let i=0;i<n;i++){
-        const a=frame*-.04+i*TAU/n;
-        const x=player.x+Math.cos(a)*48, y=player.y+Math.sin(a)*48;
-        fireAtTarget(x,y,nearestEnemy(x,y,null,210),.32,'bit');
-      }
-    }
-  }
-}
-function drawSupportGroup(n,r,color,size,spin){
-  n=Math.min(10,n);
-  if(n<=0) return;
-  ctx.strokeStyle=h2r(color,.18);ctx.lineWidth=1;
-  ctx.beginPath();ctx.arc(player.x,player.y,r,0,TAU);ctx.stroke();
-  ctx.fillStyle=color;
-  for(let i=0;i<n;i++){
-    const a=frame*spin+i*TAU/n;
-    ctx.beginPath();ctx.arc(player.x+Math.cos(a)*r,player.y+Math.sin(a)*r,size,0,TAU);ctx.fill();
-  }
-}
-function drawSupportUnits(){
-  ctx.save();
-  drawSupportGroup(supportDroneCount(),32,'#66ccff',4,.028);
-  drawSupportGroup(interceptorCount(),48,'#e8e8f0',3,-.04);
-  ctx.restore();
-}
-function updateShield(){
-  const max=shieldMax();
-  if(max<=0){shield=0;shieldCooldown=0;return;}
-  if(shield>max) shield=max;
-  if(shield<max){
-    if(shieldCooldown>0) shieldCooldown--;
-    else shield++;
-  }
-}
-function drawShield(){
-  if(shield<=0) return;
-  ctx.save();
-  ctx.strokeStyle='rgba(0,240,255,.75)';
-  ctx.lineWidth=1.5;
-  for(let i=0;i<shield;i++){
-    ctx.beginPath();ctx.arc(player.x,player.y,24+i*5,0,TAU);ctx.stroke();
-  }
-  ctx.restore();
-}
-function drawStasisAura(){
-  if(specialLevels.stasisAura<=0) return;
-  ctx.save();
-  ctx.strokeStyle='rgba(136,170,255,.34)';
-  ctx.fillStyle='rgba(136,170,255,.045)';
-  ctx.beginPath();ctx.arc(player.x,player.y,stasisRadius(),0,TAU);ctx.fill();ctx.stroke();
-  ctx.restore();
-}
-function blockWithShield(){
-  if(shield<=0) return false;
-  shield--;
-  shieldCooldown=Math.max(120,SHIELD_DELAY-specialLevels.energyShield*12);
-  shake(6);
-  burst(player.x,player.y,'#00f0ff',18);
-  addFloat(player.x,player.y-30,'SHIELD','#00f0ff',12);
-  return true;
+  if(state.wave >= 100) return unlockedEnemyTypes[Math.floor(Math.random() * unlockedEnemyTypes.length)];
+  const top = unlockedEnemyTypes[unlockedEnemyTypes.length - 1];
+  return Math.random() < .55 ? top : unlockedEnemyTypes[Math.floor(Math.random() * unlockedEnemyTypes.length)];
 }
 
-// ─────────────────────────────────────
-//  矢
-// ─────────────────────────────────────
-function spawnArrow(x,y,angle,opts={}){
-  if(arrows.length>=MAX_ARROWS) return;
-  const spd=bulletSpd(), pw=specialLevels.powerShot>0;
-  const vx=opts.vx ?? Math.sin(angle)*spd;
-  const vy=opts.vy ?? -Math.cos(angle)*spd;
-  const speed=opts.speed??Math.hypot(vx,vy);
-  const life=opts.life??240;
-  const sizeScale=opts.sizeScale??1;
-  arrows.push({x,y,prevX:x,prevY:y,vx,vy,speed,pierced:0,pierceBonus:opts.pierceBonus??0,pw,ricocheted:0,split:opts.split??false,dist:0,life,scanPhase:(shotSeq+arrows.length)&3,damageScale:opts.damageScale??1,sizeScale,hitRadius:opts.hitRadius??(4*sizeScale),kind:opts.kind??'main'});
+function randomPipeAngle(){
+  return (Math.random() - .5) * TAU;
 }
-function fireArrows(){
-  shotSeq++;
-  const n=arrowCnt(), sp=n===1?0:Math.min(.7,.15*n);
-  const cx=player.x, cy=player.y-player.size;
-  const shipId=activeShipDef().id;
-  const sizeScale=gatlingBulletScale();
-  const scale=multiShotDamageScale(n)*gatlingDamageScale()*fireCompressionBoost();
-  for(let i=0;i<n;i++){
-    const off=n===1?0:(i/(n-1)-.5)*sp;
-    spawnArrow(cx,cy,off,{damageScale:scale,sizeScale,hitRadius:4*sizeScale});
-  }
-  if(shipId==='striker'&&shotSeq%4===0){
-    spawnArrow(cx,cy,0,{damageScale:scale*3.00,sizeScale:1.45,hitRadius:6.5,kind:'lance'});
-  }
-  if((shipId==='sniper'||hasMountedPart('railgun'))&&shotSeq%6===0){
-    spawnArrow(cx,cy,0,{damageScale:scale*(shipId==='sniper'?4.20:3.40),sizeScale:1.62,hitRadius:7.0,kind:'rail',pierceBonus:3});
-  }
-  if(hasMountedPart('cannon')&&shotSeq%3===0){
-    spawnArrow(cx,cy,0,{damageScale:scale*2.40,sizeScale:1.42,hitRadius:6.2,kind:'lance'});
-  }
-  if(hasMountedPart('barrel')&&shotSeq%5===0){
-    spawnArrow(cx-8,cy,.24,{damageScale:scale*.85,sizeScale:.82,hitRadius:3.4,kind:'needle'});
-    spawnArrow(cx+8,cy,-.24,{damageScale:scale*.85,sizeScale:.82,hitRadius:3.4,kind:'needle'});
-  }
-  playSfx('shot');
-}
-function splitArrow(a){
-  const lv=specialLevels.splitter;
-  if(lv<=0) return;
-  const n=Math.min(6,2+lv);
-  const base=Math.atan2(a.vx,-a.vy);
-  const spread=Math.min(1.4,.35+lv*.08);
-  const scale=splitDamageScale(a.damageScale,n);
-  for(let i=0;i<n;i++){
-    const off=n===1?0:(i/(n-1)-.5)*spread;
-    const sizeScale=Math.max(.55,(a.sizeScale??1)*.85);
-    spawnArrow(a.x,a.y,base+off,{kind:'split',split:true,damageScale:scale,sizeScale,hitRadius:3.2*sizeScale,life:120});
-  }
-  a.damageScale*=SPLIT_PARENT_RETENTION;
-  burst(a.x,a.y,'#b8a7ff',5);
-}
-function redirectArrowToEnemy(a,fromEnemy){
-  const target=nearestEnemy(a.x,a.y,fromEnemy,320);
-  if(!target) return false;
-  const spd=a.speed;
-  const dx=target.x-a.x, dy=target.y-a.y, len=Math.hypot(dx,dy)||1;
-  a.vx=dx/len*spd;
-  a.vy=dy/len*spd;
-  a.speed=spd;
-  a.ricocheted++;
-  return true;
-}
-function updateArrows(){
-  const hs=homingStr();
-  const homingMask=arrows.length>85?3:1;
-  for(let i=arrows.length-1;i>=0;i--){
-    const a=arrows[i];
-    if(hs>0&&enemies.length>0&&a.kind!=='split'&&((frame+(a.scanPhase||0))&homingMask)===0){
-      let near=null;
-      let nd2=240*240;
-      for(let ei=0;ei<enemies.length;ei++){
-        const e=enemies[ei];
-        if(e.dead) continue;
-        const dx=e.x-a.x, dy=e.y-a.y;
-        if(dx<-240||dx>240||dy<-240||dy>240) continue;
-        const d2=dx*dx+dy*dy;
-        if(d2<nd2){nd2=d2;near=e;}
-      }
-      if(near){
-        const dx=near.x-a.x,dy=near.y-a.y,len=Math.hypot(dx,dy)||1;
-        const spd=a.speed;
-        a.vx+=(dx/len)*hs*1.7; a.vy+=(dy/len)*hs*1.7;
-        const ns=Math.sqrt(a.vx*a.vx+a.vy*a.vy)||1;
-        a.vx=a.vx/ns*spd; a.vy=a.vy/ns*spd;
-      }
-    }
-    a.prevX=a.x;
-    a.prevY=a.y;
-    a.x+=a.vx; a.y+=a.vy;
-    a.dist+=a.speed;
-    a.life--;
-    if(specialLevels.ricochet>0&&(a.x<4||a.x>W-4)){a.vx*=-1;a.x=Math.max(4,Math.min(W-4,a.x));a.ricocheted++;}
-    if(specialLevels.splitter>0&&!a.split&&a.kind!=='split'&&a.dist>150){
-      splitArrow(a);
-      a.split=true;
-    }
-    if(a.life<=0||a.y<-ARROW_DESPAWN_MARGIN||a.y>H+ARROW_DESPAWN_MARGIN||a.x<-ARROW_DESPAWN_MARGIN||a.x>W+ARROW_DESPAWN_MARGIN) removeAtFast(arrows,i);
-  }
-}
-function drawArrows(){
-  const simple=projectileLoad()>125;
-  for(const a of arrows){
-    const palette=a.pw
-      ? {core:'#fff1d0',main:'#ff7a24',soft:'255,120,36'}
-      : a.kind==='split'
-        ? {core:'#e6fbff',main:'#b8a7ff',soft:'184,167,255'}
-        : a.kind==='drone'
-          ? {core:'#e8fbff',main:'#66ccff',soft:'102,204,255'}
-          : a.kind==='bit'
-            ? {core:'#ffffff',main:'#c8d8ff',soft:'200,216,255'}
-            : a.kind==='lance'
-              ? {core:'#eef7ff',main:'#ff3b62',soft:'255,59,98'}
-              : a.kind==='rail'
-                ? {core:'#ffffff',main:'#eef7ff',soft:'238,247,255'}
-              : a.kind==='needle'
-                ? {core:'#eef7ff',main:'#b8a7ff',soft:'184,167,255'}
-                : {core:'#e8fbff',main:'#00f0ff',soft:'0,240,255'};
-    const spd=a.speed||1;
-    const ux=a.vx/spd, uy=a.vy/spd, px=-uy, py=ux;
-    const sizeScale=a.sizeScale??1;
-    const tail=(a.pw?13:9)*sizeScale;
-    const wing=(a.pw?4.2:3)*sizeScale;
-    const len=(a.pw?10:7.5)*sizeScale;
-    const nose=(a.pw?4.2:2.8)*sizeScale;
-    const backX=a.x-ux*len, backY=a.y-uy*len;
-    const tailX=a.x-ux*tail, tailY=a.y-uy*tail;
 
-    if(simple&&(a.kind==='main'||a.kind==='drone'||a.kind==='bit'||a.kind==='needle')&&!a.pw){
-      ctx.fillStyle=palette.main;
-      const s=Math.max(2.4,3.2*sizeScale);
-      ctx.fillRect(a.x-s*.5,a.y-s*.5,s,s);
-      continue;
-    }
+function spawnInterval(){
+  return Math.max(.34, .95 - state.wave * .009) * (.82 + Math.random() * .38);
+}
 
-    ctx.strokeStyle=`rgba(${palette.soft},${a.pw?.40:.28})`;
-    ctx.lineWidth=(a.pw?2.4:1.5)*sizeScale;
-    ctx.beginPath();ctx.moveTo(a.prevX??tailX,a.prevY??tailY);ctx.lineTo(a.x-ux*2*sizeScale,a.y-uy*2*sizeScale);ctx.stroke();
+function waveDuration(){
+  return 10;
+}
 
-    ctx.fillStyle=palette.main;
-    ctx.beginPath();
-    ctx.moveTo(a.x+ux*nose,a.y+uy*nose);
-    ctx.lineTo(backX+px*wing,backY+py*wing);
-    ctx.lineTo(backX-px*wing,backY-py*wing);
-    ctx.closePath();
-    ctx.fill();
+function waveSeconds(){
+  return Math.max(0, Math.ceil(waveDuration() - state.waveTime));
+}
+
+function setPipePosition(object, angle, z, radial = .78){
+  object.position.set(
+    Math.sin(angle) * PIPE_RADIUS * radial,
+    -Math.cos(angle) * PIPE_RADIUS * radial,
+    z
+  );
+}
+
+function syncBulletInstances(){
+  if(!bulletsDirty) return;
+  const count = Math.min(bullets.length, MAX_BULLETS);
+  bulletMesh.count = count;
+  if(count === 0){
+    bulletsDirty = false;
+    return;
   }
-}
-function bossBulletDamage(tier){
-  return Math.ceil((BOSS_BULLET_BASE_DAMAGE+tier*BOSS_BULLET_DAMAGE_STEP)*Math.pow(1.026,wave-1));
-}
-const BOSS_ARCHETYPES=[
-  {id:'duelist',name:'SCARLET DUELIST',color:HOYO_UI.rose,shape:'hex',rgb:[255,59,98],hp:1.00,size:0,targetY:108,shot:1.00,move:'weave'},
-  {id:'helix',name:'HELIX ORACLE',color:HOYO_UI.gold,shape:'circle',rgb:[184,167,255],hp:1.12,size:-2,targetY:118,shot:.86,move:'orbit'},
-  {id:'sniper',name:'RAIL EXECUTOR',color:HOYO_UI.blue,shape:'tri',rgb:[30,214,255],hp:.92,size:-4,targetY:96,shot:.78,move:'stalker'},
-  {id:'wall',name:'BULWARK GATE',color:HOYO_UI.jade,shape:'rect',rgb:[54,243,155],hp:1.28,size:6,targetY:126,shot:1.08,move:'gate'},
-  {id:'warden',name:'GRAVITY WARDEN',color:'#b96cff',shape:'hex',rgb:[185,108,255],hp:1.45,size:4,targetY:112,shot:1.18,move:'drift'},
-];
-function bossArchetypeForWave(w=wave){
-  const tier=bossTierForWave(w);
-  return BOSS_ARCHETYPES[(tier-1)%BOSS_ARCHETYPES.length];
-}
-function spawnEnemyBullet(x,y,angle,speed,damage,size=5,color=HOYO_UI.rose,kind='aimed',extra=null){
-  if(enemyBullets.length>=MAX_ENEMY_BULLETS) removeAtFast(enemyBullets,0);
-  enemyBullets.push({
-    x,y,prevX:x,prevY:y,
-    vx:Math.cos(angle)*speed,
-    vy:Math.sin(angle)*speed,
-    speed,damage,size,color,kind,
-    life:220,
-    ...(extra||{})
-  });
-}
-function fireBossFan(boss,base,count,spread,speed,dmg,size,color,kind='aimed'){
   for(let i=0;i<count;i++){
-    const off=count===1?0:(i/(count-1)-.5)*spread;
-    spawnEnemyBullet(boss.x,boss.y+boss.size*.55,base+off,speed,dmg,size,color,kind);
+    const b = bullets[i];
+    bulletDummy.position.set(
+      b.sin * PIPE_RADIUS * b.radial,
+      -b.cos * PIPE_RADIUS * b.radial,
+      b.z
+    );
+    bulletDummy.rotation.set(0, 0, 0);
+    bulletDummy.scale.setScalar(1);
+    bulletDummy.updateMatrix();
+    bulletMesh.setMatrixAt(i, bulletDummy.matrix);
   }
-}
-function fireBossRing(boss,count,rot,speed,dmg,size,color,kind='ring',extra=null){
-  for(let i=0;i<count;i++) spawnEnemyBullet(boss.x,boss.y,rot+i*TAU/count,speed,dmg,size,color,kind,extra);
-}
-function fireBossPatternDuelist(boss,base,tier,dmg){
-  const count=Math.min(9,3+Math.floor(tier/3));
-  const spread=Math.min(.82,.18+tier*.035);
-  fireBossFan(boss,base,count,spread,2.1+tier*.13,dmg,5.2,boss.color,'aimed');
-  if(boss.volley%4===0){
-    fireBossRing(boss,Math.min(18,8+tier),frame*.035+boss.phase,1.55+tier*.07,Math.ceil(dmg*.72),4.4,HOYO_UI.gold,'ring');
-    shake(4);
-  }
-}
-function fireBossPatternHelix(boss,base,tier,dmg){
-  const arms=Math.min(4,2+Math.floor(tier/4));
-  const rot=frame*.085+boss.phase+boss.volley*.42;
-  for(let i=0;i<arms;i++){
-    const a=rot+i*TAU/arms;
-    spawnEnemyBullet(boss.x,boss.y,a,1.75+tier*.08,Math.ceil(dmg*.72),4.6,boss.color,'ring');
-    if(boss.volley%2===0) spawnEnemyBullet(boss.x,boss.y,a+Math.PI/(arms||1),1.22+tier*.05,Math.ceil(dmg*.58),3.8,HOYO_UI.gold,'ring');
-  }
-  if(boss.volley%3===0) fireBossFan(boss,base,3,.18,2.45+tier*.09,dmg,4.6,HOYO_UI.rose,'aimed');
-}
-function fireBossPatternSniper(boss,base,tier,dmg){
-  const speed=3.05+tier*.16;
-  const burstCount=3+(tier>=5?1:0);
-  for(let i=0;i<burstCount;i++){
-    const off=(i-(burstCount-1)/2)*.045;
-    spawnEnemyBullet(boss.x,boss.y+boss.size*.38,base+off,speed+i*.18,Math.ceil(dmg*1.25),4.2,boss.color,'needle',{life:190});
-  }
-  if(boss.volley%3===0){
-    const n=Math.min(8,4+Math.floor(tier/2));
-    for(let i=0;i<n;i++){
-      const x=28+i*(W-56)/Math.max(1,n-1);
-      const a=Math.PI/2+(Math.sin(frame*.04+i)*.10);
-      spawnEnemyBullet(x,42,a,2.15+tier*.08,Math.ceil(dmg*.72),3.8,HOYO_UI.gold,'needle',{life:230});
-    }
-    shake(5);
-  }
-}
-function fireBossPatternWall(boss,base,tier,dmg){
-  const lanes=Math.min(7,4+Math.floor(tier/3));
-  const gap=(W-68)/Math.max(1,lanes-1);
-  const offset=(boss.volley%2)*gap*.5;
-  for(let i=0;i<lanes;i++){
-    const x=34+((i*gap+offset)%(W-68));
-    const sway=(i%2?-.11:.11)+Math.sin(frame*.025+i)*.04;
-    spawnEnemyBullet(x,boss.y+boss.size*.15,Math.PI/2+sway,1.7+tier*.08,Math.ceil(dmg*.78),5.4,boss.color,'ring');
-  }
-  if(boss.volley%2===0) fireBossFan(boss,base,3,.34,2.35+tier*.07,dmg,4.8,HOYO_UI.rose,'aimed');
-}
-function fireBossPatternWarden(boss,base,tier,dmg){
-  const orbCount=Math.min(3,1+Math.floor(tier/3));
-  for(let i=0;i<orbCount;i++){
-    const a=base+(i-(orbCount-1)/2)*.24;
-    spawnEnemyBullet(boss.x,boss.y+boss.size*.4,a,1.55+tier*.045,Math.ceil(dmg*1.05),6.8,boss.color,'orb',{turn:.018,life:220});
-  }
-  if(boss.volley%3===0){
-    fireBossRing(boss,Math.min(14,8+tier),-frame*.045+boss.phase,1.18+tier*.05,Math.ceil(dmg*.66),4.7,HOYO_UI.gold,'ring');
-    shake(4);
-  }
-}
-function fireBossPattern(boss){
-  const tier=boss.tier || bossTierForWave();
-  const dx=player.x-boss.x, dy=player.y-boss.y;
-  const base=Math.atan2(dy,dx);
-  const dmg=bossBulletDamage(tier);
-  boss.volley=(boss.volley||0)+1;
-  if(boss.bossType==='helix') fireBossPatternHelix(boss,base,tier,dmg);
-  else if(boss.bossType==='sniper') fireBossPatternSniper(boss,base,tier,dmg);
-  else if(boss.bossType==='wall') fireBossPatternWall(boss,base,tier,dmg);
-  else if(boss.bossType==='warden') fireBossPatternWarden(boss,base,tier,dmg);
-  else fireBossPatternDuelist(boss,base,tier,dmg);
-  playSfx('shot');
-}
-function updateBoss(boss,slow=1){
-  const amp=Math.min(116,54+boss.tier*7);
-  let homeX=W/2+Math.sin(frame*.018+boss.phase)*amp;
-  if(boss.moveType==='orbit') homeX=W/2+Math.sin(frame*.026+boss.phase)*Math.min(130,74+boss.tier*8);
-  else if(boss.moveType==='stalker') homeX=Math.max(54,Math.min(W-54,player.x+Math.sin(frame*.035+boss.phase)*34));
-  else if(boss.moveType==='gate'){
-    boss.drift=(boss.drift||1);
-    homeX=boss.x+boss.drift*(1.2+boss.tier*.08);
-    if(homeX<54||homeX>W-54){boss.drift*=-1;homeX=Math.max(54,Math.min(W-54,homeX));}
-  }else if(boss.moveType==='drift') homeX=W/2+Math.sin(frame*.012+boss.phase)*Math.min(92,48+boss.tier*6)+Math.sin(frame*.037)*22;
-  boss.x+=(homeX-boss.x)*(boss.moveType==='gate'?.18:.022)*slow;
-  if(boss.y<boss.targetY) boss.y+=boss.vy*slow;
-  else boss.y+=Math.sin(frame*.045+boss.phase)*.18*slow;
-  boss.rot+=boss.rotSpd*slow;
-  if(boss.y<34) return;
-  boss.shotTimer=(boss.shotTimer??60)-slow;
-  if(boss.shotTimer<=0){
-    fireBossPattern(boss);
-    boss.shotTimer=Math.max(20,(68-boss.tier*4)*(boss.shotRate||1));
-  }
-}
-function updateEnemyBullets(){
-  for(let i=enemyBullets.length-1;i>=0;i--){
-    const b=enemyBullets[i];
-    b.prevX=b.x;
-    b.prevY=b.y;
-    if(b.turn&&(frame&1)===0){
-      const desired=Math.atan2(player.y-b.y,player.x-b.x);
-      const current=Math.atan2(b.vy,b.vx);
-      let diff=((desired-current+Math.PI*3)%TAU)-Math.PI;
-      diff=Math.max(-b.turn,Math.min(b.turn,diff));
-      const next=current+diff;
-      const speed=Math.hypot(b.vx,b.vy)||b.speed||1;
-      b.vx=Math.cos(next)*speed;
-      b.vy=Math.sin(next)*speed;
-    }
-    b.x+=b.vx;
-    b.y+=b.vy;
-    b.life--;
-    if(b.life<=0||b.x<-30||b.x>W+30||b.y<-40||b.y>H+44) removeAtFast(enemyBullets,i);
-  }
-}
-function drawEnemyBullets(){
-  ctx.save();
-  ctx.shadowBlur=0;
-  const simple=enemyBullets.length>64;
-  for(const b of enemyBullets){
-    const col=b.color||HOYO_UI.rose;
-    ctx.fillStyle=col;
-    if(simple){
-      const s=b.size*1.25;
-      ctx.fillRect(b.x-s*.5,b.y-s*.5,s,s);
-    }else if(b.kind==='orb'){
-      ctx.beginPath();
-      ctx.arc(b.x,b.y,b.size,0,TAU);
-      ctx.fill();
-    }else if(b.kind==='ring'){
-      const s=b.size*1.35;
-      ctx.fillRect(b.x-s*.5,b.y-s*.5,s,s);
-    }else if(b.kind==='needle'){
-      ctx.fillRect(b.x-b.size*1.55,b.y-b.size*.28,b.size*3.1,b.size*.56);
-    }else{
-      const s=b.size*1.15;
-      ctx.fillRect(b.x-s*.5,b.y-s*.5,s,s);
-    }
-  }
-  ctx.restore();
+  bulletMesh.instanceMatrix.needsUpdate = true;
+  bulletsDirty = false;
 }
 
-// ─────────────────────────────────────
-//  敵
-// ─────────────────────────────────────
-const SHAPES=['tri','rect','hex','circle'];
-const SHAPE_PROPS={
-  tri:    { hpMult:.8,  spdMult:1.3, sizeAdj:-2, rewardMult:.88, r:200,g:80, b:80  },
-  rect:   { hpMult:1.0, spdMult:1.0, sizeAdj:0,  rewardMult:1.00, r:80, g:160,b:220 },
-  hex:    { hpMult:1.6, spdMult:.8,  sizeAdj:4,  rewardMult:1.28, r:160,g:60, b:220 },
-  circle: { hpMult:.7,  spdMult:1.1, sizeAdj:-3, rewardMult:.76, r:220,g:160,b:40  },
-};
-function enemyHpCurve(wB){
-  const base=ENEMY_HP_BASE+wB*ENEMY_HP_LINEAR+wB*wB*ENEMY_HP_QUAD;
-  const early=Math.pow(ENEMY_HP_EXP,wB);
-  const late=Math.pow(ENEMY_HP_LATE_EXP,Math.max(0,wB-ENEMY_HP_LATE_START));
-  const brutal=Math.pow(ENEMY_HP_BRUTAL_EXP,Math.max(0,wB-ENEMY_HP_BRUTAL_START));
-  return base*early*late*brutal;
-}
-function bossTierForWave(w=wave){
-  return Math.max(1,Math.floor(w/BOSS_WAVE_INTERVAL));
-}
-function spawnBoss(){
-  const wB=wave-1, tier=bossTierForWave();
-  const type=bossArchetypeForWave(wave);
-  const size=Math.min(72,42+tier*3+(type.size||0));
-  const hpCurve=enemyHpCurve(wB);
-  const baseHp=Math.floor(hpCurve*(BOSS_HP_MULT+tier*3.5)*(type.hp||1));
-  const x=W/2, y=-size*2;
-  const scoreValue=Math.max(5000,Math.floor(baseHp*1.65+wave*900));
-  const xpValue=Math.max(120,Math.floor(80+wave*18+Math.sqrt(baseHp)*2.8));
-  const orbValue=Math.max(18,Math.floor(14+tier*4+Math.sqrt(baseHp)/80));
-  const contactDamage=Math.ceil((88+tier*22)*Math.pow(ENEMY_CONTACT_EXP,wB)*BOSS_CONTACT_MULT);
-  const [r,g,b]=type.rgb;
-  enemies.push({
-    x,y,vx:0,vy:.82,hp:baseHp,maxHp:baseHp,xpValue,scoreValue,orbValue,contactDamage,
-    hasCore:true,shape:type.shape,size,r,g,b,flash:0,rot:0,rotSpd:.014,dead:false,
-    boss:true,bossWave:wave,tier,bossType:type.id,bossName:type.name,color:type.color,moveType:type.move,
-    targetY:type.targetY,phase:Math.random()*TAU,shotTimer:80,shotRate:type.shot,volley:0,drift:Math.random()<.5?-1:1
-  });
-  waveBanner=150;
-  shake(9);
-  addFloat(W/2,112,`${type.name}  WAVE ${wave}`,type.color,16);
-  playSfx('dead');
-}
-function spawnEnemy(){
-  const wB=wave-1;
-  const shape=SHAPES[Math.floor(Math.random()*SHAPES.length)];
-  const p=SHAPE_PROPS[shape];
-  const base=12+Math.random()*14;
-  const size=Math.floor(base*(1+p.sizeAdj*.1));
-  const hpCurve=enemyHpCurve(wB);
-  const sizeScale=Math.max(.55,Math.min(1.75,size/20));
-  const hpSizeMult=Math.pow(sizeScale,1.55);
-  const rewardMult=p.rewardMult*Math.pow(sizeScale,1.05);
-  const hasCore=size>=(shape==='tri'?22:18);
-  const corelessMult=hasCore?1.12:.34;
-  const baseHp=Math.max(5,Math.floor((hpCurve+Math.random()*22)*p.hpMult*hpSizeMult*corelessMult));
-  const smallRewardScale=hasCore?1:.70;
-  const xpValue=Math.max(1,Math.floor((7+wave*2.4+Math.sqrt(baseHp)*1.45)*rewardMult*smallRewardScale));
-  const scoreValue=Math.max(8,Math.floor((baseHp*.90+wave*18)*rewardMult*smallRewardScale));
-  const orbValue=Math.max(1,Math.floor(1+Math.sqrt(baseHp)*rewardMult*smallRewardScale/5.6));
-  const contactDamage=Math.ceil((hasCore?28:10)*(1+wB*.055)*Math.pow(ENEMY_CONTACT_EXP,wB));
-  const spd=(1.08+Math.random()*.62+wB*.14)*p.spdMult;
-  const x=size+10+Math.random()*(W-(size+10)*2);
-  const rot=Math.random()*Math.PI*2;
-  const rotSpd=(Math.random()<.5?-1:1)*(.006+Math.random()*.012);
-  enemies.push({x,y:-size*2,vx:(Math.random()-.5)*.6,vy:spd,hp:baseHp,maxHp:baseHp,xpValue,scoreValue,orbValue,contactDamage,hasCore,shape,size,r:p.r,g:p.g,b:p.b,flash:0,rot,rotSpd,dead:false});
-}
-function enemySpawnInterval(){
-  return Math.max(34,118-wave*8);
-}
-function enemySpawnPackSize(){
-  return Math.min(11,1+Math.floor(wave/3)+Math.floor(wave/12));
-}
-function spawnEnemyPack(){
-  const room=Math.max(0,MAX_ACTIVE_ENEMIES-enemies.length);
-  const count=Math.min(enemySpawnPackSize(),room);
-  for(let i=0;i<count;i++) spawnEnemy();
-}
-function drawBossHpBar(e){
-  const pct=Math.max(0,Math.min(1,e.hp/e.maxHp));
-  const x=28,y=58,w=W-56,h=10;
-  const accent=e.color||HOYO_UI.rose;
-  ctx.save();
-  ctx.fillStyle='rgba(5,6,7,.82)';
-  ctx.fillRect(x,y,w,h);
-  const g=ctx.createLinearGradient(x,y,x+w,y);
-  g.addColorStop(0,accent);
-  g.addColorStop(.55,HOYO_UI.gold);
-  g.addColorStop(1,'#eef7ff');
-  ctx.fillStyle=g;
-  ctx.fillRect(x,y,w*pct,h);
-  ctx.strokeStyle=h2r(accent,.74);
-  ctx.lineWidth=1.2;
-  ctx.strokeRect(x-.5,y-.5,w+1,h+1);
-  ctx.font=`900 10px ${UI_FONT}`;
-  ctx.textAlign='center';
-  ctx.textBaseline='bottom';
-  ctx.fillStyle=HOYO_UI.text;
-  ctx.shadowColor=accent;
-  ctx.shadowBlur=5;
-  ctx.fillText(`${e.bossName||'BOSS'}  WAVE ${e.bossWave}`,W/2,y-4);
-  ctx.restore();
-}
-function drawEnemy(e){
-  const{x,y,size,shape,r,g,b,hp,maxHp,flash,rot=0}=e;
-  const fl=flash>0;
-  const hpPct=Math.max(0,Math.min(1,hp/maxHp));
-  const col=`rgb(${r},${g},${b})`;
-  const fill=fl?'rgba(255,255,255,.9)':`rgba(${r},${g},${b},.50)`;
-  ctx.save();
-  ctx.translate(x,y);
-  ctx.rotate(rot);
-  ctx.shadowColor=fl?'#fff':col; ctx.shadowBlur=fl?14:0;
-  ctx.strokeStyle=fl?'#fff':col;
-  ctx.fillStyle=fill;
-  ctx.lineWidth=1.4;
-  const hasCore=e.hasCore ?? size>=(shape==='tri'?22:18);
-  const bodyInner=hasCore?Math.max(10,size*.48):0;
-  const spokeFrom=hasCore?bodyInner:0;
-  ctx.shadowBlur=fl?14:(hasCore?6:2);
-
-  if(e.boss){
-    const pulse=.62+Math.sin(frame*.075+e.phase)*.38;
-    const accent=e.color||HOYO_UI.rose;
-    const reducedBossDetail=state==='play'&&projectileLoad()>115;
-    ctx.save();
-    ctx.shadowColor=accent;
-    ctx.shadowBlur=24;
-    ctx.strokeStyle=h2r(accent,.32+pulse*.28);
-    ctx.lineWidth=2.4;
-    ctx.beginPath();
-    ctx.arc(0,0,size+9+pulse*5,0,TAU);
-    ctx.stroke();
-    if(!reducedBossDetail){
-      ctx.rotate(-rot+frame*.013);
-      ctx.strokeStyle=h2r(e.bossType==='helix'?accent:HOYO_UI.gold,.30);
-      ctx.lineWidth=1.4;
-      const sigils=e.bossType==='sniper'?3:(e.bossType==='wall'?4:8);
-      for(let i=0;i<sigils;i++){
-        const a=i*TAU/sigils;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a)*(size+15),Math.sin(a)*(size+15));
-        ctx.lineTo(Math.cos(a+TAU/(sigils*2))*(size+24),Math.sin(a+TAU/(sigils*2))*(size+24));
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
-  }
-
-  if(shape==='circle'){
-    ctx.beginPath();ctx.arc(0,0,size,0,Math.PI*2);ctx.fill();ctx.stroke();
-    if(hasCore){
-      ctx.strokeStyle=`rgba(${r},${g},${b},.36)`;ctx.lineWidth=1;
-      ctx.beginPath();ctx.arc(0,0,(bodyInner+size)*.5,0,Math.PI*2);ctx.stroke();
-    }
-  }else{
-    const sides=shape==='tri'?3:(shape==='rect'?4:6);
-    const offset=shape==='rect'?Math.PI/4:(shape==='tri'?-Math.PI/2:-Math.PI/6);
-    ctx.beginPath();
-    for(let i=0;i<sides;i++){
-      const a=offset+i*Math.PI*2/sides;
-      i===0?ctx.moveTo(size*Math.cos(a),size*Math.sin(a)):ctx.lineTo(size*Math.cos(a),size*Math.sin(a));
-    }
-    ctx.closePath();ctx.fill();ctx.stroke();
-    if(hasCore){
-      ctx.strokeStyle=`rgba(${r},${g},${b},.42)`;ctx.lineWidth=1;
-      for(let i=0;i<sides;i++){
-        const a=offset+i*Math.PI*2/sides;
-        ctx.beginPath();
-        ctx.moveTo(spokeFrom*Math.cos(a),spokeFrom*Math.sin(a));
-        ctx.lineTo(size*Math.cos(a),size*Math.sin(a));
-        ctx.stroke();
-      }
-    }
-  }
-  ctx.rotate(-rot);
-  if(!hasCore){
-    ctx.restore();
-    if(e.flash>0) e.flash--;
+function syncParticleInstances(){
+  if(!particlesDirty) return;
+  const count = Math.min(particles.length, MAX_PARTICLES);
+  particleMesh.count = count;
+  if(count === 0){
+    particlesDirty = false;
     return;
   }
-  const coreY=0;
-  const coreR=Math.max(4.5,Math.min(8,size*.34));
-  const hpStage=hpPct>.66?3:(hpPct>.33?2:(hpPct>.12?1:0));
-  const coreScale=[.54,.68,.84,1][hpStage];
-  const coreColor=fl?'255,255,255':`${r},${g},${b}`;
-  ctx.shadowBlur=0;
-  ctx.fillStyle='rgba(6,6,14,.84)';
-  ctx.beginPath();ctx.arc(0,coreY,coreR+5,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle=`rgba(${coreColor},${hpStage===0?.34:.48})`;
-  ctx.lineWidth=1.2;
-  ctx.beginPath();ctx.arc(0,coreY,coreR+4,0,Math.PI*2);ctx.stroke();
-  ctx.fillStyle=`rgba(${coreColor},${hpStage===0?.48:.82})`;
-  ctx.beginPath();ctx.arc(0,coreY,coreR*coreScale,0,Math.PI*2);ctx.fill();
-  if(hpStage>=2){
-    ctx.strokeStyle='rgba(232,232,240,.18)';ctx.lineWidth=1;
-    ctx.beginPath();ctx.arc(0,coreY,coreR*(hpStage===3?1.35:1.18),0,Math.PI*2);ctx.stroke();
-  }
-  if(hpStage<=1){
-    ctx.strokeStyle=`rgba(${coreColor},.72)`;ctx.lineWidth=1;
-    const crack=coreR*(hpStage===0?.95:.72);
-    ctx.beginPath();ctx.moveTo(-crack*.55,coreY-crack*.36);ctx.lineTo(-crack*.12,coreY+crack*.08);ctx.lineTo(crack*.18,coreY-crack*.02);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(crack*.52,coreY-crack*.28);ctx.lineTo(crack*.18,coreY+crack*.18);ctx.lineTo(crack*.46,coreY+crack*.42);ctx.stroke();
-  }
-  if(hpStage===0){
-    ctx.fillStyle=`rgba(${coreColor},.34)`;
-    ctx.fillRect(-coreR*.9,coreY+coreR*.95,coreR*.55,1);
-    ctx.fillRect(coreR*.25,coreY-coreR*1.1,coreR*.62,1);
-  }
-  ctx.restore();
-  if(e.boss) drawBossHpBar(e);
-  if(e.flash>0) e.flash--;
-}
-
-// ─────────────────────────────────────
-//  パーティクル
-// ─────────────────────────────────────
-function burst(x,y,color,n){
-  const cnt=Math.min(Math.ceil(n*.45*effectLoadScale()), MAX_PARTICLES-particles.length);
-  for(let i=0;i<cnt;i++){
-    const angle=Math.random()*Math.PI*2, spd=1+Math.random()*3.5;
-    particles.push({x,y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,life:28+Math.random()*22,maxLife:50,color,size:1.5+Math.random()*2});
-  }
-}
-function updateParticles(){
-  for(let i=particles.length-1;i>=0;i--){
-    const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vx*=.89;p.vy*=.89;p.life--;
-    if(p.life<=0) removeAtFast(particles,i);
-  }
-}
-function drawParticles(){
-  for(const p of particles){
-    ctx.globalAlpha=p.life/p.maxLife; ctx.fillStyle=p.color;
-    const s=p.size;
-    ctx.fillRect(p.x-s*.5,p.y-s*.5,s,s);
-  }
-  ctx.globalAlpha=1;
-}
-
-// ─────────────────────────────────────
-//  EPオーブ
-// ─────────────────────────────────────
-function spawnEpOrbs(x,y,n){
-  const cnt=Math.min(Math.ceil(n*effectLoadScale()), MAX_EP_ORBS-epOrbs.length);
-  for(let i=0;i<cnt;i++){
-    const angle=Math.random()*Math.PI*2, spd=1.5+Math.random()*2.5;
-    epOrbs.push({x,y,prevX:x,prevY:y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,delay:6+Math.floor(Math.random()*16),size:2.3+Math.random()*1.5});
-  }
-}
-function updateEpOrbs(){
-  for(let i=epOrbs.length-1;i>=0;i--){
-    const o=epOrbs[i];
-    o.prevX=o.x;
-    o.prevY=o.y;
-    const dx=player.x-o.x, dy=player.y-o.y, dist2=dx*dx+dy*dy;
-    if(dist2<16*16 || (dist2<28*28 && o.vx*o.vx+o.vy*o.vy>7*7)){
-      removeAtFast(epOrbs,i);
-      continue;
-    }
-    if(o.delay>0){o.delay--;o.vx*=.86;o.vy*=.86;}
-    else{
-      const dist=Math.sqrt(dist2)||1;
-      const pull=Math.min(1.8,.75+dist/140);
-      o.vx+=(dx/dist)*pull; o.vy+=(dy/dist)*pull;
-      const s2=o.vx*o.vx+o.vy*o.vy;if(s2>10*10){const s=Math.sqrt(s2);o.vx=o.vx/s*10;o.vy=o.vy/s*10;}
-    }
-    o.x+=o.vx; o.y+=o.vy;
-    if(distSq(o.x,o.y,player.x,player.y)<20*20) removeAtFast(epOrbs,i);
-  }
-}
-function drawEpOrbs(){
-  for(const o of epOrbs){
-    ctx.strokeStyle='rgba(0,220,100,.24)';
-    ctx.lineWidth=Math.max(1,o.size*.55);
-    ctx.beginPath();ctx.moveTo(o.prevX,o.prevY);ctx.lineTo(o.x,o.y);ctx.stroke();
-    ctx.fillStyle='#66ffbb';
-    ctx.beginPath();ctx.arc(o.x,o.y,o.size,0,Math.PI*2);ctx.fill();
-  }
-}
-
-// ─────────────────────────────────────
-//  フローティングテキスト
-// ─────────────────────────────────────
-function updateFloatTexts(){
-  for(let i=floatTexts.length-1;i>=0;i--){
-    const t=floatTexts[i];t.y+=t.vy;t.life--;
-    if(t.life<=0) removeAtFast(floatTexts,i);
-  }
-}
-function drawFloatTexts(){
-  for(const t of floatTexts){
-    ctx.globalAlpha=t.life/t.maxLife;
-    ctx.save();
-    ctx.font=`bold ${t.size}px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif`;
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=t.color;ctx.fillText(t.text,t.x,t.y);
-    ctx.restore();
-  }
-  ctx.globalAlpha=1;
-}
-
-// ─────────────────────────────────────
-//  ゲーム内アップグレード
-// ─────────────────────────────────────
-function basicSkillDef(id){
-  return BASIC_STAT_BY_ID[id] || BASIC_STAT_DEFS[0];
-}
-function basicSkillNodeAt(cx,cy){
-  for(let i=0;i<BASIC_STAT_DEFS.length;i++){
-    const r=upgradeCardRect(i);
-    if(cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h) return { id:BASIC_STAT_DEFS[i].id };
-  }
-  return null;
-}
-function basicSkillUnlocked(n){
-  return !!n;
-}
-function basicSkillValue(id){
-  if(id==='fireRate') return fireRateReadout();
-  if(id==='regen') return `${regenPerSec().toFixed(1)}HP/s`;
-  if(id==='critChance') return critReadout();
-  if(id==='critDamage') return fmtMult(critDamage());
-  if(id==='hp') return fmtMult(maxHp/100);
-  if(id==='range') return `${Math.round(damageFalloffRange())}`;
-  return fmtMult(statMult(id));
-}
-function applyBasicSkill(id){
-  const d=basicSkillDef(id);
-  const gainText=basicGainText(id);
-  statLevels[id]++;
-  if(id==='hp'){
-    const oldMax=maxHp;
-    maxHp=Math.ceil(maxHp*BASIC_STAT_GROWTH);
-    hp=Math.min(maxHp,hp+(maxHp-oldMax));
-  }
-  shake(5);
-  burst(player.x,player.y,d.color,16);
-  playSfx('upgrade');
-  addFloat(player.x,player.y-30,`${d.icon} ${d.name} ${gainText}`,d.color,12);
-}
-function spendBasicSkill(id){
-  const d=basicSkillDef(id);
-  if(!d || skillPoints<=0) return false;
-  skillPoints--;
-  applyBasicSkill(id);
-  return true;
-}
-function grantSkillPoint(amount=1){
-  skillPoints+=amount;
-  addFloat(W/2,116,`SP +${amount}`,'#b8a7ff',13);
-  playSfx('special');
-}
-function openSkillTree(){
-  if(state!=='play') return;
-  state='skillTree';
-  stopTouchMove();
-  activePointerId=null;
-  playSfx('select');
-}
-function closeSkillTree(){
-  state='play';
-  playSfx('select');
-}
-function hitSkillOpen(cx,cy){
-  return cx>=SKILL_BTN.x&&cx<=SKILL_BTN.x+SKILL_BTN.w&&cy>=SKILL_BTN.y&&cy<=SKILL_BTN.y+SKILL_BTN.h;
-}
-function hitSkillClose(cx,cy){
-  return cx>=SKILL_CLOSE_BTN.x&&cx<=SKILL_CLOSE_BTN.x+SKILL_CLOSE_BTN.w&&cy>=SKILL_CLOSE_BTN.y&&cy<=SKILL_CLOSE_BTN.y+SKILL_CLOSE_BTN.h;
-}
-function handleSkillTreeClick(cx,cy){
-  const n=basicSkillNodeAt(cx,cy);
-  if(n){
-    if(spendBasicSkill(n.id)) return true;
-    const d=basicSkillDef(n.id);
-    addFloat(W/2,H-112,'SP不足',d.color,11);
-    shake(3);
-    return true;
-  }
-  if(hitSkillClose(cx,cy)){closeSkillTree();return true;}
-  return false;
-}
-function rollBasicUpgradeOptions(){
-  let pool=BASIC_STAT_DEFS.filter(d=>d.id!=='critDamage'||effectiveStatLevel('critChance')>0);
-  if(pool.length<3) pool=[...BASIC_STAT_DEFS];
-  pool=[...pool];
-  for(let i=pool.length-1;i>0;i--){
-    const j=Math.floor(Math.random()*(i+1));
-    [pool[i],pool[j]]=[pool[j],pool[i]];
-  }
-  return pool.slice(0,3);
-}
-function spawnUpgradeZones(){
-  if(upgradeZones.length>0) return;
-  const xs=[W*.22,W*.5,W*.78];
-  const opts=rollBasicUpgradeOptions();
-  upgradeZones=opts.map((d,i)=>({
-    id:d.id,
-    x:xs[i]-UPGRADE_ZONE.w/2,
-    y:-UPGRADE_ZONE.h,
-    w:UPGRADE_ZONE.w,
-    h:UPGRADE_ZONE.h,
-    vy:UPGRADE_ZONE.vy,
-    pulse:Math.random()*Math.PI*2
-  }));
-  addFloat(W/2,118,'ベースアップ','#e8e8f0',10);
-}
-function upgradeZoneHit(z){
-  const nx=Math.max(z.x+8,Math.min(player.x,z.x+z.w-8));
-  const ny=Math.max(z.y+8,Math.min(player.y,z.y+z.h-8));
-  return Math.hypot(player.x-nx,player.y-ny)<player.size+3;
-}
-function updateUpgradeZones(){
-  if(upgradeZones.length===0) return;
-  for(const z of upgradeZones){
-    z.y+=z.vy;
-    z.pulse+=.08;
-    if(upgradeZoneHit(z)){
-      const d=basicSkillDef(z.id);
-      applyBasicSkill(z.id);
-      burst(z.x+z.w/2,z.y+z.h/2,d.color,18);
-      addFloat(W/2,132,'ベースアップ',d.color,11);
-      upgradeZones=[];
-      return;
-    }
-  }
-  if(upgradeZones.every(z=>z.y>UPGRADE_ZONE.missY)){
-    upgradeZones=[];
-    addFloat(W/2,132,'取り逃し','rgba(232,232,240,.70)',11);
-  }
-}
-function drawUpgradeZones(){
-  if(upgradeZones.length===0) return;
-  ctx.save();
-  const minX=Math.min(...upgradeZones.map(z=>z.x));
-  const maxX=Math.max(...upgradeZones.map(z=>z.x+z.w));
-  const y=upgradeZones[0].y;
-  const h=upgradeZones[0].h;
-  const topFade=ctx.createLinearGradient(0,y-28,0,y+16);
-  topFade.addColorStop(0,'rgba(6,6,14,0)');
-  topFade.addColorStop(1,'rgba(6,6,14,.64)');
-  ctx.fillStyle=topFade;ctx.fillRect(0,y-28,W,44);
-  ctx.fillStyle='rgba(6,6,14,.42)';ctx.fillRect(0,y+16,W,h-32);
-  const bottomFade=ctx.createLinearGradient(0,y+h-16,0,y+h+28);
-  bottomFade.addColorStop(0,'rgba(6,6,14,.64)');
-  bottomFade.addColorStop(1,'rgba(6,6,14,0)');
-  ctx.fillStyle=bottomFade;ctx.fillRect(0,y+h-16,W,44);
-  ctx.strokeStyle='rgba(232,232,240,.08)';
-  ctx.lineWidth=1;
-  ctx.beginPath();
-  ctx.moveTo(minX-12,y+13);ctx.lineTo(maxX+12,y+13);
-  ctx.moveTo(minX-12,y+h-13);ctx.lineTo(maxX+12,y+h-13);
-  ctx.stroke();
-
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-  ctx.fillStyle='rgba(232,232,240,.30)';
-  ctx.fillText('ベースアップをセレクト',W/2,y+4);
-
-  for(const z of upgradeZones){
-    const d=basicSkillDef(z.id), lv=statLevels[z.id]||0;
-    const cx=z.x+z.w/2;
-    const pulse=.5+Math.sin(z.pulse)*.5;
-    const x=z.x+6, yy=z.y+18, w=z.w-12, hh=z.h-28;
-    const card=ctx.createLinearGradient(0,yy,0,yy+hh);
-    card.addColorStop(0,h2r(d.color,.11+pulse*.03));
-    card.addColorStop(.42,'rgba(12,16,26,.90)');
-    card.addColorStop(1,'rgba(5,7,12,.90)');
-    ctx.fillStyle=card;
-    ctx.fillRect(x,yy,w,hh);
-    ctx.strokeStyle=h2r(d.color,.52+pulse*.18);
-    ctx.lineWidth=1.5;
-    ctx.strokeRect(x,yy,w,hh);
-
-    ctx.fillStyle=h2r(d.color,.70+pulse*.14);
-    ctx.fillRect(x,yy,4,hh);
-    ctx.fillRect(x,yy,w,2);
-    ctx.strokeStyle='rgba(232,232,240,.055)';
-    ctx.lineWidth=.8;
-    for(let ly=yy+10;ly<yy+hh-8;ly+=10){
-      ctx.beginPath();
-      ctx.moveTo(x+10,ly);
-      ctx.lineTo(x+w-10,ly);
-      ctx.stroke();
-    }
-
-    const ringR=23+pulse*1.6;
-    ctx.beginPath();
-    ctx.arc(cx,yy+34,ringR,0,Math.PI*2);
-    ctx.fillStyle=h2r(d.color,.10+pulse*.03);
-    ctx.fill();
-    ctx.strokeStyle=h2r(d.color,.46+pulse*.20);
-    ctx.lineWidth=1.2;
-    ctx.stroke();
-
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.font=d.icon.length>1?'bold 24px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif':'31px serif';
-    ctx.fillStyle=h2r(d.color,.95);
-    ctx.shadowColor=d.color;ctx.shadowBlur=6+pulse*4;
-    ctx.fillText(d.icon,cx,yy+34);
-    ctx.shadowBlur=0;
-
-    ctx.font='bold 9px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-    ctx.fillStyle='rgba(232,232,240,.62)';
-    ctx.fillText(d.name,cx,yy+62);
-
-    const pillW=58,pillH=15,pillX=cx-pillW/2,pillY=yy+hh-20;
-    rr(pillX,pillY,pillW,pillH,3);
-    ctx.fillStyle='rgba(232,232,240,.055)';
-    ctx.fill();
-    ctx.strokeStyle=h2r(d.color,.26);
-    ctx.lineWidth=1;
-    rr(pillX,pillY,pillW,pillH,3);
-    ctx.stroke();
-    ctx.font='bold 10px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-    ctx.fillStyle=h2r(d.color,.78);
-    ctx.fillText(`Lv.${lv}  ${basicGainText(z.id,lv)}`,cx,pillY+pillH/2+1);
-  }
-  ctx.restore();
-}
-function drawSkillTree(){
-  ctx.save();
-  ctx.fillStyle='rgba(5,6,7,.97)';
-  ctx.fillRect(0,0,W,H);
-
-  const bg=ctx.createLinearGradient(0,0,W,H);
-  bg.addColorStop(0,'rgba(184,167,255,.13)');
-  bg.addColorStop(.38,'rgba(30,214,255,.045)');
-  bg.addColorStop(.72,'rgba(255,59,98,.040)');
-  bg.addColorStop(1,'rgba(5,6,7,0)');
-  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle='rgba(238,247,255,.045)';ctx.lineWidth=1;
-  for(let y=34;y<H;y+=44){
-    ctx.beginPath();ctx.moveTo(26,y);ctx.lineTo(W-26,y);ctx.stroke();
-  }
-  ctx.strokeStyle='rgba(30,214,255,.050)';
-  for(let i=-5;i<13;i++){
-    const x=i*56;
-    ctx.beginPath();ctx.moveTo(x,86);ctx.lineTo(x+H*.42,H-98);ctx.stroke();
-  }
-
-  ctx.fillStyle=HOYO_UI.gold;
-  cutPanel(0,0,182,58,14);ctx.fill();
-  ctx.fillStyle=HOYO_UI.ink;
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 24px ${DISPLAY_FONT}`;
-  ctx.fillText('アップグレード',18,28);
-  ctx.font=`900 10px ${UI_FONT}`;
-  ctx.fillText('タクティカルノード',18,50);
-
-  drawCutPanel(W-166,12,68,28,skillPoints>0?HOYO_UI.gold:HOYO_UI.blue,skillPoints>0);
-  drawCutPanel(W-90,12,72,28,HOYO_UI.blue,false);
-  ctx.textAlign='center';
-  ctx.font=`900 11px ${UI_FONT}`;ctx.fillStyle=skillPoints>0?HOYO_UI.gold:HOYO_UI.muted;
-  ctx.fillText(`SP ${skillPoints}`,W-132,27);
-  ctx.fillStyle=HOYO_UI.blue;
-  ctx.fillText(`WAVE ${wave}`,W-54,27);
-
-  const panelX=14, panelY=76, panelW=W-28, panelH=512;
-  drawCutPanel(panelX,panelY,panelW,panelH,HOYO_UI.blue,false);
-  ctx.save();
-  ctx.beginPath();ctx.rect(panelX,panelY,panelW,panelH);ctx.clip();
-  const scan=((globalThis.performance?.now?.() ?? Date.now())*.08)%panelH;
-  const scanG=ctx.createLinearGradient(0,panelY+scan-34,0,panelY+scan+34);
-  scanG.addColorStop(0,'rgba(30,214,255,0)');
-  scanG.addColorStop(.5,'rgba(30,214,255,.055)');
-  scanG.addColorStop(1,'rgba(30,214,255,0)');
-  ctx.fillStyle=scanG;ctx.fillRect(panelX,panelY+scan-34,panelW,68);
-  ctx.restore();
-
-  const hovered=BASIC_SKILL_TREE.find(n=>Math.hypot(mouseX-n.x,mouseY-n.y)<=34);
-  const focused=hovered || BASIC_SKILL_TREE.find(n=>basicSkillUnlocked(n)&&skillPoints>0) || BASIC_SKILL_TREE[0];
-
-  ctx.lineCap='round';
-  for(const n of BASIC_SKILL_TREE){
-    if(!n.requires) continue;
-    const p=BASIC_SKILL_TREE.find(v=>v.id===n.requires);
-    const parentActive=statLevels[n.requires]>0;
-    const childActive=(statLevels[n.id]||0)>0;
-    const color=childActive?basicSkillDef(n.id).color:(parentActive?HOYO_UI.gold:'rgba(238,247,255,.25)');
-    ctx.strokeStyle=parentActive?h2r(color,.62):'rgba(238,247,255,.13)';
-    ctx.lineWidth=parentActive?3.2:1.4;
-    ctx.shadowColor=parentActive?color:'transparent';
-    ctx.shadowBlur=parentActive?8:0;
-    ctx.beginPath();
-    ctx.moveTo(p.x,p.y+30);
-    const midY=(p.y+n.y)/2;
-    ctx.lineTo(p.x,midY);
-    ctx.lineTo(n.x,midY);
-    ctx.lineTo(n.x,n.y-31);
-    ctx.stroke();
-    ctx.shadowBlur=0;
-    ctx.fillStyle=parentActive?h2r(color,.82):'rgba(238,247,255,.18)';
-    ctx.beginPath();ctx.arc(n.x,midY,3.2,0,Math.PI*2);ctx.fill();
-  }
-
-  for(const n of BASIC_SKILL_TREE){
-    const d=basicSkillDef(n.id), lv=statLevels[n.id]||0;
-    const unlocked=basicSkillUnlocked(n), can=unlocked&&skillPoints>0;
-    const active=lv>0, hov=hovered===n;
-    ctx.save();
-    ctx.globalAlpha=unlocked?1:.58;
-    const nodeColor=active?d.color:(can?HOYO_UI.gold:d.color);
-    const r=hov?31:28;
-    ctx.shadowColor=nodeColor;ctx.shadowBlur=can?(hov?20:12):(active?8:0);
-    ctx.beginPath();ctx.arc(n.x,n.y,r+7,0,Math.PI*2);
-    ctx.fillStyle=h2r(nodeColor,can?.12:(active?.10:.045));ctx.fill();
-    ctx.strokeStyle=h2r(nodeColor,can?.55:(active?.44:.18));ctx.lineWidth=1.4;ctx.stroke();
-    ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);
-    ctx.fillStyle=active?h2r(d.color,.18):(can?'rgba(184,167,255,.16)':'rgba(238,247,255,.045)');
-    ctx.fill();
-    ctx.strokeStyle=can?HOYO_UI.gold:(active?h2r(d.color,.72):'rgba(238,247,255,.22)');
-    ctx.lineWidth=can?2.3:1.3;ctx.stroke();
-    ctx.shadowBlur=0;
-
-    cutPanel(n.x-19,n.y-16,38,32,8);
-    ctx.fillStyle=active?h2r(d.color,.92):(can?HOYO_UI.gold:'rgba(238,247,255,.18)');
-    ctx.fill();
-    ctx.fillStyle=active||can?HOYO_UI.ink:HOYO_UI.faint;
-    ctx.font=`900 12px ${UI_FONT}`;
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(d.icon,n.x,n.y+1);
-
-    const cardW=88, cardH=34, cardX=n.x-cardW/2, cardY=n.y+35;
-    cutPanel(cardX,cardY,cardW,cardH,7);
-    ctx.fillStyle=hov?'rgba(238,247,255,.12)':'rgba(8,10,10,.70)';
-    ctx.fill();
-    ctx.strokeStyle=can?HOYO_UI.goldSoft:(active?h2r(d.color,.44):'rgba(238,247,255,.13)');
-    ctx.lineWidth=1;cutPanel(cardX,cardY,cardW,cardH,7);ctx.stroke();
-    ctx.font=`900 11px ${UI_FONT}`;ctx.fillStyle=unlocked?HOYO_UI.text:'rgba(238,247,255,.52)';
-    ctx.fillText(statName(n.id),n.x,cardY+12);
-    ctx.font=`900 10px ${UI_FONT}`;
-    ctx.fillStyle=active?d.color:(can?HOYO_UI.gold:'rgba(238,247,255,.42)');
-    ctx.fillText(`Lv.${lv}  ${basicSkillValue(n.id)}`,n.x,cardY+25);
-
-    if(!unlocked || can){
-      const tag=!unlocked?'ロック':`+${basicGainText(n.id,lv)}`;
-      const tw=Math.min(70,Math.max(48,ctx.measureText(tag).width+14));
-      cutPanel(n.x-tw/2,n.y-48,tw,18,5);
-      ctx.fillStyle=!unlocked?'rgba(238,247,255,.08)':'rgba(184,167,255,.18)';ctx.fill();
-      ctx.strokeStyle=!unlocked?'rgba(238,247,255,.15)':HOYO_UI.goldSoft;ctx.lineWidth=1;cutPanel(n.x-tw/2,n.y-48,tw,18,5);ctx.stroke();
-      ctx.font=`900 9px ${UI_FONT}`;ctx.fillStyle=!unlocked?HOYO_UI.faint:HOYO_UI.gold;
-      ctx.fillText(tag,n.x,n.y-38);
-    }
-    ctx.restore();
-  }
-
-  if(focused){
-    const d=basicSkillDef(focused.id), lv=statLevels[focused.id]||0;
-    const infoX=22, infoY=594, infoW=W-44, infoH=42;
-    drawCutPanel(infoX,infoY,infoW,infoH,d.color,basicSkillUnlocked(focused));
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=d.color;
-    ctx.fillText(statName(focused.id).toUpperCase(),infoX+14,infoY+14);
-    ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-    const status=basicSkillUnlocked(focused)?(skillPoints>0?'アップ可能':'SP不足'):'ロック';
-    ctx.fillText(`${status} / Lv.${lv} / ${basicSkillValue(focused.id)} / 次 ${basicGainText(focused.id,lv)}`,infoX+14,infoY+30);
-  }
-
-  const bx=SKILL_CLOSE_BTN.x, by=H-48, bw=SKILL_CLOSE_BTN.w, bh=34;
-  drawCutPanel(bx,by,bw,bh,HOYO_UI.gold,false);
-  ctx.font=`900 14px ${UI_FONT}`;
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText('戻る',W/2,by+bh/2+1);
-  ctx.restore();
-}
-function drawSkillTreeV2(){
-  ctx.save();
-  ctx.fillStyle='rgba(5,6,7,.98)';
-  ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='rgba(238,247,255,.035)';
-  for(let y=78;y<620;y+=34) ctx.fillRect(18,y,W-36,1);
-  ctx.fillStyle='rgba(184,167,255,.88)';
-  ctx.fillRect(0,0,5,H);
-
-  ctx.fillStyle='rgba(10,13,15,.96)';
-  ctx.fillRect(0,0,W,86);
-  ctx.strokeStyle='rgba(238,247,255,.16)';
-  ctx.beginPath();ctx.moveTo(0,86);ctx.lineTo(W,86);ctx.stroke();
-
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 28px ${DISPLAY_FONT}`;
-  ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText('アップグレード',18,28);
-  ctx.font=`bold 11px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('SPでベース能力をアップ。距離補正もここで強化できます。',18,55);
-
-  drawCutPanel(W-162,12,70,28,skillPoints>0?HOYO_UI.gold:HOYO_UI.blue,skillPoints>0);
-  drawCutPanel(W-84,12,66,28,HOYO_UI.blue,false);
-  ctx.textAlign='center';
-  ctx.font=`900 11px ${UI_FONT}`;
-  ctx.fillStyle=skillPoints>0?HOYO_UI.gold:HOYO_UI.muted;
-  ctx.fillText(`SP ${skillPoints}`,W-127,27);
-  ctx.fillStyle=HOYO_UI.blue;
-  ctx.fillText(`WAVE ${wave}`,W-51,27);
-
-  const hovered=basicSkillNodeAt(mouseX,mouseY);
-  const focused=hovered || BASIC_SKILL_TREE.find(n=>basicSkillUnlocked(n)&&skillPoints>0) || BASIC_SKILL_TREE[0];
-
-  ctx.save();
-  ctx.lineCap='round';
-  ctx.lineJoin='round';
-  for(const n of BASIC_SKILL_TREE){
-    if(!n.requires) continue;
-    const p=BASIC_SKILL_TREE.find(v=>v.id===n.requires);
-    if(!p) continue;
-    const d=basicSkillDef(n.id);
-    const parentActive=statLevels[n.requires]>0;
-    const childActive=(statLevels[n.id]||0)>0;
-    const x1=p.x+SKILL_NODE_W/2, y1=p.y+SKILL_NODE_H;
-    const x2=n.x+SKILL_NODE_W/2, y2=n.y;
-    const midY=(y1+y2)/2;
-    ctx.strokeStyle=childActive?h2r(d.color,.76):(parentActive?h2r(HOYO_UI.gold,.52):'rgba(238,247,255,.12)');
-    ctx.lineWidth=childActive?3:(parentActive?2.2:1.2);
-    ctx.beginPath();
-    ctx.moveTo(x1,y1);
-    ctx.lineTo(x1,midY);
-    ctx.lineTo(x2,midY);
-    ctx.lineTo(x2,y2);
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  for(const n of BASIC_SKILL_TREE){
-    const d=basicSkillDef(n.id), lv=statLevels[n.id]||0;
-    const unlocked=basicSkillUnlocked(n);
-    const can=unlocked&&skillPoints>0;
-    const active=lv>0;
-    const hov=hovered===n;
-    drawCutPanel(n.x,n.y,SKILL_NODE_W,SKILL_NODE_H,d.color,can||hov);
-    ctx.globalAlpha=unlocked?1:.52;
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    drawStatusTag(n.x+10,n.y+11,38,24,d.icon,d.color,active||can);
-    ctx.font=`900 13px ${UI_FONT}`;
-    ctx.fillStyle=HOYO_UI.text;
-    ctx.fillText(statName(n.id),n.x+58,n.y+18);
-    ctx.font=`900 10px ${UI_FONT}`;
-    ctx.fillStyle=active?d.color:(can?HOYO_UI.gold:HOYO_UI.faint);
-    ctx.fillText(`Lv.${lv}  ${basicSkillValue(n.id)}`,n.x+58,n.y+36);
-    ctx.textAlign='right';
-    ctx.font=`900 10px ${UI_FONT}`;
-    const stateText=!unlocked?'ロック':(can?`+${basicGainText(n.id,lv)}`:'SP不足');
-    ctx.fillStyle=!unlocked?HOYO_UI.faint:(can?HOYO_UI.gold:HOYO_UI.muted);
-    ctx.fillText(stateText,n.x+SKILL_NODE_W-10,n.y+51);
-    if(!unlocked&&n.requires){
-      ctx.textAlign='left';
-      ctx.font=`bold 9px ${UI_FONT}`;
-      ctx.fillStyle='rgba(238,247,255,.36)';
-      ctx.fillText(`要 ${statName(n.requires)}`,n.x+58,n.y+50);
-    }
-    ctx.globalAlpha=1;
-  }
-
-  if(focused){
-    const d=basicSkillDef(focused.id), lv=statLevels[focused.id]||0;
-    const infoX=18, infoY=488, infoW=W-36, infoH=112;
-    drawCutPanel(infoX,infoY,infoW,infoH,d.color,basicSkillUnlocked(focused));
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    drawStatusTag(infoX+14,infoY+15,46,30,d.icon,d.color,true);
-    ctx.font=`900 18px ${UI_FONT}`;
-    ctx.fillStyle=HOYO_UI.text;
-    ctx.fillText(statName(focused.id),infoX+72,infoY+28);
-    ctx.font=`900 11px ${UI_FONT}`;
-    ctx.fillStyle=d.color;
-    ctx.fillText(`現在 Lv.${lv} / ${basicSkillValue(focused.id)}`,infoX+72,infoY+51);
-    ctx.font=`bold 12px ${UI_FONT}`;
-    ctx.fillStyle=HOYO_UI.muted;
-    const status=basicSkillUnlocked(focused)?(skillPoints>0?'カードをタップしてアップ':'SPが必要です'):`先に ${statName(focused.requires)} をアップ`;
-    ctx.fillText(status,infoX+18,infoY+78);
-    ctx.fillStyle=HOYO_UI.gold;
-    ctx.fillText(`次の効果: ${basicGainText(focused.id,lv)}`,infoX+18,infoY+96);
-  }
-
-  drawCutPanel(SKILL_CLOSE_BTN.x,SKILL_CLOSE_BTN.y,SKILL_CLOSE_BTN.w,SKILL_CLOSE_BTN.h,HOYO_UI.gold,false);
-  ctx.font=`900 14px ${UI_FONT}`;
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText('戻る',W/2,SKILL_CLOSE_BTN.y+SKILL_CLOSE_BTN.h/2+1);
-  ctx.restore();
-}
-function upgradeCardRect(i){
-  const col=i%2, row=Math.floor(i/2);
-  return {
-    x:UPGRADE_CARD.x+col*(UPGRADE_CARD.w+UPGRADE_CARD.gapX),
-    y:UPGRADE_CARD.y+row*(UPGRADE_CARD.h+UPGRADE_CARD.gapY),
-    w:UPGRADE_CARD.w,
-    h:UPGRADE_CARD.h
-  };
-}
-function drawFrozenPlayScene(){
-  ctx.save();
-  drawBg();
-  drawArrows();
-  for(const e of enemies){
-    const flash=e.flash;
-    drawEnemy(e);
-    e.flash=flash;
-  }
-  drawEnemyBullets();
-  drawEpOrbs();
-  drawStasisAura();
-  drawSupportUnits();
-  drawShield();
-  drawPlayer();
-  drawParticles();
-  ctx.restore();
-  drawHUDZZZ();
-}
-function drawUpgradeDrawer(){
-  const p=UPGRADE_PANEL;
-  ctx.save();
-  ctx.fillStyle='rgba(0,0,0,.42)';
-  ctx.fillRect(0,0,W,p.y);
-  ctx.fillStyle='rgba(5,6,7,.96)';
-  ctx.fillRect(0,p.y,W,H-p.y);
-  ctx.strokeStyle='rgba(238,247,255,.20)';
-  ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(0,p.y+.5);ctx.lineTo(W,p.y+.5);ctx.stroke();
-
-  drawCutPanel(p.x,p.y+8,p.w,p.h-8,HOYO_UI.gold,false);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 22px ${DISPLAY_FONT}`;
-  ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText('アップグレード',22,p.y+31);
-  ctx.font=`bold 11px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('SPで好きな能力をアップ。接続条件はありません。',22,p.y+54);
-
-  drawCutPanel(W-172,p.y+14,68,28,skillPoints>0?HOYO_UI.gold:HOYO_UI.blue,skillPoints>0);
-  ctx.textAlign='center';ctx.font=`900 11px ${UI_FONT}`;
-  ctx.fillStyle=skillPoints>0?HOYO_UI.gold:HOYO_UI.muted;
-  ctx.fillText(`SP ${skillPoints}`,W-138,p.y+29);
-  drawCutPanel(SKILL_CLOSE_BTN.x,SKILL_CLOSE_BTN.y,SKILL_CLOSE_BTN.w,SKILL_CLOSE_BTN.h,HOYO_UI.blue,false);
-  ctx.fillStyle=HOYO_UI.blue;
-  ctx.fillText('閉じる',SKILL_CLOSE_BTN.x+SKILL_CLOSE_BTN.w/2,SKILL_CLOSE_BTN.y+SKILL_CLOSE_BTN.h/2+1);
-
-  const hovered=basicSkillNodeAt(mouseX,mouseY);
-  for(let i=0;i<BASIC_STAT_DEFS.length;i++){
-    const d=BASIC_STAT_DEFS[i], lv=statLevels[d.id]||0;
-    const r=upgradeCardRect(i);
-    const can=skillPoints>0, hov=hovered?.id===d.id;
-    drawCutPanel(r.x,r.y,r.w,r.h,d.color,can||hov);
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    drawStatusTag(r.x+8,r.y+9,35,24,d.icon,d.color,lv>0||can);
-    ctx.font=`900 12px ${UI_FONT}`;
-    ctx.fillStyle=HOYO_UI.text;
-    ctx.fillText(statName(d.id),r.x+52,r.y+15);
-    ctx.font=`900 10px ${UI_FONT}`;
-    ctx.fillStyle=lv>0?d.color:HOYO_UI.muted;
-    ctx.fillText(`Lv.${lv} / ${basicSkillValue(d.id)}`,r.x+52,r.y+31);
-    ctx.textAlign='right';
-    ctx.font=`900 10px ${UI_FONT}`;
-    ctx.fillStyle=can?HOYO_UI.gold:HOYO_UI.faint;
-    ctx.fillText(can?`+${basicGainText(d.id,lv)}`:'SP不足',r.x+r.w-9,r.y+31);
-  }
-
-  const focused=hovered || {id:BASIC_STAT_DEFS[0].id};
-  const fd=basicSkillDef(focused.id), flv=statLevels[focused.id]||0;
-  const iy=H-56;
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=fd.color;
-  ctx.fillText(statName(focused.id),22,iy);
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(`現在 ${basicSkillValue(focused.id)} / 次 ${basicGainText(focused.id,flv)}`,116,iy);
-  ctx.restore();
-}
-
-// ─────────────────────────────────────
-//  Unique Ability
-// ─────────────────────────────────────
-const SC={w:116, h:250, gap:7, y:226};
-const RR={w:128,h:30,y:586};
-const PAUSE_BTN={x:8,y:6,w:88,h:30};
-const PAUSE_MENU={
-  panelX:14,panelY:214,panelW:W-28,panelH:462,
-  buttons:[
-    {id:'resume',label:'再開',sub:'プレイに戻る',icon:'▶',color:HOYO_UI.gold},
-    {id:'stats',label:'ベースステータス',sub:'アップ値をチェック',icon:'◆',color:HOYO_UI.blue},
-    {id:'settings',label:'オプション',sub:'操作とサウンド',icon:'OP',color:'#9fc7aa'},
-    {id:'home',label:'ホーム',sub:'トークンを受け取る',icon:'⌂',color:'#ff2d78'},
-  ]
-};
-Object.assign(PAUSE_MENU.buttons[0],{label:'再開',sub:'バトルに戻る',icon:'>>',color:HOYO_UI.blue});
-Object.assign(PAUSE_MENU.buttons[1],{label:'ステータス',sub:'バトル性能をチェック',icon:'ST',color:HOYO_UI.gold});
-Object.assign(PAUSE_MENU.buttons[2],{label:'オプション',sub:'操作とサウンド',icon:'OP',color:HOYO_UI.jade});
-Object.assign(PAUSE_MENU.buttons[3],{label:'ホーム',sub:'トークンを精算して終了',icon:'HM',color:HOYO_UI.rose});
-const SKILL_BTN={x:136,y:H-30,w:118,h:22};
-const UPGRADE_PANEL={x:8,y:H-386,w:W-16,h:372};
-const UPGRADE_CARD={x:18,y:H-318,w:170,h:42,gapX:14,gapY:8};
-const SKILL_CLOSE_BTN={x:W-94,y:UPGRADE_PANEL.y+14,w:76,h:28};
-const TOUCH_PAD={y:H-204,w:104,h:70,edge:12};
-const TOUCH_STICK={idleX:W/2,y:H-166,baseR:37,knobR:15,max:34,dead:.16};
-const hasTouchInput = (navigator.maxTouchPoints || 0) > 0 || (window.matchMedia?.('(pointer: coarse)').matches ?? false);
-function specialCandidatePool(){
-  const owned=ownedSpecialCount();
-  return SPECIAL_DEFS.filter(d=>specialLevels[d.id]<10&&(specialLevels[d.id]>0||owned<MAX_SPECIAL_TYPES));
-}
-function rollSpecialOptions(avoidCurrent=false){
-  const current=new Set(pendingSpecials.map(d=>d.id));
-  let available=specialCandidatePool();
-  if(avoidCurrent&&available.length>3){
-    const fresh=available.filter(d=>!current.has(d.id));
-    if(fresh.length>=3) available=fresh;
-  }
-  for(let i=available.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[available[i],available[j]]=[available[j],available[i]];}
-  return available.slice(0,Math.min(3,available.length));
-}
-function triggerSpecial(){
-  pendingSpecials=rollSpecialOptions();
-  if(pendingSpecials.length===0){xpLevel++;xp=0;return;}
-  playSfx('special');
-  state='specialUpgrade';
-}
-function rerollSpecials(){
-  if(coins<REROLL_COST){
-    addFloat(W/2,310,`トークン ${REROLL_COST} 必要`,'#b8a7ff',11);
-    shake(3);
-    return;
-  }
-  const next=rollSpecialOptions(true);
-  if(next.length===0) return;
-  coins-=REROLL_COST;
-  pendingSpecials=next;
-  shake(4);
-  burst(W/2,330,'#b8a7ff',14);
-}
-function hitReroll(cx,cy){
-  return cx>=W/2-RR.w/2&&cx<=W/2+RR.w/2&&cy>=RR.y&&cy<=RR.y+RR.h;
-}
-function specialHelpText(id,lv){
-  const next=lv+1;
-  const map={
-    multiShot:`同時に${1+next}方向へ撃つ。弾幕密度が上がる。`,
-    homing:`弾が敵を追尾する。動く敵へ当てやすい。`,
-    piercing:`弾が敵を${next}体まで貫通する。列に強い。`,
-    powerShot:`メインショットのダメージが${next*30}%上がる。`,
-    gatling:`連射速度を上げる。弾は軽くなるが手数が増える。`,
-    supportDrone:`支援ドローンが${next}機、周囲から射撃する。`,
-    explosive:`ヒット時に爆風を発生。密集した敵へ有効。`,
-    ricochet:`弾が壁で${next}回反射する。画面内を制圧する。`,
-    chainLightning:`ヒット時に電撃が${next+1}体へ連鎖する。`,
-    adrenaline:`耐久が低いほど火力と連射が上がる。`,
-    statSynergy:`弾速アップを火力へ変換する。ビルド連携用。`,
-    stasisAura:`近距離の敵をスローにする防衛フィールド。`,
-    energyShield:`一定時間ごとにシールドを展開する。`,
-    splitter:`弾が分裂して複数の小弾になる。面制圧向き。`,
-    interceptor:`迎撃ビットが近い敵を自動で狙う。`
-  };
-  return map[id] || 'バトル中の性能をアップする。';
-}
-function drawWrappedCenter(text,x,y,maxChars,lineH,maxLines,color=HOYO_UI.muted){
-  const chars=Array.from(String(text));
-  const lines=[];
-  for(let i=0;i<chars.length&&lines.length<maxLines;i+=maxChars){
-    lines.push(chars.slice(i,i+maxChars).join(''));
-  }
-  ctx.fillStyle=color;
-  ctx.textAlign='center';
-  ctx.textBaseline='middle';
-  for(let i=0;i<lines.length;i++) ctx.fillText(lines[i],x,y+i*lineH);
-}
-function drawSpecialSilhouette(id,cx,cy,s,color,active=false){
-  ctx.save();
-  ctx.translate(cx,cy);
-  ctx.fillStyle=active?color:h2r(color,.86);
-  ctx.strokeStyle=active?HOYO_UI.text:color;
-  ctx.lineWidth=Math.max(1.4,s*.07);
-  ctx.lineJoin='round';
-  ctx.lineCap='round';
-  const path=pts=>{
-    ctx.beginPath();
-    pts.forEach((p,i)=>i?ctx.lineTo(p[0]*s,p[1]*s):ctx.moveTo(p[0]*s,p[1]*s));
-    ctx.closePath();
-    ctx.fill();
-  };
-  const blade=(x,y,rot=0,scale=1)=>{
-    ctx.save();ctx.translate(x*s,y*s);ctx.rotate(rot);ctx.scale(scale,scale);
-    path([[0,-.62],[.18,-.08],[.07,.48],[-.07,.48],[-.18,-.08]]);
-    ctx.restore();
-  };
-  if(id==='multiShot'){
-    blade(-.30,-.02,-.22,.74);blade(0,-.08,0,.86);blade(.30,-.02,.22,.74);
-  }else if(id==='homing'){
-    ctx.beginPath();ctx.arc(0,0,s*.44,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.arc(0,0,s*.15,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.moveTo(-s*.55,0);ctx.lineTo(-s*.25,0);ctx.moveTo(s*.25,0);ctx.lineTo(s*.55,0);ctx.moveTo(0,-s*.55);ctx.lineTo(0,-s*.25);ctx.moveTo(0,s*.25);ctx.lineTo(0,s*.55);ctx.stroke();
-  }else if(id==='piercing'){
-    path([[0,-.66],[.17,-.18],[.09,.56],[-.09,.56],[-.17,-.18]]);
-    ctx.strokeRect(-s*.34,s*.10,s*.68,s*.12);
-  }else if(id==='powerShot'){
-    path([[0,-.62],[.44,0],[0,.62],[-.44,0]]);
-    ctx.strokeRect(-s*.18,-s*.18,s*.36,s*.36);
-  }else if(id==='gatling'){
-    for(let i=-1;i<=1;i++){ctx.fillRect(i*s*.20-s*.055,-s*.56,s*.11,s*.78);}
-    ctx.beginPath();ctx.arc(0,s*.28,s*.22,0,Math.PI*2);ctx.fill();
-  }else if(id==='supportDrone'){
-    ctx.beginPath();ctx.arc(0,0,s*.24,0,Math.PI*2);ctx.fill();
-    path([[-.58,-.08],[-.30,-.22],[-.26,.16],[-.56,.24]]);
-    path([[.58,-.08],[.30,-.22],[.26,.16],[.56,.24]]);
-  }else if(id==='explosive'){
-    for(let i=0;i<8;i++){const a=i*Math.PI/4;ctx.beginPath();ctx.moveTo(Math.cos(a)*s*.18,Math.sin(a)*s*.18);ctx.lineTo(Math.cos(a)*s*.58,Math.sin(a)*s*.58);ctx.stroke();}
-    ctx.beginPath();ctx.arc(0,0,s*.22,0,Math.PI*2);ctx.fill();
-  }else if(id==='ricochet'){
-    ctx.beginPath();ctx.moveTo(-s*.55,s*.40);ctx.lineTo(-s*.12,-s*.10);ctx.lineTo(s*.18,s*.18);ctx.lineTo(s*.55,-s*.42);ctx.stroke();
-    blade(s*.58/s,-s*.42/s,.68,.42);
-  }else if(id==='chainLightning'){
-    path([[-.08,-.62],[.30,-.12],[.08,-.12],[.24,.62],[-.32,.02],[-.05,.02]]);
-  }else if(id==='adrenaline'){
-    path([[0,-.62],[.38,-.08],[.20,.54],[-.20,.54],[-.38,-.08]]);
-    ctx.fillStyle=HOYO_UI.ink;ctx.fillRect(-s*.05,-s*.18,s*.10,s*.46);
-  }else if(id==='statSynergy'){
-    ctx.beginPath();ctx.arc(-s*.22,0,s*.24,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.arc(s*.22,0,s*.24,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.arc(0,0,s*.12,0,Math.PI*2);ctx.fill();
-  }else if(id==='stasisAura'){
-    ctx.beginPath();ctx.arc(0,0,s*.50,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.arc(0,0,s*.28,0,Math.PI*2);ctx.stroke();
-    ctx.fillRect(-s*.06,-s*.42,s*.12,s*.84);
-  }else if(id==='energyShield'){
-    path([[0,-.60],[.46,-.36],[.34,.32],[0,.62],[-.34,.32],[-.46,-.36]]);
-    ctx.fillStyle=HOYO_UI.ink;ctx.beginPath();ctx.arc(0,-s*.04,s*.18,0,Math.PI*2);ctx.fill();
-  }else if(id==='splitter'){
-    blade(0,-.32,0,.58);
-    blade(-.34,.25,-.55,.46);
-    blade(.34,.25,.55,.46);
-    ctx.beginPath();ctx.moveTo(0,-s*.04);ctx.lineTo(-s*.24,s*.18);ctx.moveTo(0,-s*.04);ctx.lineTo(s*.24,s*.18);ctx.stroke();
-  }else if(id==='interceptor'){
-    path([[0,-.56],[.24,-.04],[.54,.12],[.16,.26],[0,.56],[-.16,.26],[-.54,.12],[-.24,-.04]]);
-  }else{
-    path([[0,-.58],[.50,.28],[0,.52],[-.50,.28]]);
-  }
-  ctx.restore();
-}
-function drawSpecialScreen(){
-  ctx.save();
-  ctx.fillStyle='rgba(4,6,12,.96)'; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='rgba(184,167,255,.055)'; ctx.fillRect(0,0,W,110);
-  ctx.fillStyle=HOYO_UI.goldSoft; ctx.fillRect(0,0,W,1);
-
-  ctx.font=`900 25px ${DISPLAY_FONT}`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.shadowColor=HOYO_UI.gold; ctx.shadowBlur=5; ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText('特殊アップグレード',W/2,32); ctx.shadowBlur=0;
-  ctx.font=`bold 12px ${UI_FONT}`; ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('3つの候補から1つセレクト。選ぶとバトルへ戻ります。',W/2,60);
-  ctx.font=`bold 12px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText(`セット済み ${ownedSpecialCount()}/${MAX_SPECIAL_TYPES}   トークン ${coins}`,W/2,80);
-
-  const ownedUnique=SPECIAL_DEFS.filter(d=>specialLevels[d.id]>0);
-  const slotW=60, slotH=28, slotGap=7;
-  const slotsX=(W-(slotW*MAX_SPECIAL_TYPES+slotGap*(MAX_SPECIAL_TYPES-1)))/2;
-  const slotsY=92;
-  for(let i=0;i<MAX_SPECIAL_TYPES;i++){
-    const d=ownedUnique[i];
-    const x=slotsX+i*(slotW+slotGap);
-    const color=d?.color || '#e8e8f0';
-    rr(x,slotsY,slotW,slotH,4);
-    ctx.fillStyle=d?'rgba(238,247,255,.075)':'rgba(238,247,255,.030)';ctx.fill();
-    ctx.strokeStyle=d?h2r(HOYO_UI.gold,.42):HOYO_UI.line;ctx.lineWidth=1;rr(x,slotsY,slotW,slotH,4);ctx.stroke();
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    if(d){
-      drawSpecialSilhouette(d.id,x+slotW/2,slotsY+11,13,color,true);
-      ctx.font=`bold 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-      ctx.fillText(`Lv.${specialLevels[d.id]}`,x+slotW/2,slotsY+21);
-    }else{
-      ctx.font=`bold 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
-      ctx.fillText('空き',x+slotW/2,slotsY+slotH/2);
-    }
-  }
-
-  const n=pendingSpecials.length;
-  const{w:cw,h:ch,gap,y:cardY}=SC;
-  const sx=(W-(cw*n+gap*(n-1)))/2;
-  ctx.fillStyle='rgba(4,6,12,.72)';
-  ctx.fillRect(0,cardY-28,W,H-cardY+28);
-  for(let i=0;i<n;i++){
-    const d=pendingSpecials[i];
-    const cx=sx+i*(cw+gap);
-    const lv=specialLevels[d.id];
-    const hov=mouseX>=cx&&mouseX<=cx+cw&&mouseY>=cardY&&mouseY<=cardY+ch;
-    ctx.save();
-    ctx.shadowColor=HOYO_UI.gold; ctx.shadowBlur=hov?8:0;
-    rr(cx,cardY,cw,ch,8); ctx.fillStyle=hov?'rgba(238,247,255,.105)':'rgba(238,247,255,.055)'; ctx.fill();
-    ctx.strokeStyle=hov?HOYO_UI.goldSoft:HOYO_UI.line; ctx.lineWidth=hov?1.8:1;
-    rr(cx,cardY,cw,ch,8); ctx.stroke(); ctx.shadowBlur=0;
-    rrTop(cx,cardY,cw,68,8); ctx.fillStyle=h2r(d.color,hov?.16:.09); ctx.fill();
-    drawSpecialSilhouette(d.id,cx+cw/2,cardY+36,31,d.color,hov);
-    ctx.font=`900 12px ${UI_FONT}`;
-    ctx.shadowColor=HOYO_UI.gold; ctx.shadowBlur=hov?3:0; ctx.fillStyle=HOYO_UI.text;
-    ctx.fillText((UI_COPY.special[d.id] || d.name).replace(/\s/g,''),cx+cw/2,cardY+86); ctx.shadowBlur=0;
-    ctx.strokeStyle=HOYO_UI.line; ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(cx+8,cardY+98);ctx.lineTo(cx+cw-8,cardY+98);ctx.stroke();
-    const bw=70,bh=18,bxc=cx+cw/2-35,byc=cardY+106;
-    rr(bxc,byc,bw,bh,4); ctx.fillStyle='rgba(184,167,255,.10)'; ctx.fill();
-    rr(bxc,byc,bw,bh,4); ctx.strokeStyle=HOYO_UI.goldSoft; ctx.lineWidth=1; ctx.stroke();
-    ctx.font=`bold 11px ${UI_FONT}`; ctx.fillStyle=HOYO_UI.gold; ctx.textBaseline='middle';
-    ctx.fillText(lv===0?'新規':`Lv.${lv} → ${lv+1}`,cx+cw/2,byc+bh/2);
-    ctx.font=`11px ${UI_FONT}`;
-    drawWrappedCenter(specialHelpText(d.id,lv),cx+cw/2,cardY+143,10,14,3,HOYO_UI.muted);
-    ctx.font=`900 10px ${UI_FONT}`;
-    ctx.fillStyle=d.color;
-    ctx.fillText(d.desc(lv+1),cx+cw/2,cardY+192);
-    if(lv>=9){ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.gold;ctx.fillText('次で最大',cx+cw/2,cardY+208);}
-    const ctaY=cardY+ch-16;
-    if(hov){
-      rr(cx+6,ctaY-9,cw-12,18,4); ctx.fillStyle='rgba(184,167,255,.13)'; ctx.fill();
-      ctx.font=`bold 11px ${UI_FONT}`; ctx.fillStyle=HOYO_UI.gold;
-    } else {
-      ctx.font=`11px ${UI_FONT}`; ctx.fillStyle=HOYO_UI.faint;
-    }
-    ctx.textBaseline='middle'; ctx.fillText(hov?'セレクト':'タップでセレクト',cx+cw/2,ctaY);
-    ctx.restore();
-  }
-
-  const canReroll=coins>=REROLL_COST;
-  const rx=W/2-RR.w/2, ry=RR.y;
-  ctx.save();
-  rr(rx,ry,RR.w,RR.h,6);
-  ctx.fillStyle=canReroll?'rgba(184,167,255,.15)':'rgba(238,247,255,.055)';
-  ctx.fill();
-  ctx.strokeStyle=canReroll?HOYO_UI.goldSoft:HOYO_UI.line;
-  ctx.lineWidth=1.4; rr(rx,ry,RR.w,RR.h,6); ctx.stroke();
-  ctx.font=`900 13px ${UI_FONT}`;
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=canReroll?HOYO_UI.gold:HOYO_UI.faint;
-  ctx.shadowColor=HOYO_UI.gold;ctx.shadowBlur=canReroll?3:0;
-  ctx.fillText(`再抽選  ${REROLL_COST}トークン`,W/2,ry+RR.h/2);
-  ctx.restore();
-  ctx.restore();
-}
-function handleSpecialAt(cx,cy){
-  if(hitReroll(cx,cy)){rerollSpecials();return;}
-  const n=pendingSpecials.length;
-  const{w:cw,h:ch,gap,y:cardY}=SC;
-  const sx=(W-(cw*n+gap*(n-1)))/2;
-  for(let i=0;i<n;i++){
-    const cardX=sx+i*(cw+gap);
-    if(cx>=cardX&&cx<=cardX+cw&&cy>=cardY&&cy<=cardY+ch){
-      const chosen=pendingSpecials[i];
-      if(specialLevels[chosen.id]===0&&ownedSpecialCount()>=MAX_SPECIAL_TYPES) return;
-      specialLevels[chosen.id]++;
-      playSfx('upgrade');
-      shake(6); burst(player.x,player.y,chosen.color,20);
-      addFloat(W/2,H/2-20,`${chosen.name}  Lv.${specialLevels[chosen.id]}`,chosen.color,14);
-      xpLevel++; xp=0;
-      pendingSpecials=[]; state='play'; break;
-    }
-  }
-}
-function handleSpecialClick(e){
-  const rect=canvas.getBoundingClientRect();
-  const cx=(e.clientX-rect.left)*(W/rect.width);
-  const cy=(e.clientY-rect.top)*(H/rect.height);
-  handleSpecialAt(cx,cy);
-}
-
-// ─────────────────────────────────────
-//  XP
-// ─────────────────────────────────────
-function addXp(amount){
-  const gained=Math.floor(amount*xpMult());
-  xp+=gained;
-  addFloat(player.x,player.y-20,`+${formatCompactNumber(gained)} XP`,'#00dd77',10);
-  if(xp>=xpThresh()) triggerSpecial();
-}
-function addDamageXp(amount){
-  if(amount<=0) return;
-  hitXpBank+=amount*xpMult()*DAMAGE_XP_RATE;
-  const gained=Math.floor(hitXpBank);
-  if(gained<=0) return;
-  hitXpBank-=gained;
-  xp+=gained;
-  if(xp>=xpThresh()) triggerSpecial();
-}
-
-function killEnemy(e){
-  if(!e||e.dead) return;
-  const idx=enemies.indexOf(e);
-  if(idx<0) return;
-  e.dead=true;
-  const pts=e.scoreValue ?? (Math.floor(e.maxHp*.5)+wave*5);
-  const coinGain=1+Math.floor(wave/4)+Math.floor(Math.sqrt(e.maxHp)/120);
-  score+=pts;
-  coins+=coinGain;
-  addXp(e.xpValue ?? Math.floor(10+wave*3+Math.sqrt(e.maxHp)*2.2));
-  addFloat(e.x,e.y-10,`+${formatCompactNumber(pts)}  +${formatCompactNumber(coinGain)}トークン`,'#e8e8f0',11);
-  burst(e.x,e.y,`rgb(${e.r},${e.g},${e.b})`,14);
-  playSfx('kill');
-  spawnEpOrbs(e.x,e.y,e.orbValue ?? (3+Math.floor(e.maxHp/22)));
-  removeAtFast(enemies,idx);
-}
-function damageEnemy(e,amount,color,label=null){
-  if(!e||e.dead) return false;
-  const actual=Math.max(0,Math.min(e.hp,amount));
-  e.hp-=amount; e.flash=6;
-  addDamageXp(actual);
-  if(label) addFloat(e.x,e.y-18,label,color,10);
-  burst(e.x,e.y,color,5);
-  if(e.hp<=0){killEnemy(e);return true;}
-  playSfx('hit');
-  return false;
-}
-function applyOnHitEffects(source,x,y,baseDmg){
-  if(specialLevels.explosive>0){
-    const r=34+specialLevels.explosive*6;
-    const r2=r*r;
-    const dmg=baseDmg*(.32+specialLevels.explosive*.04);
-    burst(x,y,'#ff7040',12+specialLevels.explosive*2);
-    for(let i=enemies.length-1;i>=0;i--){
-      const e=enemies[i];
-      if(e!==source&&distSq(e.x,e.y,x,y)<r2) damageEnemy(e,dmg,'#ff7040');
-    }
-  }
-  if(specialLevels.chainLightning>0){
-    const jumps=Math.min(8,specialLevels.chainLightning+1);
-    let from=source;
-    const used=new Set([source]);
-    for(let j=0;j<jumps;j++){
-      if(!from) break;
-      let next=null, nd2=Math.pow(150+specialLevels.chainLightning*10,2);
-      for(const e of enemies){
-        if(used.has(e)) continue;
-        const d2=distSq(e.x,e.y,from.x,from.y);
-        if(d2<nd2){nd2=d2;next=e;}
-      }
-      if(!next) break;
-      used.add(next);
-      damageEnemy(next,baseDmg*(.22+specialLevels.chainLightning*.025),'#9cff6a','CHAIN');
-      from=next;
-    }
-  }
-}
-
-// ─────────────────────────────────────
-//  衝突判定
-// ─────────────────────────────────────
-function checkCollisions(){
-  const dmg=damage(), pc=pierce(), critD=critDamage();
-  const critC=critChance(), doubleCritC=doubleCritChance();
-  const ricochetLv=specialLevels.ricochet;
-  if(arrows.length>0&&enemies.length>0) for(let ai=arrows.length-1;ai>=0;ai--){
-    const a=arrows[ai]; let rem=false;
-    const ar=a.hitRadius??4;
-    for(let ei=enemies.length-1;ei>=0;ei--){
-      if(rem) break;
-      const e=enemies[ei];
-      const hitR=e.size+ar;
-      if(Math.abs(a.x-e.x)>hitR||Math.abs(a.y-e.y)>hitR) continue;
-      if(distSq(a.x,a.y,e.x,e.y)<hitR*hitR){
-        const critTier=rollCritTier(critC,doubleCritC);
-        const distanceMult=distanceDamageMult(e);
-        const hitDmg=dmg*a.damageScale*distanceMult*Math.pow(critD,critTier);
-        const actualDmg=Math.max(0,Math.min(e.hp,hitDmg));
-        e.hp-=hitDmg; e.flash=6;
-        addDamageXp(actualDmg);
-        const hitBurst=a.kind==='split' ? 3 : 5;
-        burst(a.x,a.y,critTier?'#b8a7ff':(a.pw?'#ff6020':'#00f0ff'),critTier?9+critTier*4:hitBurst);
-        if(critTier) addFloat(e.x,e.y-18,critTier>1?'DOUBLE CRIT':'CRIT',critTier>1?'#ff7040':'#b8a7ff',10);
-        applyOnHitEffects(e,a.x,a.y,hitDmg);
-        if(e.hp<=0) killEnemy(e);
-        else playSfx('hit');
-        const bounced=ricochetLv>0&&a.ricocheted<ricochetLv&&redirectArrowToEnemy(a,e);
-        if(bounced){rem=true;break;}
-        const maxPierce=pc+(a.pierceBonus||0);
-        if(maxPierce===0||a.pierced>=maxPierce){removeAtFast(arrows,ai);rem=true;}
-        else a.pierced++;
-      }
-    }
-  }
-  if(invincible>0){invincible--;}
-  else{
-    const playerR=playerHitRadius();
-    let damaged=false;
-    for(const e of enemies){
-      const hitR=e.size+playerR;
-      if(distSq(player.x,player.y,e.x,e.y)<hitR*hitR){
-        if(blockWithShield()){damaged=true;break;}
-        hp-=incomingDamage(e.contactDamage ?? 26); invincible=80;
-        shake(8); burst(player.x,player.y,'#ff2d78',12);
-        if(hp<=0){hp=0; endGame(); return;}
-        damaged=true;
-        break;
-      }
-    }
-    if(!damaged){
-      for(let i=enemyBullets.length-1;i>=0;i--){
-        const b=enemyBullets[i];
-        const hitR=playerR+(b.size||5);
-        if(distSq(player.x,player.y,b.x,b.y)<hitR*hitR){
-          removeAtFast(enemyBullets,i);
-          if(blockWithShield()) break;
-          hp-=incomingDamage(b.damage ?? BOSS_BULLET_BASE_DAMAGE);
-          invincible=76;
-          shake(7);
-          burst(player.x,player.y,b.color||HOYO_UI.rose,12);
-          if(hp<=0){hp=0; endGame(); return;}
-          break;
-        }
-      }
-    }
-  }
-  const regen=regenPerSec();
-  if(regen>0&&hp<maxHp){
-    regenBank+=regen/60;
-    if(regenBank>=1){
-      const heal=Math.floor(regenBank);
-      hp=Math.min(maxHp,hp+heal);
-      regenBank-=heal;
-    }
-  }else if(hp>=maxHp){
-    regenBank=0;
-  }
-}
-
-// ─────────────────────────────────────
-//  HUD描画（キャンバス内オーバーレイ）
-// ─────────────────────────────────────
-function drawHUD(){
-  ctx.save();
-
-  // ── 上部HUD ──
-  ctx.fillStyle=hudTopGradient; ctx.fillRect(0,0,W,HUD_T+16);
-
-  const bx=10, bw=W-20;
-  const topY=7, topH=22;
-
-  // ホームボタン
-  rr(PAUSE_BTN.x,PAUSE_BTN.y,PAUSE_BTN.w,PAUSE_BTN.h,4);
-  ctx.fillStyle=pauseButtonGradient;ctx.fill();
-  ctx.strokeStyle='rgba(232,232,240,.22)';ctx.lineWidth=1;rr(PAUSE_BTN.x,PAUSE_BTN.y,PAUSE_BTN.w,PAUSE_BTN.h,4);ctx.stroke();
-  ctx.fillStyle=HOYO_UI.gold;
-  ctx.shadowColor=HOYO_UI.gold;ctx.shadowBlur=3;
-  ctx.fillRect(PAUSE_BTN.x+12,PAUSE_BTN.y+9,3,12);
-  ctx.fillRect(PAUSE_BTN.x+20,PAUSE_BTN.y+9,3,12);
-  ctx.fillStyle=HOYO_UI.goldSoft;
-  ctx.fillRect(PAUSE_BTN.x,PAUSE_BTN.y,3,PAUSE_BTN.h);
-  ctx.font='bold 13px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText('停止',PAUSE_BTN.x+34,PAUSE_BTN.y+PAUSE_BTN.h/2+1);
-  ctx.shadowBlur=0;
-
-  // WAVE
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  rr(W/2-44,topY,88,topH,4);
-  ctx.fillStyle='rgba(184,167,255,.10)';ctx.fill();
-  ctx.strokeStyle=HOYO_UI.goldSoft;ctx.lineWidth=1;rr(W/2-44,topY,88,topH,4);ctx.stroke();
-  ctx.font=`bold 13px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText(`WAVE ${wave}`,W/2,topY+topH/2+1);
-
-  // スコア
-  ctx.textAlign='right';
-  ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-  ctx.fillStyle=HOYO_UI.faint;
-  ctx.fillText('スコア',W-bx,topY+5);
-  ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(`${formatCompactNumber(score)}  トークン ${formatCompactNumber(coins)}`,W-bx,topY+17);
-
-  // ── 下部グラデーションオーバーレイ ──
-  ctx.fillStyle=hudBottomGradient; ctx.fillRect(0,H-HUD_B-18,W,HUD_B+18);
-
-  // 現在ステータス
-  ctx.textBaseline='middle';
-  ctx.textAlign='left';
-  const barX=bx, barW=bw, hpY=H-118, hpH=15, xpY=H-96, xpH=12;
-  function drawMeter(y,h,label,valueText,ratio,colorA,colorB){
-    rr(barX,y,barW,h,6);ctx.fillStyle='rgba(238,247,255,.060)';ctx.fill();
-    const mw=barW*Math.max(0,Math.min(1,ratio));
-    if(mw>0){
-      const mg=ctx.createLinearGradient(barX,0,barX+barW,0);
-      mg.addColorStop(0,colorA);mg.addColorStop(1,colorB);
-      rr(barX,y,mw,h,6);ctx.fillStyle=mg;ctx.fill();
-    }
-    ctx.strokeStyle=HOYO_UI.line;ctx.lineWidth=1;rr(barX,y,barW,h,6);ctx.stroke();
-    ctx.font=`bold 12px ${UI_FONT}`;ctx.textAlign='left';ctx.fillStyle=HOYO_UI.text;
-    ctx.fillText(label,barX+6,y+h/2);
-    ctx.textAlign='right';ctx.fillStyle=HOYO_UI.muted;
-    ctx.fillText(valueText,barX+barW-6,y+h/2);
-  }
-  drawMeter(hpY,hpH,'HP',hpText(),hp/maxHp,'#b94564','#f0a0b2');
-  drawMeter(xpY,xpH,'XP',`Lv.${formatCompactNumber(xpLevel)}  ${formatCompactNumber(xp)}/${formatCompactNumber(xpThresh())}`,Math.min(1,xp/xpThresh()),'#6f9f8e','#cfe8c0');
-
-  const chipY=H-74, chipH=22, chipGap=6, chipW=(bw-chipGap*2)/3;
-  const chips=[
-    {label:'LV',value:xpLevel,color:'#00dd77'},
-    {label:'トークン',value:coins,color:'#b8a7ff'},
-    {label:'BASE',value:`${skillPoints} SP`,color:'#88aaff'},
-  ];
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  for(let i=0;i<chips.length;i++){
-    const c=chips[i], x=bx+i*(chipW+chipGap);
-    const g=ctx.createLinearGradient(x,chipY,x,chipY+chipH);
-    g.addColorStop(0,h2r(c.color,.10));
-    g.addColorStop(1,'rgba(12,15,24,.72)');
-    rr(x,chipY,chipW,chipH,4);
-    ctx.fillStyle=g;ctx.fill();
-    ctx.strokeStyle='rgba(238,247,255,.13)';ctx.lineWidth=1;rr(x,chipY,chipW,chipH,4);ctx.stroke();
-    ctx.font=`bold 9px ${UI_FONT}`;
-    ctx.fillStyle=HOYO_UI.faint;
-    ctx.fillText(c.label,x+chipW*.32,chipY+chipH/2+1);
-    ctx.font=`bold 13px ${UI_FONT}`;
-    ctx.fillStyle=c.color=== '#b8a7ff'?HOYO_UI.gold:h2r(c.color,.82);
-    ctx.fillText(String(c.value),x+chipW*.68,chipY+chipH/2+1);
-  }
-
-  // Upgrade zone status
-  rr(SKILL_BTN.x,SKILL_BTN.y,SKILL_BTN.w,SKILL_BTN.h,5);
-  const canUpgrade=skillPoints>0;
-  ctx.fillStyle=canUpgrade?'rgba(184,167,255,.16)':'rgba(238,247,255,.060)';
-  ctx.fill();
-  ctx.strokeStyle=canUpgrade?h2r(HOYO_UI.gold,.72):HOYO_UI.line;
-  ctx.lineWidth=1.1;rr(SKILL_BTN.x,SKILL_BTN.y,SKILL_BTN.w,SKILL_BTN.h,5);ctx.stroke();
-  ctx.font='bold 14px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=canUpgrade?HOYO_UI.gold:HOYO_UI.text;
-  ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=canUpgrade?7:3;
-  ctx.fillText(canUpgrade?`アップ ${skillPoints}SP`:'アップグレード',SKILL_BTN.x+SKILL_BTN.w/2,SKILL_BTN.y+SKILL_BTN.h/2);
-  ctx.shadowBlur=0;
-
-  ctx.restore();
-}
-function drawHUDZZZ(){
-  ctx.save();
-  ctx.fillStyle='rgba(5,6,7,.90)';ctx.fillRect(0,0,W,HUD_T+20);
-
-  drawCutPanel(PAUSE_BTN.x,PAUSE_BTN.y,PAUSE_BTN.w,PAUSE_BTN.h,HOYO_UI.gold,false);
-  ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillRect(PAUSE_BTN.x+12,PAUSE_BTN.y+9,3,12);
-  ctx.fillRect(PAUSE_BTN.x+20,PAUSE_BTN.y+9,3,12);
-  ctx.font=`900 12px ${UI_FONT}`;ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText('ポーズ',PAUSE_BTN.x+34,PAUSE_BTN.y+PAUSE_BTN.h/2+1);
-
-  ctx.textAlign='center';
-  drawCutPanel(W/2-48,7,96,24,HOYO_UI.rose,true);
-  ctx.font=`900 14px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText(`WAVE ${wave}`,W/2,20);
-  const timerColor=HOYO_UI.rose;
-  const remain=waveSecondsLeft();
-  drawCutPanel(W/2-62,34,124,14,timerColor,false);
-  const progress=Math.max(0, Math.min(1, waveFrame / WAVE_DURATION_FRAMES));
-  if(progress>0){
-    ctx.fillStyle=h2r(timerColor,.26);
-    cutPanel(W/2-59,37,118*progress,8,4);ctx.fill();
-  }
-  ctx.font=`900 9px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(`次WAVEまで ${remain}秒`,W/2,42);
-
-  const counterX=258, counterY=6, counterW=W-counterX-8, counterH=42;
-  drawCutPanel(counterX,counterY,counterW,counterH,HOYO_UI.blue,false);
-  ctx.fillStyle='rgba(238,247,255,.055)';
-  cutPanel(counterX+4,counterY+4,counterW-8,counterH-8,8);ctx.fill();
-  ctx.fillStyle=h2r(HOYO_UI.blue,.72);
-  ctx.fillRect(counterX+7,counterY+8,3,counterH-16);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 9px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('スコア',counterX+16,counterY+13);
-  ctx.fillText('トークン',counterX+16,counterY+31);
-  ctx.textAlign='right';
-  ctx.shadowColor='rgba(0,0,0,.85)';
-  ctx.shadowBlur=4;
-  ctx.font=`900 15px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText(fitText(formatCompactNumber(score),64),counterX+counterW-10,counterY+13);
-  ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText(fitText(formatCompactNumber(coins),64),counterX+counterW-10,counterY+31);
-  ctx.shadowBlur=0;
-
-  ctx.fillStyle='rgba(5,6,7,.92)';ctx.fillRect(0,H-HUD_B-20,W,HUD_B+20);
-  const bx=12,bw=W-24;
-  const meter=(y,h,label,value,ratio,a,b)=>{
-    drawCutPanel(bx,y,bw,h,a,false);
-    const mw=(bw-6)*Math.max(0,Math.min(1,ratio));
-    if(mw>0){
-      cutPanel(bx+3,y+3,mw,h-6,6);ctx.fillStyle=h2r(a,.82);ctx.fill();
-    }
-    ctx.font=`900 11px ${UI_FONT}`;ctx.textAlign='left';ctx.fillStyle='#070808';
-    ctx.fillStyle=HOYO_UI.text;ctx.fillText(label,bx+10,y+h/2+1);
-    ctx.textAlign='right';ctx.fillStyle=HOYO_UI.muted;ctx.fillText(value,bx+bw-10,y+h/2+1);
-  };
-  meter(H-119,17,'HP',hpText(),hp/maxHp,HOYO_UI.rose,'#ffb3a5');
-  meter(H-94,14,'XP',`Lv.${formatCompactNumber(xpLevel)}  ${formatCompactNumber(xp)}/${formatCompactNumber(xpThresh())}`,Math.min(1,xp/xpThresh()),HOYO_UI.jade,'#d6ff69');
-
-  const chips=[
-    {label:'LV',value:formatCompactNumber(xpLevel),color:HOYO_UI.jade},
-    {label:'トークン',value:formatCompactNumber(coins),color:HOYO_UI.gold},
-    {label:'SP',value:formatCompactNumber(skillPoints),color:HOYO_UI.blue},
-  ];
-  const chipY=H-67, chipGap=7, chipW=(bw-chipGap*2)/3;
-  for(let i=0;i<chips.length;i++){
-    const c=chips[i], x=bx+i*(chipW+chipGap);
-    drawCutPanel(x,chipY,chipW,24,c.color,false);
-    ctx.font=`900 9px ${UI_FONT}`;ctx.textAlign='left';ctx.fillStyle=h2r(c.color,.95);
-    ctx.fillText(c.label,x+10,chipY+9);
-    ctx.font=`900 16px ${UI_FONT}`;ctx.textAlign='right';ctx.fillStyle=HOYO_UI.text;
-    ctx.shadowColor='rgba(0,0,0,.75)';ctx.shadowBlur=3;
-    ctx.fillText(fitText(c.value,chipW-22),x+chipW-10,chipY+17);
-    ctx.shadowBlur=0;
-  }
-
-  const canUpgrade=skillPoints>0;
-  drawCutPanel(SKILL_BTN.x,SKILL_BTN.y,SKILL_BTN.w,SKILL_BTN.h,canUpgrade?HOYO_UI.gold:HOYO_UI.blue,canUpgrade);
-  ctx.font=`900 12px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=canUpgrade?HOYO_UI.gold:HOYO_UI.muted;
-  ctx.fillText(canUpgrade?`アップ ${skillPoints}SP`:'アップグレード',SKILL_BTN.x+SKILL_BTN.w/2,SKILL_BTN.y+SKILL_BTN.h/2+1);
-  ctx.restore();
-}
-
-// ─────────────────────────────────────
-//  ウェーブバナー
-// ─────────────────────────────────────
-function drawTouchControls(){
-  return;
-}
-function pauseButtonRect(i){
-  const p=PAUSE_MENU, x=p.panelX+18, y=p.panelY+116, gap=10;
-  if(i===0) return {x,y,w:p.panelW-36,h:64};
-  const w=(p.panelW-36-gap)/2, h=74;
-  const n=i-1, col=n%2, row=Math.floor(n/2);
-  return {x:x+col*(w+gap),y:y+78+row*(h+gap),w,h};
-}
-function pauseSettingRect(i){
-  const p=PAUSE_MENU, x=p.panelX+18, y=p.panelY+112;
-  return {x,y:y+i*76,w:p.panelW-36,h:62};
-}
-function pauseBackRect(){
-  const p=PAUSE_MENU;
-  return {x:p.panelX+18,y:p.panelY+p.panelH-60,w:p.panelW-36,h:42};
-}
-function drawPauseRow(b,label,sub,color,meta='',active=false,icon=''){
-  drawCutPanel(b.x,b.y,b.w,b.h,color,active);
-  if(icon){
-    ctx.fillStyle=h2r(color,active?.95:.74);
-    cutPanel(b.x+12,b.y+b.h/2-16,38,32,8);ctx.fill();
-    ctx.font=`900 13px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle='#070808';ctx.fillText(icon,b.x+31,b.y+b.h/2+1);
-  }
-  const rowTx=b.x+(icon?62:18);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 ${active?20:15}px ${UI_FONT}`;ctx.fillStyle=active?HOYO_UI.text:h2r(color,.96);
-  ctx.fillText(label,rowTx,b.y+(active?24:22));
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(sub,rowTx,b.y+(active?47:42));
-  if(meta){
-    ctx.textAlign='right';ctx.font=`900 11px ${UI_FONT}`;ctx.fillStyle=active?color:HOYO_UI.faint;
-    ctx.fillText(meta,b.x+b.w-14,b.y+b.h/2+1);
-  }
-  return;
-  rr(b.x,b.y,b.w,b.h,7);
-  const bg=ctx.createLinearGradient(b.x,b.y,b.x+b.w,b.y+b.h);
-  bg.addColorStop(0,active?h2r(color,.20):'rgba(232,232,240,.060)');
-  bg.addColorStop(.55,'rgba(14,18,30,.82)');
-  bg.addColorStop(1,'rgba(5,7,14,.94)');
-  ctx.fillStyle=bg;ctx.fill();
-  ctx.strokeStyle=active?h2r(color,.70):'rgba(232,232,240,.14)';
-  ctx.lineWidth=active?1.5:1;rr(b.x,b.y,b.w,b.h,7);ctx.stroke();
-  ctx.fillStyle=h2r(color,active?.72:.36);
-  ctx.fillRect(b.x,b.y,4,b.h);
-  if(icon){
-    const ir=Math.min(22,b.h*.28);
-    ctx.beginPath();ctx.arc(b.x+30,b.y+b.h/2,ir,0,Math.PI*2);
-    ctx.fillStyle=h2r(color,active?.18:.10);ctx.fill();
-    ctx.strokeStyle=h2r(color,active?.48:.24);ctx.lineWidth=1;ctx.stroke();
-    ctx.font=icon.length>1?`bold 16px ${UI_FONT}`:'18px serif';
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=active?color:h2r(color,.74);
-    ctx.fillText(icon,b.x+30,b.y+b.h/2+1);
-  }
-  const tx=b.x+(icon?62:20);
-  ctx.fillStyle=active?color:'rgba(232,232,240,.88)';
-  ctx.font=`bold ${active?20:16}px ${UI_FONT}`;
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.fillText(label,tx,b.y+(active?24:25));
-  ctx.font=`12px ${UI_FONT}`;
-  ctx.fillStyle='rgba(232,232,240,.45)';
-  ctx.fillText(sub,tx,b.y+(active?45:48));
-  if(meta){
-    ctx.textAlign='right';
-    ctx.font=`bold 13px ${UI_FONT}`;
-    ctx.fillStyle=active?h2r(color,.92):'rgba(232,232,240,.42)';
-    ctx.fillText(meta,b.x+b.w-16,b.y+b.h/2);
-  }
-}
-function drawPauseStatsPanel(){
-  const p=PAUSE_MENU;
-  const stats=basicStatReadouts();
-  const left=p.panelX+18, top=p.panelY+108;
-  const gapX=10, gapY=8;
-  const colW=(p.panelW-36-gapX)/2, rowH=43;
-  for(let i=0;i<stats.length;i++){
-    const s=stats[i];
-    const col=i%2, row=Math.floor(i/2);
-    const x=left+col*(colW+gapX), y=top+row*(rowH+gapY);
-    const active=effectiveStatLevel(s.id)>0;
-    rr(x,y,colW,rowH,5);
-    const bg=ctx.createLinearGradient(x,y,x+colW,y+rowH);
-    bg.addColorStop(0,h2r(s.color,active?.15:.06));
-    bg.addColorStop(.62,'rgba(12,16,28,.78)');
-    bg.addColorStop(1,'rgba(6,6,14,.88)');
-    ctx.fillStyle=bg;ctx.fill();
-    ctx.strokeStyle=h2r(s.color,active?.48:.20);ctx.lineWidth=active?1.3:1;rr(x,y,colW,rowH,5);ctx.stroke();
-    ctx.fillStyle=h2r(s.color,active?.72:.34);
-    ctx.fillRect(x,y,3,rowH);
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.font=s.icon.length>1?`bold 15px ${UI_FONT}`:'17px serif';
-    ctx.fillStyle=h2r(s.color,.90);
-    ctx.fillText(s.icon,x+12,y+15);
-    ctx.font=`bold 12px ${UI_FONT}`;
-    ctx.fillStyle='rgba(232,232,240,.72)';
-    ctx.fillText(s.label,x+36,y+15);
-    ctx.font=`bold 14px ${UI_FONT}`;
-    ctx.fillStyle='rgba(232,232,240,.92)';
-    ctx.fillText(String(s.value),x+12,y+32);
-  }
-    drawPauseRow(pauseBackRect(),'戻る','ポーズメニューへ','#88aaff','',false,'←');
-}
-function drawPauseMenu(){
-  ctx.save();
-  const shade=ctx.createLinearGradient(0,0,0,H);
-  shade.addColorStop(0,'rgba(2,4,10,.38)');
-  shade.addColorStop(.45,'rgba(2,4,10,.62)');
-  shade.addColorStop(1,'rgba(2,4,10,.86)');
-  ctx.fillStyle=shade;ctx.fillRect(0,0,W,H);
-  const p=PAUSE_MENU;
-  const halo=ctx.createRadialGradient(W/2,p.panelY+40,10,W/2,p.panelY+40,p.panelW*.85);
-  halo.addColorStop(0,'rgba(0,240,255,.12)');
-  halo.addColorStop(.46,'rgba(136,170,255,.035)');
-  halo.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=halo;
-  ctx.fillRect(0,p.panelY-90,W,p.panelH+120);
-  rr(p.panelX,p.panelY,p.panelW,p.panelH,10);
-  const g=ctx.createLinearGradient(p.panelX,p.panelY,p.panelX,p.panelY+p.panelH);
-  g.addColorStop(0,'rgba(18,23,36,.97)');
-  g.addColorStop(.32,'rgba(9,13,24,.98)');
-  g.addColorStop(1,'rgba(4,6,12,.99)');
-  ctx.fillStyle=g;ctx.fill();
-  ctx.strokeStyle='rgba(232,232,240,.16)';
-  ctx.lineWidth=1;rr(p.panelX,p.panelY,p.panelW,p.panelH,10);ctx.stroke();
-  ctx.fillStyle='rgba(232,232,240,.22)';
-  rr(W/2-28,p.panelY+10,56,4,2);ctx.fill();
-  ctx.fillStyle='rgba(0,240,255,.38)';
-  ctx.fillRect(p.panelX,p.panelY+18,3,p.panelH-36);
-  ctx.fillStyle='rgba(232,232,240,.055)';
-  ctx.fillRect(p.panelX+18,p.panelY+88,p.panelW-36,1);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`42px ${DISPLAY_FONT}`;
-  ctx.fillStyle='#e8e8f0';ctx.shadowColor='#00f0ff';ctx.shadowBlur=4;
-  const title=pauseView==='settings'?'操作オプション':(pauseView==='stats'?'ベースステータス':'ポーズ');
-  ctx.fillText(title,p.panelX+22,p.panelY+48);ctx.shadowBlur=0;
-  ctx.font=`bold 11px ${UI_FONT}`;
-  ctx.fillStyle='rgba(232,232,240,.44)';
-  ctx.fillText('PAUSE MENU',p.panelX+24,p.panelY+74);
-  const chipY=p.panelY+43;
-  const chips=[`WAVE ${wave}`,`SCORE ${formatCompactNumber(score)}`];
-  ctx.textAlign='right';
-  for(let i=0;i<chips.length;i++){
-    const w=i===0?74:112, x=p.panelX+p.panelW-18-w, y=chipY+i*24;
-    rr(x,y,w,18,4);
-    ctx.fillStyle='rgba(232,232,240,.055)';ctx.fill();
-    ctx.strokeStyle='rgba(232,232,240,.11)';ctx.lineWidth=1;rr(x,y,w,18,4);ctx.stroke();
-    ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle='rgba(232,232,240,.62)';
-    ctx.fillText(chips[i],x+w-8,y+9);
-  }
-  if(pauseView==='stats'){
-    drawPauseStatsPanel();
-    ctx.restore();
-    return;
-  }
-  if(pauseView==='settings'){
-    const modes=[
-      {id:'buttons',label:'タップ操作',sub:'触った位置へ移動',color:'#00f0ff'},
-      {id:'stick',label:'ドラッグ操作',sub:'下部をドラッグして移動',color:'#00dd77'},
-    ];
-    for(let i=0;i<modes.length;i++){
-      const b=pauseSettingRect(i), m=modes[i], active=touchControlMode()===m.id;
-      drawPauseRow(b,m.label,m.sub,m.color,active?'使用中':'変更',active,i===0?'TAP':'DRAG');
-    }
-    drawPauseRow(pauseBackRect(),'戻る','メニューへ戻る','#88aaff','',false,'←');
-    ctx.restore();
-    return;
-  }
-  for(let i=0;i<p.buttons.length;i++){
-    const b=pauseButtonRect(i), item=p.buttons[i];
-    drawPauseRow(b,item.label,item.sub,item.color,i===0?'':'›',i===0,item.icon);
-  }
-  ctx.restore();
-}
-function drawPauseMenuZZZ(){
-  ctx.save();
-  ctx.fillStyle='rgba(0,0,0,.62)';ctx.fillRect(0,0,W,H);
-  const p=PAUSE_MENU;
-  drawCutPanel(p.panelX,p.panelY,p.panelW,p.panelH,HOYO_UI.gold,true);
-  ctx.fillStyle=HOYO_UI.gold;
-  cutPanel(p.panelX+18,p.panelY+16,92,28,8);ctx.fill();
-  ctx.fillStyle='#070808';
-  ctx.font=`900 15px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('停止中',p.panelX+64,p.panelY+31);
-  ctx.textAlign='left';
-  ctx.font=`900 34px ${DISPLAY_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  const title=pauseView==='settings'?'オプション':(pauseView==='stats'?'ステータス':'バトルメニュー');
-  ctx.fillText(title,p.panelX+20,p.panelY+65);
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(`WAVE ${wave} / スコア ${formatCompactNumber(score)}`,p.panelX+22,p.panelY+88);
-
-  if(pauseView==='stats'){
-    const stats=[
-      ['HP',hpText(),HOYO_UI.rose],
-      ['連射',fmtMult(statMult('fireRate')*bodyMult('fireRate')),HOYO_UI.blue],
-      ['攻撃',fmtMult(statMult('damage')*bodyMult('attack')),HOYO_UI.gold],
-      ['速度',fmtMult(statMult('speed')),HOYO_UI.jade],
-      ['会心',`${Math.round(critChance()*100)}%`,HOYO_UI.rose],
-      ['トークン',coins,HOYO_UI.gold],
-    ];
-    const left=p.panelX+18, top=p.panelY+112, gap=10, w=(p.panelW-46)/2, h=58;
-    for(let i=0;i<stats.length;i++){
-      const [label,value,color]=stats[i], col=i%2,row=Math.floor(i/2);
-      const x=left+col*(w+gap), y=top+row*(h+gap);
-      drawCutPanel(x,y,w,h,color,false);
-      ctx.textAlign='left';ctx.font=`900 11px ${UI_FONT}`;ctx.fillStyle=h2r(color,.95);
-      ctx.fillText(label,x+12,y+18);
-      ctx.font=`900 19px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-      ctx.fillText(String(value),x+12,y+40);
-    }
-    drawPauseRow(pauseBackRect(),'戻る','メニューへ戻る',HOYO_UI.blue,'',false,'<');
-    ctx.restore();return;
-  }
-  if(pauseView==='settings'){
-    const modes=[
-      {id:'buttons',label:'タップ操作',sub:'触れた位置へ移動',color:HOYO_UI.blue},
-      {id:'stick',label:'ドラッグ操作',sub:'仮想スティックで移動',color:HOYO_UI.jade},
-    ];
-    for(let i=0;i<modes.length;i++){
-      const b=pauseSettingRect(i), m=modes[i], active=touchControlMode()===m.id;
-      drawPauseRow(b,m.label,m.sub,m.color,active?'使用中':'変更',active,i===0?'TP':'DG');
-    }
-    drawPauseRow(pauseBackRect(),'戻る','メニューへ戻る',HOYO_UI.blue,'',false,'<');
-    ctx.restore();return;
-  }
-  for(let i=0;i<p.buttons.length;i++){
-    const b=pauseButtonRect(i), item=p.buttons[i];
-    drawPauseRow(b,item.label,item.sub,item.color,'',i===0,item.icon);
-  }
-  ctx.restore();
-}
-function pauseGame(){
-  if(state!=='play') return;
-  state='pause';
-  pauseView='menu';
-  stopTouchMove();
-  activePointerId=null;
-  pauseBgm();
-  playSfx('select');
-}
-function resumeGame(){
-  if(state!=='pause') return;
-  state='play';
-  pauseView='menu';
-  playBgm();
-  playSfx('select');
-}
-function handlePauseClick(cx,cy){
-  if(pauseView==='stats'){
-    const back=pauseBackRect();
-    if(cx>=back.x&&cx<=back.x+back.w&&cy>=back.y&&cy<=back.y+back.h){pauseView='menu';return true;}
-    return true;
-  }
-  if(pauseView==='settings'){
-    for(let i=0;i<2;i++){
-      const b=pauseSettingRect(i);
-      if(cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h){
-        setTouchControlMode(i===0?'buttons':'stick');
-        return true;
-      }
-    }
-    const back=pauseBackRect();
-    if(cx>=back.x&&cx<=back.x+back.w&&cy>=back.y&&cy<=back.y+back.h){pauseView='menu';return true;}
-    return true;
-  }
-  for(let i=0;i<PAUSE_MENU.buttons.length;i++){
-    const b=pauseButtonRect(i), id=PAUSE_MENU.buttons[i].id;
-    if(cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h){
-      if(id==='resume') resumeGame();
-      else if(id==='stats') pauseView='stats';
-      else if(id==='home') returnHome();
-      else if(id==='settings') pauseView='settings';
-      return true;
-    }
-  }
-  return true;
-}
-function drawWaveBanner(){
-  if(waveBanner<=0) return;
-  waveBanner--;
-  const a=Math.min(1,waveBanner/30)*Math.min(1,(waveBanner>90?1:(waveBanner/30)));
-  ctx.save();
-  ctx.globalAlpha=a;
-  ctx.font='72px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.shadowColor='#ff2d78'; ctx.shadowBlur=12; ctx.fillStyle='#ff2d78';
-  ctx.fillText(`WAVE  ${wave}`,W/2,H/2);
-  ctx.restore();
-}
-
-// ─────────────────────────────────────
-//  ボタン描画ヘルパー
-// ─────────────────────────────────────
-function drawBtn(bx,by,bw,bh,label,color){
-  ctx.save();
-  const accent=color||HOYO_UI.gold;
-  ctx.shadowColor=accent; ctx.shadowBlur=5;
-  rr(bx,by,bw,bh,8); ctx.fillStyle='rgba(238,247,255,.070)'; ctx.fill();
-  ctx.strokeStyle=h2r(accent,.48); ctx.lineWidth=1.2; rr(bx,by,bw,bh,8); ctx.stroke();
-  ctx.fillStyle=h2r(accent,.28);ctx.fillRect(bx,by+7,4,bh-14);
-  ctx.shadowBlur=0;
-  ctx.font=`900 18px ${UI_FONT}`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillStyle=accent===HOYO_UI.gold?HOYO_UI.gold:HOYO_UI.text;
-  ctx.fillText(label,bx+bw/2,by+bh/2);
-  ctx.restore();
-}
-function drawTokenIcon(cx,cy,r=8){
-  ctx.save();
-  const hex=(rad,rot=0)=>{
-    ctx.beginPath();
-    for(let i=0;i<6;i++){
-      const a=rot+Math.PI/6+i*Math.PI/3;
-      const x=cx+Math.cos(a)*rad, y=cy+Math.sin(a)*rad;
-      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-    }
-    ctx.closePath();
-  };
-  hex(r,0);
-  const outer=ctx.createLinearGradient(cx-r,cy-r,cx+r,cy+r);
-  outer.addColorStop(0,'#7fb6ce');
-  outer.addColorStop(.28,'#2f85b8');
-  outer.addColorStop(.62,'#1b5d92');
-  outer.addColorStop(1,'#123052');
-  ctx.fillStyle=outer;ctx.fill();
-  ctx.lineWidth=Math.max(1,r*.16);
-  ctx.strokeStyle='rgba(184,218,232,.58)';
-  ctx.stroke();
-
-  hex(r*.76,0);
-  const inner=ctx.createLinearGradient(cx-r*.65,cy-r*.65,cx+r*.65,cy+r*.65);
-  inner.addColorStop(0,'rgba(130,184,210,.34)');
-  inner.addColorStop(.48,'rgba(38,111,164,.42)');
-  inner.addColorStop(1,'rgba(12,42,78,.52)');
-  ctx.fillStyle=inner;ctx.fill();
-  ctx.strokeStyle='rgba(118,174,206,.38)';
-  ctx.lineWidth=Math.max(1,r*.10);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(cx,cy-r*.52);
-  ctx.lineTo(cx+r*.42,cy);
-  ctx.lineTo(cx,cy+r*.52);
-  ctx.lineTo(cx-r*.42,cy);
-  ctx.closePath();
-  const gem=ctx.createLinearGradient(cx-r*.35,cy-r*.48,cx+r*.35,cy+r*.48);
-  gem.addColorStop(0,'#9bc7d8');
-  gem.addColorStop(.46,'#2b8ac0');
-  gem.addColorStop(1,'#174f8a');
-  ctx.fillStyle=gem;ctx.fill();
-  ctx.strokeStyle='rgba(176,211,226,.48)';
-  ctx.lineWidth=Math.max(.8,r*.08);
-  ctx.stroke();
-
-  ctx.strokeStyle='rgba(210,232,238,.24)';
-  ctx.lineWidth=Math.max(.7,r*.07);
-  ctx.beginPath();
-  ctx.moveTo(cx-r*.38,cy-r*.30);
-  ctx.lineTo(cx+r*.02,cy-r*.50);
-  ctx.stroke();
-  ctx.strokeStyle='rgba(6,20,42,.28)';
-  ctx.beginPath();
-  ctx.moveTo(cx-r*.42,cy+r*.42);
-  ctx.lineTo(cx+r*.42,cy-r*.42);
-  ctx.stroke();
-  ctx.restore();
-}
-function drawTokenAmount(x,y,value,align='right',size=10){
-  ctx.save();
-  ctx.font=`bold ${size}px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif`;
-  ctx.textBaseline='middle';
-  const text=formatCompactNumber(value);
-  const tw=ctx.measureText(text).width;
-  const r=Math.max(6,size*.78);
-  const gap=r*.45;
-  let ix=x, tx=x;
-  if(align==='right'){
-    tx=x;
-    ix=x-tw-gap-r;
-    ctx.textAlign='right';
-  }else if(align==='center'){
-    const left=x-(r*2+gap+tw)/2;
-    ix=left+r;
-    tx=left+r*2+gap;
-    ctx.textAlign='left';
-  }else{
-    ix=x+r;
-    tx=x+r*2+gap;
-    ctx.textAlign='left';
-  }
-  drawTokenIcon(ix,y,r);
-  ctx.fillStyle='#8fefff';
-  ctx.shadowColor='#00aaff';
-  ctx.shadowBlur=3;
-  ctx.fillText(text,tx,y);
-  ctx.restore();
-}
-function drawHomeTokenBadge(){
-  const x=238,y=12,w=138,h=42;
-  ctx.save();
-  drawCutPanel(x,y,w,h,HOYO_UI.gold,false);
-  ctx.fillStyle='rgba(238,247,255,.060)';
-  cutPanel(x+5,y+5,w-10,h-10,8);ctx.fill();
-  ctx.fillStyle=h2r(HOYO_UI.gold,.76);
-  ctx.fillRect(x+9,y+9,3,h-18);
-  ctx.textAlign='left';
-  ctx.textBaseline='middle';
-  ctx.font=`900 9px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('TOKEN',x+18,y+14);
-  drawTokenAmount(x+w-12,y+29,meta.tokens,'right',15);
-  ctx.restore();
-}
-
-// ─────────────────────────────────────
-//  スタート・ゲームオーバー画面
-// ─────────────────────────────────────
-function checkpointButtonRect(){
-  return {x:34,y:326,w:W-68,h:24};
-}
-function drawHighScoreBadge(x,y,w,h){
-  normalizeHighScore();
-  ctx.save();
-  drawCutPanel(x,y,w,h,HOYO_UI.gold,false);
-  ctx.textAlign='left';
-  ctx.textBaseline='middle';
-  ctx.font=`900 9px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText('HIGH SCORE',x+12,y+13);
-  ctx.font=`900 15px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText(`WAVE ${formatCompactNumber(highScoreWave())}`,x+12,y+31);
-  ctx.font=`900 10px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(formatCompactNumber(meta.highScore.score),x+12,y+47);
-  ctx.restore();
-}
-function drawCheckpointButton(){
-  const r=checkpointButtonRect();
-  const active=canUseHighScoreCheckpoint();
-  const target=highScoreCheckpointWave();
-  ctx.save();
-  drawCutPanel(r.x,r.y,r.w,r.h,active?HOYO_UI.gold:HOYO_UI.faint,active);
-  ctx.textAlign='center';
-  ctx.textBaseline='middle';
-  ctx.font=`900 11px ${UI_FONT}`;
-  ctx.fillStyle=active?HOYO_UI.gold:HOYO_UI.faint;
-  ctx.fillText(active?`CHECKPOINT START  WAVE ${target}`:'CHECKPOINT LOCKED  BEST WAVE 11+',r.x+r.w/2,r.y+r.h/2+1);
-  ctx.restore();
-}
-const BTN_W=200, BTN_H=50;
-const GAME_OVER_RETRY_Y=H/2+76;
-const GAME_OVER_HOME_Y=H/2+134;
-const GAME_OVER_CHECKPOINT_Y=H/2+192;
-const INSTALL_BTN={x:W/2-80,y:H-72,w:160,h:34};
-const HOME_START_Y=366;
-const HOME_TABS=[
-  { id:'store', label:'ストア' },
-  { id:'warehouse', label:'ガレージ' },
-  { id:'upgrade', label:'アップグレード' },
-];
-const HOME_TAB={x:10,y:234,w:118,h:32,gap:6};
-const HOME_GRID={x:12,y:274,w:175,h:56,gapX:14,gapY:8};
-const HOME_NAV_BTNS=[
-  {id:'store',label:'ストア',color:'#00f0ff'},
-  {id:'warehouse',label:'ガレージ',color:'#b8a7ff'},
-  {id:'upgrade',label:'アップグレード',color:'#cc00ff'},
-  {id:'codex',label:'アーカイブ',color:'#88aaff'},
-  {id:'ranking',label:'ランキング',color:'#36f39b'},
-  {id:'settings',label:'オプション',color:'#00dd77'},
-];
-const HOME_NAV={x:24,y:432,w:162,h:54,gapX:18,gapY:10};
-const HOME_NAV_VIEW=[
-  {id:'store',label:'ストア',sub:'機体 / コア / ドローン',color:'#00f0ff'},
-  {id:'warehouse',label:'ガレージ',sub:'カスタム確認',color:'#b8a7ff'},
-  {id:'upgrade',label:'アップグレード',sub:'ベースステータス',color:'#cc00ff'},
-  {id:'codex',label:'アーカイブ',sub:'アビリティデータ',color:'#88aaff'},
-  {id:'ranking',label:'ランキング',sub:'ハイスコア記録',color:'#36f39b'},
-  {id:'settings',label:'オプション',sub:'操作とサウンド',color:'#00dd77'},
-];
-const CODEX={startY:102,rowH:58,pageSize:7,pagerY:624,btnW:88,btnH:30};
-HOME_TABS.forEach(t=>{ t.label=UI_COPY.nav[t.id]?.[0] || t.label; });
-HOME_NAV_BTNS.forEach(b=>{
-  const copy=UI_COPY.nav[b.id];
-  if(copy) b.label=copy[0].toUpperCase();
-  b.color={store:HOYO_UI.blue,warehouse:HOYO_UI.gold,upgrade:HOYO_UI.rose,codex:'#9cff5e',ranking:HOYO_UI.jade,settings:HOYO_UI.blue}[b.id] || b.color;
-});
-HOME_NAV_VIEW.forEach(b=>{
-  const copy=UI_COPY.nav[b.id];
-  if(copy){ b.label=copy[0].toUpperCase(); b.sub=copy[1]; }
-  b.color={store:HOYO_UI.blue,warehouse:HOYO_UI.gold,upgrade:HOYO_UI.rose,codex:'#9cff5e',ranking:HOYO_UI.jade,settings:HOYO_UI.blue}[b.id] || b.color;
-});
-function drawHomeGridCard(i,color,title,value,metaText,owned=false,selected=false){
-  const col=i%2,row=Math.floor(i/2);
-  const x=HOME_GRID.x+col*(HOME_GRID.w+HOME_GRID.gapX), y=HOME_GRID.y+row*(HOME_GRID.h+HOME_GRID.gapY);
-  rr(x,y,HOME_GRID.w,HOME_GRID.h,5);
-  const g=ctx.createLinearGradient(x,y,x+HOME_GRID.w,y+HOME_GRID.h);
-  g.addColorStop(0,h2r(color,selected?.16:(owned?.10:.055)));
-  g.addColorStop(1,'rgba(6,6,14,.72)');
-  ctx.fillStyle=g;ctx.fill();
-  ctx.strokeStyle=selected?'rgba(232,232,240,.70)':h2r(color,owned?.42:.22);
-  ctx.lineWidth=selected?1.4:1;rr(x,y,HOME_GRID.w,HOME_GRID.h,5);ctx.stroke();
-  ctx.fillStyle=h2r(color,.75);
-  ctx.fillRect(x,y,3,HOME_GRID.h);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=h2r(color,.90);ctx.shadowBlur=0;
-  ctx.fillText(title,x+10,y+14);ctx.shadowBlur=0;
-  ctx.font='14px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.58)';
-  ctx.fillText(value,x+10,y+31);
-  ctx.textAlign='right';ctx.font='bold 14px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle=owned?'#00dd77':'#b8a7ff';
-  ctx.fillText(metaText,x+HOME_GRID.w-8,y+46);
-}
-function drawHomeTabs(){
-  for(let i=0;i<HOME_TABS.length;i++){
-    const t=HOME_TABS[i], x=HOME_TAB.x+i*(HOME_TAB.w+HOME_TAB.gap), active=homeTab===t.id;
-    rr(x,HOME_TAB.y,HOME_TAB.w,HOME_TAB.h,5);
-    ctx.fillStyle=active?'rgba(0,240,255,.16)':'rgba(232,232,240,.045)';ctx.fill();
-    ctx.strokeStyle=active?'#00f0ff':'rgba(232,232,240,.16)';
-    ctx.lineWidth=active?1.6:1;rr(x,HOME_TAB.y,HOME_TAB.w,HOME_TAB.h,5);ctx.stroke();
-    ctx.font='bold 14px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=active?'#00f0ff':'rgba(232,232,240,.62)';
-    ctx.fillText(t.label,x+HOME_TAB.w/2,HOME_TAB.y+HOME_TAB.h/2);
-  }
-}
-const partInfo = part => PART_INFO[part.id] || {tier:'STD',desc:'Modular system part.'};
-function multText(mult,short=false){
-  const entries=Object.entries(mult).filter(([,v])=>!short || Math.abs(v-1)>.001);
-  if(entries.length===0) return short ? '標準' : '標準性能';
-  return entries.map(([k,v])=>`${short?(SHORT_STAT_LABELS[k]||k.toUpperCase()):(STAT_LABELS[k]||k)} ${fmtMult(v)}`).join(' ');
-}
-function equippedPartDefs(shipId=meta.selectedShip){
-  return mountedPartIds(shipId).map(id=>PART_BY_ID[id]).filter(Boolean);
-}
-function loadoutMult(shipId=meta.selectedShip){
-  return loadoutMultFromMount(mountedForShip(shipId));
-}
-function loadoutMultFromMount(mount){
-  const totals={hp:1,defense:1,attack:1,fireRate:1};
-  for(const type of SLOT_ORDER){
-    for(const id of (mount?.[type] || [])){
-      const part=PART_BY_ID[id];
-      if(!part) continue;
-      for(const [k,v] of Object.entries(part.mult)) totals[k]=(totals[k]||1)*v;
-    }
-  }
-  return totals;
-}
-function loadoutText(shipId=meta.selectedShip){
-  const totals=loadoutMult(shipId);
-  const active=Object.entries(totals).filter(([,v])=>Math.abs(v-1)>.001);
-  return active.length ? active.map(([k,v])=>`${STAT_LABELS[k]||k} ${fmtMult(v)}`).join('  ') : 'パーツ補正なし';
-}
-function partSlotStatus(part,ship=selectedShipDef()){
-  const limit=ship.slots[part.type]||0;
-  const cur=(mountedForShip(ship.id)[part.type]||[]).length;
-  const shipId=partMountedShip(part.id);
-  if(shipId===ship.id) return 'セット中';
-  if(shipId) return '他機体';
-  if(limit<=0) return '枠なし';
-  return `${cur}/${limit}枠`;
-}
-function slotText(ship=selectedShipDef()){
-  if(ship.id==='coreOnly') return 'フレームなし / パーツ不可';
-  const short={turret:'砲',armor:'装',drone:'ド',coreBoost:'コ'};
-  return SLOT_ORDER.map(t=>`${short[t]||partTypeName(t)} ${(mountedForShip(ship.id)[t]||[]).length}/${ship.slots[t]||0}`).join('  ');
-}
-function itemValue(item){
-  const d=item.def;
-  if(item.type==='ship') return slotText(d);
-  if(item.type==='core') return `${d.role} / Lv.${meta.coreLevels[d.id]||0}`;
-  return `${partTypeName(d.type)}  ${multText(d.mult,true)}`;
-}
-function itemMeta(item){
-  const d=item.def;
-  if(item.type==='ship') return meta.selectedShip===d.id?'セレクト中':(meta.ownedShips[d.id]?'セレクト':`トークン ${d.cost}`);
-  if(item.type==='core') return meta.selectedCore===d.id?'セット中':(meta.ownedCores[d.id]?'セット':`トークン ${d.cost}`);
-  if(!meta.ownedParts[d.id]) return `トークン ${d.cost}`;
-  const shipId=partMountedShip(d.id);
-  if(shipId===meta.selectedShip) return 'セット中';
-  return shipId?'他機体':'セット';
-}
-// ── サブ画面共通ヘルパー ──
-const BACK_BTN={x:8,y:10,w:58,h:30};
-function drawSubHeaderZZZ(title,tokenVisible=true){
-  ctx.fillStyle='rgba(12,16,28,.72)'; ctx.fillRect(0,0,W,52);
-  ctx.strokeStyle='rgba(232,232,240,.12)'; ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(0,52);ctx.lineTo(W,52);ctx.stroke();
-  rr(BACK_BTN.x,BACK_BTN.y,BACK_BTN.w,BACK_BTN.h,5);
-  ctx.fillStyle='rgba(232,232,240,.055)';ctx.fill();
-  ctx.strokeStyle='rgba(0,240,255,.38)';ctx.lineWidth=1;rr(BACK_BTN.x,BACK_BTN.y,BACK_BTN.w,BACK_BTN.h,5);ctx.stroke();
-  ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#00f0ff';
-  ctx.fillText('← 戻る',BACK_BTN.x+BACK_BTN.w/2,BACK_BTN.y+BACK_BTN.h/2);
-  ctx.font='28px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-  ctx.textAlign='center';ctx.shadowColor='#00f0ff';ctx.shadowBlur=4;ctx.fillStyle='#e8e8f0';
-  ctx.fillText(title,W/2,27);ctx.shadowBlur=0;
-  if(tokenVisible){
-    drawTokenAmount(W-10,27,meta.tokens,'right',10);
-  }
-}
-function drawTabRowZZZ(tabs,labels,current,y,h=28){
-  const tabW=(W-20)/tabs.length;
-  for(let i=0;i<tabs.length;i++){
-    const tx=10+i*tabW,active=current===tabs[i];
-    rr(tx,y,tabW-4,h,4);
-    ctx.fillStyle=active?'rgba(0,240,255,.18)':'rgba(232,232,240,.045)';ctx.fill();
-    ctx.strokeStyle=active?'#00f0ff':'rgba(232,232,240,.18)';ctx.lineWidth=active?1.5:1;
-    rr(tx,y,tabW-4,h,4);ctx.stroke();
-    ctx.font='bold 13px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=active?'#00f0ff':'rgba(232,232,240,.55)';
-    ctx.fillText(labels[tabs[i]],tx+(tabW-4)/2,y+h/2);
-  }
-}
-function hitTabRow(cx,cy,tabs,y,h=28){
-  const tabW=(W-20)/tabs.length;
-  for(let i=0;i<tabs.length;i++){
-    const tx=10+i*tabW;
-    if(cx>=tx&&cx<=tx+tabW-4&&cy>=y&&cy<=y+h) return tabs[i];
-  }
-  return null;
-}
-function hitBackBtn(cx,cy){ return cx>=BACK_BTN.x&&cx<=BACK_BTN.x+BACK_BTN.w&&cy>=BACK_BTN.y&&cy<=BACK_BTN.y+BACK_BTN.h; }
-function drawSubHeader(title,tokenVisible=true){
-  title={store:'ストア',warehouse:'ガレージ',upgrade:'アップグレード',codex:'アーカイブ',ranking:'ランキング',settings:'オプション'}[homeState] || title;
-  ctx.save();
-  ctx.fillStyle='rgba(4,5,5,.94)';ctx.fillRect(0,0,W,58);
-  ctx.fillStyle='rgba(184,167,255,.92)';
-  cutPanel(68,8,164,39,12);ctx.fill();
-  ctx.save();
-  cutPanel(68,8,164,39,12);ctx.clip();
-  ctx.globalCompositeOperation='lighter';
-  const headSweep=68+((uiNow()*84)%(164+56))-56;
-  ctx.fillStyle='rgba(238,247,255,.18)';
-  ctx.fillRect(headSweep,8,34,39);
-  ctx.restore();
-  ctx.fillStyle='rgba(238,247,255,.055)';
-  cutPanel(230,18,78,20,8);ctx.fill();
-  ctx.strokeStyle='rgba(238,247,255,.16)';ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(0,57);ctx.lineTo(W,57);ctx.stroke();
-  ctx.fillStyle=HOYO_UI.gold;ctx.fillRect(0,0,5,58);
-
-  drawCutPanel(BACK_BTN.x,BACK_BTN.y,BACK_BTN.w,BACK_BTN.h,HOYO_UI.gold,false);
-  ctx.font=`900 10px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=HOYO_UI.gold;ctx.fillText('戻る',BACK_BTN.x+BACK_BTN.w/2,BACK_BTN.y+BACK_BTN.h/2+1);
-  ctx.font=`900 25px ${DISPLAY_FONT}`;
-  ctx.fillStyle=HOYO_UI.ink;
-  ctx.fillText(fitText(title,138),150,29);
-  ctx.font=`900 9px ${UI_FONT}`;
-  ctx.fillText('BARRAGE SYS',151,45);
-  ctx.textAlign='right';
-  ctx.font=`900 9px ${UI_FONT}`;
-  ctx.fillStyle='rgba(238,247,255,.45)';
-  ctx.fillText('HOLLOW LINK // READY',W-16,52);
-  if(tokenVisible) drawTokenAmount(W-13,28,meta.tokens,'right',10);
-  ctx.restore();
-}
-function drawTabRow(tabs,labels,current,y,h=28){
-  const tabW=(W-20)/tabs.length;
-  for(let i=0;i<tabs.length;i++){
-    const tx=10+i*tabW, active=current===tabs[i];
-    const color=active?HOYO_UI.gold:HOYO_UI.blue;
-    const label=({ship:'機体',core:'コア',part:'パーツ',drone:'ドローン',special:'能力',basic:'基礎'}[tabs[i]]) || labels[tabs[i]] || tabs[i].toUpperCase();
-    ctx.save();
-    cutPanel(tx,y,tabW-4,h,9);
-    ctx.fillStyle=active?color:'rgba(238,247,255,.060)';
-    ctx.fill();
-    ctx.strokeStyle=active?h2r(color,.95):'rgba(238,247,255,.18)';
-    ctx.lineWidth=active?1.6:1;
-    cutPanel(tx,y,tabW-4,h,9);ctx.stroke();
-    ctx.fillStyle=active?HOYO_UI.ink:h2r(color,.55);
-    ctx.fillRect(tx+2,y+2,4,h-4);
-    if(active){
-      ctx.save();
-      cutPanel(tx,y,tabW-4,h,9);
-      ctx.clip();
-      ctx.globalCompositeOperation='lighter';
-      const sweep=tx+((uiNow()*96+i*31)%(tabW+42))-42;
-      ctx.fillStyle=alphaColor(color,.22);
-      ctx.fillRect(sweep,y+2,26,h-4);
-      ctx.fillStyle=alphaColor(HOYO_UI.text,.30);
-      ctx.fillRect(tx+10,y+h-4,(tabW-24)*(0.66+Math.sin(uiNow()*3+i)*.12),2);
-      ctx.restore();
-    }
-    ctx.font=`900 12px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=active?HOYO_UI.ink:HOYO_UI.muted;
-    ctx.fillText(label,tx+(tabW-4)/2,y+h/2+1);
-    ctx.restore();
-  }
-}
-function trimText(text,max=24){
-  const s=String(text);
-  return s.length>max ? `${s.slice(0,max-3)}...` : s;
-}
-function fitText(text,maxWidth){
-  const s=String(text);
-  if(ctx.measureText(s).width<=maxWidth) return s;
-  let out=s;
-  while(out.length>1 && ctx.measureText(`${out}...`).width>maxWidth) out=out.slice(0,-1);
-  return `${out}...`;
-}
-function fillFitText(text,x,y,maxWidth){
-  ctx.fillText(fitText(text,maxWidth),x,y);
-}
-function loadoutTotalMult(ship=selectedShipDef(),core=selectedCoreDef(),mount=null){
-  const parts=mount?loadoutMultFromMount(mount):loadoutMult(ship.id);
-  const totals={hp:1,defense:1,attack:1,fireRate:1};
-  for(const id of LOADOUT_STAT_IDS) totals[id]=(ship.mult?.[id]||1)*(core.mult?.[id]||1)*(parts[id]||1);
-  return totals;
-}
-function totalSlotCount(ship=selectedShipDef()){
-  return SLOT_ORDER.reduce((sum,type)=>sum+(ship.slots[type]||0),0);
-}
-function drawMetricPill(x,y,w,label,value,color=HOYO_UI.gold,active=false){
-  ctx.save();
-  cutPanel(x,y,w,17,5);
-  ctx.fillStyle=active?alphaColor(color,.18):'rgba(238,247,255,.055)';
-  ctx.fill();
-  ctx.strokeStyle=active?alphaColor(color,.45):'rgba(238,247,255,.13)';
-  ctx.lineWidth=1;
-  cutPanel(x,y,w,17,5);
-  ctx.stroke();
-  ctx.textBaseline='middle';
-  ctx.textAlign='left';
-  ctx.font=`900 8px ${UI_FONT}`;
-  ctx.fillStyle=alphaColor(color,.92);
-  ctx.fillText(label,x+6,y+9);
-  ctx.textAlign='right';
-  ctx.font=`900 9px ${UI_FONT}`;
-  ctx.fillStyle=active?HOYO_UI.text:HOYO_UI.muted;
-  ctx.fillText(fitText(value,w-24),x+w-6,y+9);
-  ctx.restore();
-}
-function drawItemCardChrome(x,y,w,h,color,active=false,mark=''){
-  ctx.save();
-  cutPanel(x,y,w,h,active?15:10);
-  ctx.clip();
-  const g=ctx.createLinearGradient(x,y,x+w,y+h);
-  g.addColorStop(0,alphaColor(color,active?.18:.08));
-  g.addColorStop(.58,'rgba(238,247,255,.018)');
-  g.addColorStop(1,'rgba(0,0,0,.18)');
-  ctx.fillStyle=g;
-  ctx.fillRect(x,y,w,h);
-  ctx.fillStyle=alphaColor(color,active?.72:.34);
-  ctx.fillRect(x,y,3,h);
-  ctx.fillStyle='rgba(238,247,255,.050)';
-  ctx.fillRect(x+8,y+4,Math.min(56,w-24),1);
-  ctx.fillRect(x+14,y+h-5,Math.min(72,w-30),1);
-  if(mark){
-    ctx.globalAlpha=.11;
-    ctx.font=`900 ${Math.max(26,Math.min(40,h*.42))}px ${DISPLAY_FONT}`;
-    ctx.textAlign='right';
-    ctx.textBaseline='middle';
-    ctx.fillStyle=HOYO_UI.text;
-    ctx.fillText(mark,x+w-8,y+h*.50);
-    ctx.globalAlpha=1;
-  }
-  if(active) drawUiSweep(x,y,w,h,color,.42,x+y);
-  ctx.restore();
-}
-function drawSubBackdrop(alpha=.74){
-  ctx.fillStyle=`rgba(5,6,7,${alpha})`;
-  ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='rgba(184,167,255,.055)';
-  ctx.fillRect(0,58,W,220);
-  ctx.strokeStyle='rgba(238,247,255,.050)';
-  ctx.lineWidth=1;
-  for(let y=80;y<H;y+=44){ctx.beginPath();ctx.moveTo(20,y);ctx.lineTo(W-20,y);ctx.stroke();}
-  ctx.strokeStyle='rgba(30,214,255,.040)';
-  for(let i=-4;i<9;i++){const x=i*70;ctx.beginPath();ctx.moveTo(x,96);ctx.lineTo(x+260,H-40);ctx.stroke();}
-  ctx.fillStyle='rgba(184,167,255,.86)';
-  ctx.fillRect(0,58,5,H-116);
-  ctx.fillStyle='rgba(238,247,255,.030)';
-  for(let y=58;y<H;y+=6) ctx.fillRect(0,y,W,1);
-}
-function drawStatusTag(x,y,w,h,text,color=HOYO_UI.gold,active=false){
-  ctx.save();
-  drawCutPanel(x,y,w,h,color,active);
-  ctx.font=`900 ${h>22?11:10}px ${UI_FONT}`;
-  ctx.textAlign='center';
-  ctx.textBaseline='middle';
-  ctx.fillStyle=active?color:h2r(color,.92);
-  ctx.fillText(text,x+w/2,y+h/2+1);
-  ctx.restore();
-}
-function drawSectionLabel(text,x,y,color=HOYO_UI.gold){
-  ctx.save();
-  ctx.font=`900 10px ${UI_FONT}`;
-  const w=Math.max(86,ctx.measureText(text).width+24);
-  cutPanel(x,y-11,w,22,7);
-  ctx.fillStyle=color;ctx.fill();
-  ctx.fillStyle=HOYO_UI.ink;
-  ctx.textAlign='left';
-  ctx.textBaseline='middle';
-  ctx.fillText(text,x+10,y+1);
-  ctx.restore();
-}
-function drawCraftInCard(x,y,w,h,shipId,coreId){
-  ctx.save();
-  ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
-  drawCraft(x+w/2,y+h/2,0.42,shipId,coreId);
-  ctx.restore();
-}
-
-// ── ストア画面 ──
-const STORE_TABS=['ship','core','part','drone'];
-const STORE_LABELS={ship:'SHIP',core:'CORE',part:'PART',drone:'DRONE'};
-const STORE_PAGE_SIZE={ship:6,core:6,part:6,drone:6};
-const STORE_PAGER={y:522,w:78,h:20,gap:18};
-const STORE_ACTIVE_Y=62;
-const STORE_TAB_Y=128;
-const STORE_CONTENT_Y=166;
-const WAREHOUSE_ACTIVE_Y=62;
-const WAREHOUSE_TAB_Y=132;
-const WAREHOUSE_CONTENT_Y=176;
-function storeDefs(tab=storeTab){
-  if(tab==='ship') return SHIP_DEFS;
-  if(tab==='core') return CORE_DEFS;
-  if(tab==='drone') return DRONE_DEFS;
-  return PART_DEFS;
-}
-function storePageCount(tab=storeTab){
-  return Math.max(1,Math.ceil(storeDefs(tab).length/(STORE_PAGE_SIZE[tab]||8)));
-}
-function normalizeStorePage(tab=storeTab){
-  const pages=storePageCount(tab);
-  storePages[tab]=Math.max(0,Math.min(pages-1,storePages[tab]||0));
-}
-function visibleStoreDefs(tab=storeTab){
-  normalizeStorePage(tab);
-  const size=STORE_PAGE_SIZE[tab]||8;
-  const start=(storePages[tab]||0)*size;
-  return storeDefs(tab).slice(start,start+size);
-}
-function drawStorePager(tab=storeTab){
-  const pages=storePageCount(tab);
-  if(pages<=1) return;
-  const p=STORE_PAGER, left={x:W/2-p.w-p.gap/2,y:p.y,w:p.w,h:p.h}, right={x:W/2+p.gap/2,y:p.y,w:p.w,h:p.h};
-  const page=storePages[tab]||0;
-  for(const b of [
-    {r:left,label:'前へ',on:page>0},
-    {r:right,label:'次へ',on:page<pages-1}
-  ]){
-    drawCutPanel(b.r.x,b.r.y,b.r.w,b.r.h,b.on?HOYO_UI.blue:HOYO_UI.faint,b.on);
-    ctx.font=`900 10px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=b.on?HOYO_UI.blue:HOYO_UI.faint;
-    ctx.fillText(b.label,b.r.x+b.r.w/2,b.r.y+b.r.h/2+1);
-  }
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(`${page+1}/${pages}`,W/2,p.y+p.h/2+1);
-}
-function handleStorePager(cx,cy,tab=storeTab){
-  const pages=storePageCount(tab);
-  if(pages<=1) return false;
-  const p=STORE_PAGER;
-  if(cy<p.y||cy>p.y+p.h) return false;
-  const left={x:W/2-p.w-p.gap/2,y:p.y,w:p.w,h:p.h}, right={x:W/2+p.gap/2,y:p.y,w:p.w,h:p.h};
-  if(cx>=left.x&&cx<=left.x+left.w&&storePages[tab]>0){
-    clearPendingStorePurchase();
-    clearPendingInventorySale();
-    storePages[tab]--;
-    playSfx('select');
-    return true;
-  }
-  if(cx>=right.x&&cx<=right.x+right.w&&storePages[tab]<pages-1){
-    clearPendingStorePurchase();
-    clearPendingInventorySale();
-    storePages[tab]++;
-    playSfx('select');
-    return true;
-  }
-  return cx>=left.x&&cx<=right.x+right.w;
-}
-function cloneMountForShip(shipId=meta.selectedShip){
-  const current=mountedForShip(shipId);
-  const clone={};
-  for(const type of SLOT_ORDER) clone[type]=[...(current[type]||[])];
-  return clone;
-}
-function previewMountWithPart(part,ship=selectedShipDef()){
-  const mount=cloneMountForShip(ship.id);
-  if(!part) return mount;
-  for(const type of SLOT_ORDER) mount[type]=mount[type].filter(id=>id!==part.id);
-  const limit=ship.slots[part.type]||0;
-  if(limit<=0) return mount;
-  const list=mount[part.type] || [];
-  if(list.length>=limit) list[Math.max(0,limit-1)]=part.id;
-  else list.push(part.id);
-  mount[part.type]=list;
-  return mount;
-}
-function corePreviewLevel(coreId){
-  return coreId===meta.selectedCore ? selectedCoreLevel() : (meta.coreLevels[coreId]||0);
-}
-function storePreviewLoadout(){
-  const action=pendingStorePurchase?.tab===storeTab ? pendingStorePurchase : null;
-  const currentShip=selectedShipDef();
-  const currentCore=selectedCoreDef();
-  if(!action) return {ship:currentShip,core:currentCore,mount:mountedForShip(currentShip.id),label:'使用中',itemName:'',accent:currentShip.color,preview:false};
-  if(action.kind==='ship'){
-    const ship=SHIP_BY_ID[action.id] || currentShip;
-    return {ship,core:currentCore,mount:mountedForShip(ship.id),label:'プレビュー',itemName:displayName('ship',ship),accent:ship.color,preview:true};
-  }
-  if(action.kind==='core'){
-    const core=CORE_BY_ID[action.id] || currentCore;
-    return {ship:currentShip,core,mount:mountedForShip(currentShip.id),label:'プレビュー',itemName:displayName('core',core),accent:core.color,preview:true};
-  }
-  if(action.kind==='part'){
-    const part=PART_BY_ID[action.id];
-    return {ship:currentShip,core:currentCore,mount:previewMountWithPart(part,currentShip),label:'プレビュー',itemName:part?displayName('part',part):'',accent:part?.color||currentShip.color,preview:true};
-  }
-  if(action.kind==='drone'){
-    const drone=DRONE_BY_ID[action.id];
-    return {ship:currentShip,core:currentCore,mount:mountedForShip(currentShip.id),label:'プレビュー',itemName:drone?.name||'',accent:drone?.color||currentShip.color,preview:true};
-  }
-  return {ship:currentShip,core:currentCore,mount:mountedForShip(currentShip.id),label:'使用中',itemName:'',accent:currentShip.color,preview:false};
-}
-function drawLoadoutPanel(x,y,w,h,ship=selectedShipDef()){
-  const core=selectedCoreDef();
-  drawCutPanel(x,y,w,h,ship.color,false);
-  drawItemCardChrome(x,y,w,h,ship.color,false,ship.icon);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText('ロードアウト',x+14,y+14);
-  ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=ship.color;
-  fillFitText(`${displayName('ship',ship)} + ${displayName('core',core)} Lv.${selectedCoreLevel()}`,x+14,y+32,w-28);
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(slotText(ship),x+14,y+50,w-28);
-  ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.gold;
-  fillFitText(`${shipEffectText(ship)} / ${loadoutText(ship.id)}`,x+14,y+h-12,w-28);
-}
-function drawActiveShipPanel(x,y,w,h,label='使用中',preview=null){
-  const data=preview || {ship:selectedShipDef(),core:selectedCoreDef(),mount:mountedForShip(meta.selectedShip),label,itemName:'',accent:null,preview:false};
-  const ship=data.ship || selectedShipDef(), core=data.core || selectedCoreDef(), mount=data.mount || mountedForShip(ship.id);
-  const accent=data.accent || ship.color;
-  const totals=loadoutTotalMult(ship,core,mount);
-  const coreLevel=corePreviewLevel(core.id);
-  const activeLabel=data.label || label;
-  drawCutPanel(x,y,w,h,accent,true);
-  drawItemCardChrome(x,y,w,h,accent,true,ship.icon);
-  drawUiSweep(x,y,w,h,accent,.55,24);
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(x+w-78,y+4,68,h-8);
-  ctx.clip();
-  drawCraft(x+w-42,y+h/2,0.30,ship.id,core.id,{mount});
-  const t=uiNow();
-  ctx.strokeStyle=alphaColor(accent,.55);
-  ctx.lineWidth=1.2;
-  ctx.beginPath();
-  ctx.arc(x+w-42,y+h/2,24,t*1.8,t*1.8+Math.PI*1.15);
-  ctx.stroke();
-  ctx.strokeStyle='rgba(238,247,255,.24)';
-  ctx.beginPath();
-  ctx.arc(x+w-42,y+h/2,30,-t*1.2,-t*1.2+Math.PI*.72);
-  ctx.stroke();
-  ctx.restore();
-  ctx.textAlign='left';
-  ctx.textBaseline='middle';
-  drawStatusTag(x+12,y+9,66,20,activeLabel,accent,true);
-  ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  const title=data.itemName ? `${data.itemName} 装備プレビュー` : `${displayName('ship',ship)} / ${core.icon} Lv.${coreLevel}`;
-  fillFitText(title,x+86,y+20,w-176);
-  const chipY=y+h-20;
-  drawMetricPill(x+14,chipY,50,'HP',fmtCompactMult(totals.hp),HOYO_UI.rose,true);
-  drawMetricPill(x+69,chipY,50,'AT',fmtCompactMult(totals.attack),HOYO_UI.gold,true);
-  drawMetricPill(x+124,chipY,50,'FR',fmtCompactMult(totals.fireRate),HOYO_UI.blue,true);
-  const slotCount=SLOT_ORDER.reduce((sum,type)=>sum+(mount[type]||[]).length,0);
-  drawMetricPill(x+179,chipY,48,'SL',`${slotCount}/${totalSlotCount(ship)}`,HOYO_UI.jade,true);
-}
-function drawStoreShipCard(i,ship,startY){
-  const cw=(W-36)/2,ch=92,gap=8,col=i%2,row=Math.floor(i/2);
-  const cx=14+col*(cw+8),cy=startY+row*(ch+gap);
-  const owned=meta.ownedShips[ship.id],sel=meta.selectedShip===ship.id;
-  drawCutPanel(cx,cy,cw,ch,ship.color,sel);
-  drawItemCardChrome(cx,cy,cw,ch,ship.color,sel,ship.icon);
-  drawCraftInCard(cx+2,cy+2,cw-4,48,ship.id,'basic');
-  ctx.fillStyle=h2r(ship.color,.75);
-  ctx.fillRect(cx,cy,3,ch);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=h2r(ship.color,.9);
-  fillFitText(`${ship.icon} / ${ship.role.toUpperCase()}`,cx+10,cy+57,cw-20);
-  ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(displayName('ship',ship),cx+10,cy+72,cw-20);
-  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(shipEffectText(ship),cx+10,cy+85,cw-20);
-  if(sel) drawStatusTag(cx+cw-86,cy+7,76,17,'セレクト中',HOYO_UI.gold,true);
-  else if(owned) drawStatusTag(cx+cw-76,cy+7,66,17,'セレクト',HOYO_UI.jade,false);
-  else if(isPendingStorePurchase('ship',ship.id)) drawStatusTag(cx+cw-76,cy+7,66,17,'確認中',HOYO_UI.rose,true);
-  else drawTokenAmount(cx+cw-9,cy+16,ship.cost,'right',8);
-  if(owned) drawSellButton(cx,cy,cw,ch,'ship',ship.id);
-}
-function storePurchaseConfirmPanelRect(){
-  return {x:14,y:546,w:W-28,h:104};
-}
-function storePurchaseConfirmButtonRect(kind){
-  const p=storePurchaseConfirmPanelRect();
-  const gap=10, bw=(p.w-36-gap)/2, by=p.y+58;
-  return kind==='cancel'
-    ? {x:p.x+18,y:by,w:bw,h:34}
-    : {x:p.x+18+bw+gap,y:by,w:bw,h:34};
-}
-function cardSellButtonRect(x,y,w,h){
-  return {x:x+w-58,y:y+h-23,w:48,h:17};
-}
-function rectHit(cx,cy,r){
-  return cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h;
-}
-function drawSellButton(x,y,w,h,kind,id){
-  if(!canSellInventory(kind,id)) return;
-  const r=cardSellButtonRect(x,y,w,h);
-  drawStatusTag(r.x,r.y,r.w,r.h,isPendingSale(kind,id)?'確認中':'売却',HOYO_UI.rose,isPendingSale(kind,id));
-}
-function isPendingSale(kind,id){
-  return pendingInventorySale?.kind===kind&&pendingInventorySale?.id===id;
-}
-function inventorySaleConfirmButtonRect(kind){
-  return storePurchaseConfirmButtonRect(kind);
-}
-function inventoryKindLabel(kind){
-  return {ship:'機体',core:'コア',part:'パーツ',drone:'ドローン'}[kind] || 'アイテム';
-}
-function drawInventorySaleConfirmPanel(source){
-  const action=pendingInventorySale;
-  if(!action || action.source!==source) return;
-  const p=storePurchaseConfirmPanelRect();
-  const appear=uiProgress(uiConfirmAt||uiViewOpenedAt,.24);
-  ctx.save();
-  ctx.fillStyle=`rgba(5,6,7,${.40+.28*appear})`;
-  ctx.fillRect(0,p.y-10,W,H-p.y+10);
-  ctx.globalAlpha*=.35+.65*appear;
-  ctx.translate(0,(1-appear)*18);
-  drawCutPanel(p.x,p.y,p.w,p.h,HOYO_UI.rose,true);
-  drawItemCardChrome(p.x,p.y,p.w,p.h,action.color,true,action.icon);
-  drawUiSweep(p.x,p.y,p.w,p.h,HOYO_UI.rose,.70,70);
-  drawStatusTag(p.x+14,p.y+14,48,28,action.icon,action.color,true);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 14px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(`${action.title} を売却`,p.x+74,p.y+20,p.w-150);
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(`${inventoryKindLabel(action.kind)} / 投資額の80%を返却`,p.x+74,p.y+40);
-  drawTokenAmount(p.x+p.w-16,p.y+28,action.value,'right',9);
-  ctx.textAlign='right';
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
-  ctx.fillText(`投資 ${formatCompactNumber(action.invested)}`,p.x+p.w-16,p.y+48);
-  const cancel=inventorySaleConfirmButtonRect('cancel');
-  const sell=inventorySaleConfirmButtonRect('buy');
-  drawCutPanel(cancel.x,cancel.y,cancel.w,cancel.h,HOYO_UI.faint,false);
-  drawCutPanel(sell.x,sell.y,sell.w,sell.h,HOYO_UI.rose,true);
-  ctx.font=`900 13px ${UI_FONT}`;ctx.textAlign='center';
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('キャンセル',cancel.x+cancel.w/2,cancel.y+cancel.h/2+1);
-  ctx.fillStyle=HOYO_UI.rose;
-  ctx.fillText('売却する',sell.x+sell.w/2,sell.y+sell.h/2+1);
-  ctx.restore();
-}
-function handleInventorySaleConfirm(cx,cy,source){
-  const action=pendingInventorySale;
-  if(!action || action.source!==source) return false;
-  const cancel=inventorySaleConfirmButtonRect('cancel');
-  const sell=inventorySaleConfirmButtonRect('buy');
-  if(rectHit(cx,cy,cancel)){
-    clearPendingInventorySale();
-    playSfx('denied');
-    return true;
-  }
-  if(rectHit(cx,cy,sell)){
-    sellInventoryItem(action.kind,action.id);
-    return true;
-  }
-  const p=storePurchaseConfirmPanelRect();
-  if(cy>=p.y-10){
-    clearPendingInventorySale();
-    return true;
-  }
-  return false;
-}
-function drawStorePurchaseConfirmPanel(){
-  const action=pendingStorePurchase;
-  if(!action || action.tab!==storeTab) return;
-  const p=storePurchaseConfirmPanelRect();
-  const appear=uiProgress(uiConfirmAt||uiViewOpenedAt,.24);
-  ctx.save();
-  ctx.fillStyle=`rgba(5,6,7,${.40+.28*appear})`;
-  ctx.fillRect(0,p.y-10,W,H-p.y+10);
-  ctx.globalAlpha*=.35+.65*appear;
-  ctx.translate(0,(1-appear)*18);
-  drawCutPanel(p.x,p.y,p.w,p.h,action.color,true);
-  drawItemCardChrome(p.x,p.y,p.w,p.h,action.color,true,action.icon);
-  drawUiSweep(p.x,p.y,p.w,p.h,action.color,.75,70);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  drawStatusTag(p.x+14,p.y+14,48,28,action.icon,action.color,true);
-  ctx.font=`900 14px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(action.title,p.x+74,p.y+20,p.w-150);
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(action.desc,p.x+74,p.y+40);
-  drawTokenAmount(p.x+p.w-16,p.y+28,action.cost,'right',9);
-  ctx.font=`900 10px ${UI_FONT}`;
-  ctx.fillStyle=meta.tokens>=action.cost?HOYO_UI.gold:HOYO_UI.rose;
-  ctx.textAlign='right';
-  ctx.fillText(meta.tokens>=action.cost?'残高OK':'トークン不足',p.x+p.w-16,p.y+48);
-
-  const cancel=storePurchaseConfirmButtonRect('cancel');
-  const buy=storePurchaseConfirmButtonRect('buy');
-  drawCutPanel(cancel.x,cancel.y,cancel.w,cancel.h,HOYO_UI.faint,false);
-  drawCutPanel(buy.x,buy.y,buy.w,buy.h,meta.tokens>=action.cost?HOYO_UI.gold:HOYO_UI.faint,true);
-  ctx.font=`900 13px ${UI_FONT}`;ctx.textAlign='center';
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('キャンセル',cancel.x+cancel.w/2,cancel.y+cancel.h/2+1);
-  ctx.fillStyle=meta.tokens>=action.cost?HOYO_UI.gold:HOYO_UI.faint;
-  ctx.fillText(action.kind.endsWith('Upgrade')?'強化する':'購入する',buy.x+buy.w/2,buy.y+buy.h/2+1);
-  ctx.restore();
-}
-function drawStoreCoreCard(i,core,startY){
-  const cw=(W-36)/2,ch=92,gap=8,col=i%2,row=Math.floor(i/2);
-  const cx=14+col*(cw+8),cy=startY+row*(ch+gap);
-  const owned=meta.ownedCores[core.id],sel=meta.selectedCore===core.id;
-  drawCutPanel(cx,cy,cw,ch,core.color,sel);
-  drawItemCardChrome(cx,cy,cw,ch,core.color,sel,core.icon);
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  drawStatusTag(cx+9,cy+8,36,22,core.icon,core.color,sel);
-  ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText(fitText(displayName('core',core),cw-58),cx+cw/2,cy+27);
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(fitText(core.role,cw-22),cx+cw/2,cy+45);
-  ctx.fillStyle=h2r(core.color,.86);
-  ctx.font=`900 10px ${UI_FONT}`;
-  ctx.fillText(fitText(multText(core.mult,true),cw-22),cx+cw/2,cy+61);
-  if(sel) drawStatusTag(cx+cw/2-42,cy+70,84,17,'セット中',HOYO_UI.gold,true);
-  else if(owned) drawStatusTag(cx+cw/2-32,cy+70,64,17,'セット',HOYO_UI.jade,false);
-  else if(isPendingStorePurchase('core',core.id)) drawStatusTag(cx+cw/2-32,cy+70,64,17,'確認中',HOYO_UI.rose,true);
-  else drawTokenAmount(cx+cw/2,cy+79,core.cost,'center',8);
-  if(owned) drawSellButton(cx,cy,cw,ch,'core',core.id);
-}
-function drawStorePartCard(i,part,startY){
-  const cw=(W-36)/2,ch=80,gap=8,col=i%2,row=Math.floor(i/2);
-  const cx=14+col*(cw+8),cy=startY+row*(ch+gap);
-  const owned=meta.ownedParts[part.id];
-  const mounted=partMountedShip(part.id)===meta.selectedShip;
-  const info=partInfo(part);
-  drawCutPanel(cx,cy,cw,ch,part.color,mounted);
-  drawItemCardChrome(cx,cy,cw,ch,part.color,mounted,part.icon);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  drawStatusTag(cx+8,cy+8,30,20,part.icon,part.color,mounted);
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=h2r(part.color,.88);
-  fillFitText(`${info.tier} / ${partTypeName(part.type)}`,cx+44,cy+16,cw-88);
-  ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(displayName('part',part),cx+10,cy+36,cw-20);
-  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(partEffectText(part),cx+10,cy+53,cw-20);
-  ctx.fillStyle=part.color;ctx.font=`900 10px ${UI_FONT}`;
-  fillFitText(multText(part.mult,true),cx+10,cy+68,cw-20);
-  if(mounted) drawStatusTag(cx+cw-74,cy+7,64,17,'装着中',HOYO_UI.gold,true);
-  else if(owned) drawStatusTag(cx+cw-70,cy+7,60,17,partSlotStatus(part),HOYO_UI.jade,false);
-  else if(isPendingStorePurchase('part',part.id)) drawStatusTag(cx+cw-70,cy+7,60,17,'確認中',HOYO_UI.rose,true);
-  else drawTokenAmount(cx+cw-8,cy+16,part.cost,'right',8);
-  if(owned) drawSellButton(cx,cy,cw,ch,'part',part.id);
-  ctx.textAlign='right';ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
-  ctx.fillText(owned?'ガレージ':partSlotStatus(part),cx+cw-8,cy+38);
-}
-function drawStoreDroneCard(i,drone,startY){
-  const cw=(W-36)/2,ch=86,gap=8,col=i%2,row=Math.floor(i/2);
-  const cx=14+col*(cw+8),cy=startY+row*(ch+gap);
-  const owned=!!meta.ownedDrones[drone.id], lv=droneLevel(drone.id), cost=owned?droneUpgradeCost(drone.id):drone.cost;
-  drawCutPanel(cx,cy,cw,ch,drone.color,owned);
-  drawItemCardChrome(cx,cy,cw,ch,drone.color,owned,drone.icon);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  drawStatusTag(cx+8,cy+8,32,22,drone.icon,drone.color,owned);
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=h2r(drone.color,.9);
-  fillFitText(`${drone.role} / ${drone.mult.count||1}機`,cx+46,cy+17,cw-92);
-  ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(drone.name,cx+10,cy+39,cw-20);
-  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(`火力 x${(drone.mult.damage+lv*.18).toFixed(2)} / 全ドローン火力 ${fmtMult(purchasedDroneDamageMult())}`,cx+10,cy+57,cw-20);
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=drone.color;
-  ctx.fillText(owned?`Lv.${lv}  次 +18%`:'購入で自動射撃',cx+10,cy+72);
-  if(isPendingStorePurchase(owned?'droneUpgrade':'drone',drone.id)) drawStatusTag(cx+cw-70,cy+7,60,17,'確認中',HOYO_UI.rose,true);
-  else if(owned) drawTokenAmount(cx+cw-8,cy+16,cost,'right',8);
-  else drawTokenAmount(cx+cw-8,cy+16,cost,'right',8);
-  if(owned) drawSellButton(cx,cy,cw,ch,'drone',drone.id);
-}
-function drawStoreScreen(){
-  drawBg();ctx.save();
-  drawSubBackdrop(.78);
-  drawSubHeader('ストア');
-  drawActiveShipPanel(14,STORE_ACTIVE_Y,W-28,56,'使用中',storePreviewLoadout());
-  drawTabRow(STORE_TABS,STORE_LABELS,storeTab,STORE_TAB_Y);
-  const cy=STORE_CONTENT_Y;
-  const animStart=Math.max(uiViewOpenedAt,uiStoreTabAt);
-  if(storeTab==='ship'){
-    const items=visibleStoreDefs('ship');
-    for(let i=0;i<items.length;i++) drawUiEntrance(i,animStart,()=>drawStoreShipCard(i,items[i],cy));
-  }else if(storeTab==='core'){
-    const core=selectedCoreDef(),lv=selectedCoreLevel(),uc=coreUpgradeCost(),can=meta.tokens>=uc;
-    drawCutPanel(14,cy,W-28,46,can?HOYO_UI.gold:core.color,can);
-    drawItemCardChrome(14,cy,W-28,46,can?HOYO_UI.gold:core.color,can,core.icon);
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=core.color;
-    fillFitText(`${core.icon} ${displayName('core',core)}  Lv.${lv} > ${lv+1}`,26,cy+17,W-128);
-    ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=can?HOYO_UI.gold:HOYO_UI.muted;
-    ctx.fillText(isPendingStorePurchase('coreUpgrade',core.id)?'強化確認中':(can?'コアアップ可能':'トークン不足'),26,cy+33);
-    drawTokenAmount(W-22,cy+23,uc,'right',9);
-    const items=visibleStoreDefs('core');
-    for(let i=0;i<items.length;i++) drawUiEntrance(i+1,animStart,()=>drawStoreCoreCard(i,items[i],cy+58));
-  }else{
-    if(storeTab==='drone'){
-      const ownedCount=purchasedDroneCount(), power=purchasedDroneDamageMult();
-      drawCutPanel(14,cy,W-28,56,HOYO_UI.blue,ownedCount>0);
-      drawItemCardChrome(14,cy,W-28,56,HOYO_UI.blue,ownedCount>0,'DR');
-      ctx.textAlign='left';ctx.textBaseline='middle';
-      ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.blue;
-      ctx.fillText(`支援ドローン ${ownedCount}機 / 火力 ${fmtMult(power)}`,26,cy+18);
-      ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-      ctx.fillText('購入したドローンはバトル中に自動射撃します。',26,cy+38);
-      const items=visibleStoreDefs('drone');
-      for(let i=0;i<items.length;i++) drawUiEntrance(i+1,animStart,()=>drawStoreDroneCard(i,items[i],cy+66));
-    }else{
-    drawLoadoutPanel(14,cy,W-28,62);
-    const items=visibleStoreDefs('part');
-    for(let i=0;i<items.length;i++) drawUiEntrance(i+1,animStart,()=>drawStorePartCard(i,items[i],cy+64));
-    }
-  }
-  drawStorePager(storeTab);
-  drawStorePurchaseConfirmPanel();
-  drawInventorySaleConfirmPanel('store');
-  ctx.restore();
-}
-const WAREHOUSE_TABS=['ship','custom','turret','armor','drone','coreBoost'];
-const WAREHOUSE_TAB_LABELS={ship:'機体',custom:'カスタム',turret:'砲台',armor:'装甲',drone:'ドローン',coreBoost:'コア'};
-function twoColCardRect(i,startY,ch,gap=8){
-  const cw=(W-36)/2;
-  const col=i%2,row=Math.floor(i/2);
-  return {x:14+col*(cw+8),y:startY+row*(ch+gap),w:cw,h:ch};
-}
-function hitTwoColCard(cx,cy,count,startY,ch,gap=8){
   for(let i=0;i<count;i++){
-    const r=twoColCardRect(i,startY,ch,gap);
-    if(rectHit(cx,cy,r)) return i;
+    const p = particles[i];
+    particleDummy.position.set(
+      Math.sin(p.angle) * PIPE_RADIUS * p.radial,
+      -Math.cos(p.angle) * PIPE_RADIUS * p.radial,
+      p.z
+    );
+    particleDummy.rotation.set(0, 0, 0);
+    particleDummy.scale.setScalar(Math.max(.05, p.life / p.maxLife));
+    particleDummy.updateMatrix();
+    particleMesh.setMatrixAt(i, particleDummy.matrix);
+    particleColor.set(p.color);
+    particleMesh.setColorAt(i, particleColor);
   }
-  return -1;
+  particleMesh.instanceMatrix.needsUpdate = true;
+  if(particleMesh.instanceColor) particleMesh.instanceColor.needsUpdate = true;
+  particlesDirty = false;
 }
-function handleStoreClick(cx,cy){
-  if(hitBackBtn(cx,cy)){clearPendingStorePurchase();setHomeState('home');return;}
-  const tab=hitTabRow(cx,cy,STORE_TABS,STORE_TAB_Y);
-  if(tab){clearPendingStorePurchase();clearPendingInventorySale();storeTab=tab;normalizeStorePage(storeTab);uiStoreTabAt=uiNow();return;}
-  if(handleStorePager(cx,cy,storeTab)) return;
-  const cy0=STORE_CONTENT_Y;
-  if(handleInventorySaleConfirm(cx,cy,'store')) return;
-  if(pendingStorePurchase&&pendingStorePurchase.tab===storeTab){
-    const cancel=storePurchaseConfirmButtonRect('cancel');
-    const buy=storePurchaseConfirmButtonRect('buy');
-    if(cx>=cancel.x&&cx<=cancel.x+cancel.w&&cy>=cancel.y&&cy<=cancel.y+cancel.h){
-      clearPendingStorePurchase();
-      playSfx('denied');
-      return;
-    }
-    if(cx>=buy.x&&cx<=buy.x+buy.w&&cy>=buy.y&&cy<=buy.y+buy.h){
-      confirmStorePurchase();
-      return;
-    }
-    const panel=storePurchaseConfirmPanelRect();
-    if(cy>=panel.y-10){
-      clearPendingStorePurchase();
-      return;
-    }
+
+function applyEnemyVisual(enemy, t){
+  const presence = enemyDepthPresence(enemy);
+  enemy.root.scale.setScalar(enemyVisualScale(enemy, t, presence));
+  setEnemyOpacity(enemy.root, enemyVisualOpacity(enemy, presence));
+}
+
+function enemyDepthPresence(enemy){
+  const fadeDistance = enemy.boss ? BOSS_FADE_DISTANCE : ENEMY_FADE_DISTANCE;
+  const spawnZ = enemy.spawnZ ?? (enemy.boss ? BOSS_SIGHT_Z : PIPE_Z_FAR + 24);
+  const raw = clamp((enemy.z - spawnZ) / fadeDistance, 0, 1);
+  return smoothstep(raw);
+}
+
+function enemyVisualScale(enemy, t, presence = enemyDepthPresence(enemy)){
+  const base = enemy.baseScale || 1;
+  const closeStart = enemy.boss ? -82 : -92;
+  const close = clamp((enemy.z - closeStart) / Math.max(1, PIPE_Z_NEAR - closeStart), 0, 1);
+  const farScale = enemy.boss ? .34 : .16;
+  const fullScale = enemy.boss ? 1.02 : .88;
+  const nearScale = enemy.boss ? 1.18 : 1.06;
+  const depthScale = farScale + (fullScale - farScale) * presence + (nearScale - fullScale) * close;
+  const pulse = enemy.boss ? 1 + Math.sin(t * 3.4 + enemy.phase) * .055 : 1;
+  return base * depthScale * pulse;
+}
+
+function enemyVisualOpacity(enemy, presence){
+  const minOpacity = enemy.boss ? .18 : .06;
+  return minOpacity + (1 - minOpacity) * presence;
+}
+
+function setEnemyOpacity(root, opacity){
+  const data = root.userData;
+  if(!data?.opacityMaterials) return;
+  if(Math.abs((data.opacity ?? -1) - opacity) < .015) return;
+  data.opacity = opacity;
+  for(const material of data.opacityMaterials){
+    material.opacity = material.userData.baseOpacity * opacity;
   }
-  if(storeTab==='ship'){
-    const items=visibleStoreDefs('ship');
-    const idx=hitTwoColCard(cx,cy,items.length,cy0,92,8);
-    if(idx>=0){
-      const r=twoColCardRect(idx,cy0,92,8);
-      if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('ship',items[idx].id,'store')) return;
-      requestShipPurchase(items[idx].id);
+}
+
+function setEnemyFlash(root, amount){
+  const data = root.userData;
+  if(!data?.opacityMaterials) return;
+  const flash = clamp(amount || 0, 0, 1);
+  if(Math.abs((data.flash ?? -1) - flash) < .025) return;
+  data.flash = flash;
+  for(const material of data.opacityMaterials){
+    if(material.color && material.userData.baseColor){
+      material.color.copy(material.userData.baseColor).lerp(enemyFlashColor, flash);
     }
-  }else if(storeTab==='core'){
-    if(cx>=14&&cx<=W-14&&cy>=cy0&&cy<=cy0+46){requestCoreUpgrade();return;}
-    const items=visibleStoreDefs('core');
-    const idx=hitTwoColCard(cx,cy,items.length,cy0+58,92,8);
-    if(idx>=0){
-      const r=twoColCardRect(idx,cy0+58,92,8);
-      if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('core',items[idx].id,'store')) return;
-      requestCorePurchase(items[idx].id);
-    }
-  }else if(storeTab==='drone'){
-    const items=visibleStoreDefs('drone');
-    const idx=hitTwoColCard(cx,cy,items.length,cy0+66,86,8);
-    if(idx>=0){
-      const r=twoColCardRect(idx,cy0+66,86,8);
-      if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('drone',items[idx].id,'store')) return;
-      requestDronePurchase(items[idx].id);
-    }
-  }else{
-    const items=visibleStoreDefs('part');
-    const idx=hitTwoColCard(cx,cy,items.length,cy0+64,80,8);
-    if(idx>=0){
-      const r=twoColCardRect(idx,cy0+64,80,8);
-      if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('part',items[idx].id,'store')) return;
-      requestPartPurchase(items[idx].id);
+    if(material.emissive && material.userData.baseEmissive){
+      material.emissive.copy(material.userData.baseEmissive).lerp(enemyFlashColor, flash * .72);
+      material.emissiveIntensity = (material.userData.baseEmissiveIntensity ?? material.emissiveIntensity ?? 1) + flash * 1.1;
     }
   }
 }
 
-// ── ガレージ画面 ──
-function drawWarehouseCorePanel(x,y,w,h){
-  const core=selectedCoreDef(),lv=selectedCoreLevel();
-  drawCutPanel(x,y,w,h,core.color,true);
-  drawItemCardChrome(x,y,w,h,core.color,true,core.icon);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  drawStatusTag(x+12,y+12,42,28,core.icon,core.color,true);
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText('選択中コア',x+66,y+16);
-  ctx.font=`900 15px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(`${displayName('core',core)}  Lv.${lv}`,x+66,y+34,w-154);
-  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(`${core.role} / ${multText(core.mult,true)}`,x+66,y+52,w-86);
-  ctx.textAlign='right';
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=core.color;
-  ctx.fillText('変更はストア',x+w-16,y+18);
+function smoothstep(t){
+  return t * t * (3 - 2 * t);
 }
-function drawWarehouseShipCard(i,ship,startY){
-  const cw=(W-36)/2,ch=98,gap=8,col=i%2,row=Math.floor(i/2);
-  const x=14+col*(cw+8),y=startY+row*(ch+gap);
-  const sel=meta.selectedShip===ship.id;
-  drawCutPanel(x,y,cw,ch,ship.color,sel);
-  drawItemCardChrome(x,y,cw,ch,ship.color,sel,ship.icon);
-  drawCraftInCard(x,y,cw,50,ship.id,meta.selectedCore);
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=sel?HOYO_UI.text:ship.color;
-  fillFitText(displayName('ship',ship),x+cw/2,y+60,cw-16);
-  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(shipEffectText(ship),x+cw/2,y+75,cw-16);
-  ctx.fillStyle=sel?HOYO_UI.gold:HOYO_UI.muted;
-  ctx.fillText(sel?'セレクト中':'タップでセレクト',x+cw/2,y+90);
-  drawSellButton(x,y,cw,ch,'ship',ship.id);
+
+function syncEnemyDetail(enemy){
+  const data = enemy.root.userData;
+  if(!data?.detailParts) return;
+  const detailVisible = enemy.boss ? enemy.z > BOSS_SIGHT_Z + 18 : enemy.z > ENEMY_DETAIL_Z;
+  if(data.detailVisible === detailVisible) return;
+  data.detailVisible = detailVisible;
+  for(const part of data.detailParts) part.visible = detailVisible;
 }
-function drawWarehousePartCard(i,part,startY,ship){
-  const cw=(W-36)/2,ch=82,gap=8,col=i%2,row=Math.floor(i/2);
-  const x=14+col*(cw+8),y=startY+row*(ch+gap);
-  const mounted=partMountedShip(part.id)===ship.id;
-  const onOther=partMountedShip(part.id)&&!mounted;
-  const limit=ship.slots[part.type]||0;
-  const cur=(mountedForShip(ship.id)[part.type]||[]).length;
-  const info=partInfo(part);
-  const canMount=limit>0&&(mounted||cur<limit);
-  drawCutPanel(x,y,cw,ch,part.color,mounted);
-  drawItemCardChrome(x,y,cw,ch,part.color,mounted,part.icon);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  drawStatusTag(x+8,y+8,32,20,part.icon,part.color,mounted||canMount);
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=h2r(part.color,.9);
-  fillFitText(`${info.tier} / ${partTypeName(part.type)}`,x+48,y+16,cw-112);
-  ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(displayName('part',part),x+10,y+38,cw-20);
-  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(partEffectText(part),x+10,y+55,cw-20);
-  ctx.fillStyle=part.color;ctx.font=`900 10px ${UI_FONT}`;
-  fillFitText(multText(part.mult,true),x+10,y+70,cw-20);
-  if(mounted) drawStatusTag(x+cw-70,y+7,60,17,'セット中',HOYO_UI.gold,true);
-  else if(onOther) drawStatusTag(x+cw-68,y+7,58,17,'他機体',HOYO_UI.gold,false);
-  else if(limit<=0) drawStatusTag(x+cw-68,y+7,58,17,'枠なし',HOYO_UI.faint,false);
-  else drawStatusTag(x+cw-68,y+7,58,17,cur<limit?'セット':'満杯',cur<limit?HOYO_UI.jade:HOYO_UI.muted,false);
-  drawSellButton(x,y,cw,ch,'part',part.id);
-}
-function warehouseSlotColor(type){
-  return {turret:HOYO_UI.rose,armor:HOYO_UI.blue,drone:HOYO_UI.jade,coreBoost:HOYO_UI.gold}[type] || HOYO_UI.gold;
-}
-function drawWarehouseCustomCard(i,type,startY,ship){
-  const x=14,y=startY+i*82,w=W-28,h=74;
-  const color=warehouseSlotColor(type);
-  const ids=(mountedForShip(ship.id)[type]||[]).filter(id=>PART_BY_ID[id]);
-  const limit=ship.slots[type]||0;
-  const names=ids.map(id=>displayName('part',PART_BY_ID[id])).join(' / ');
-  drawCutPanel(x,y,w,h,color,ids.length>0);
-  drawItemCardChrome(x,y,w,h,color,ids.length>0,WAREHOUSE_TAB_LABELS[type]);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  drawStatusTag(x+10,y+10,58,22,WAREHOUSE_TAB_LABELS[type],color,ids.length>0);
-  ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(ids.length?names:'未装着',x+80,y+22,w-166);
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(ids.length?ids.map(id=>multText(PART_BY_ID[id].mult,true)).join('  '):'このスロットは空です',x+16,y+48,w-32);
-  ctx.textAlign='right';
-  ctx.font=`900 11px ${UI_FONT}`;ctx.fillStyle=limit>0?color:HOYO_UI.faint;
-  ctx.fillText(`${ids.length}/${limit}`,x+w-18,y+21);
-  drawStatusTag(x+w-74,y+42,58,18,limit>0?'変更':'枠なし',limit>0?color:HOYO_UI.faint,false);
-}
-function drawWarehouseCustomView(startY){
-  const ship=selectedShipDef();
-  drawCutPanel(14,startY-10,W-28,42,ship.color,false);
-  drawItemCardChrome(14,startY-10,W-28,42,ship.color,false,ship.icon);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=ship.color;
-  fillFitText(`${displayName('ship',ship)}  カスタム`,26,startY+6,W-112);
-  ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(slotText(ship),26,startY+24,W-52);
-  const listY=startY+48;
-  const animStart=Math.max(uiViewOpenedAt,uiWarehouseTabAt);
-  for(let i=0;i<SLOT_ORDER.length;i++) drawUiEntrance(i+1,animStart,()=>drawWarehouseCustomCard(i,SLOT_ORDER[i],listY,ship));
-}
-function drawWarehouseScreen(){
-  drawBg();ctx.save();
-  drawSubBackdrop(.78);
-  drawSubHeader('ガレージ',false);
-  drawActiveShipPanel(14,WAREHOUSE_ACTIVE_Y,W-28,60,'使用中');
-  drawTabRow(WAREHOUSE_TABS,WAREHOUSE_TAB_LABELS,warehouseTab,WAREHOUSE_TAB_Y,30);
-  const startY=WAREHOUSE_CONTENT_Y;
-  const animStart=Math.max(uiViewOpenedAt,uiWarehouseTabAt);
-  if(warehouseTab==='ship'){
-    const owned=SHIP_DEFS.filter(s=>meta.ownedShips[s.id]);
-    for(let i=0;i<owned.length;i++) drawUiEntrance(i,animStart,()=>drawWarehouseShipCard(i,owned[i],startY));
-  }else if(warehouseTab==='custom'){
-    drawWarehouseCustomView(startY);
-  }else{
-    const ship=selectedShipDef();
-    const type=warehouseTab;
-    const limit=ship.slots[type]||0;
-    const cur=(mountedForShip(ship.id)[type]||[]).length;
-    drawCutPanel(14,startY-10,W-28,48,ship.color,false);
-    drawItemCardChrome(14,startY-10,W-28,48,ship.color,false,ship.icon);
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=ship.color;
-    fillFitText(`${displayName('ship',ship)} / ${WAREHOUSE_TAB_LABELS[type]}`,26,startY+6,W-112);
-    ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-    ctx.fillText(`スロット ${cur}/${limit}`,26,startY+27);
-    ctx.textAlign='right';ctx.fillStyle=limit>0?HOYO_UI.gold:HOYO_UI.faint;
-    ctx.fillText(limit>0?'パーツをタップでセット':'この機体は枠なし',W-26,startY+27);
-    const owned=PART_DEFS.filter(p=>p.type===type&&meta.ownedParts[p.id]);
-    const listY=startY+50;
-    if(owned.length===0){
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillStyle=HOYO_UI.muted;ctx.font=`900 13px ${UI_FONT}`;
-      ctx.fillText(`${WAREHOUSE_TAB_LABELS[type]}パーツなし / ストアでゲット`,W/2,listY+38);
-    }
-    for(let i=0;i<owned.length;i++) drawUiEntrance(i+1,animStart,()=>drawWarehousePartCard(i,owned[i],listY,ship));
+
+function animateEnemyObject(enemy, dt, t){
+  const data = enemy.root.userData;
+  if(!data) return;
+  if(!enemy.boss && !data.detailVisible) return;
+  if(data.core){
+    const pulse = 1 + Math.sin(t * (enemy.boss ? 7.5 : 9.0) + enemy.phase) * (enemy.boss ? .12 : .08);
+    data.core.scale.setScalar(data.coreBase * pulse);
   }
-  drawInventorySaleConfirmPanel('warehouse');
-  ctx.restore();
-}
-function handleWarehouseClick(cx,cy){
-  if(hitBackBtn(cx,cy)){setHomeState('home');return;}
-  const tab=hitTabRow(cx,cy,WAREHOUSE_TABS,WAREHOUSE_TAB_Y,30);
-  if(tab){clearPendingInventorySale();warehouseTab=tab;uiWarehouseTabAt=uiNow();return;}
-  const startY=WAREHOUSE_CONTENT_Y;
-  if(handleInventorySaleConfirm(cx,cy,'warehouse')) return;
-  if(warehouseTab==='ship'){
-    const owned=SHIP_DEFS.filter(s=>meta.ownedShips[s.id]);
-    const cw=(W-36)/2,ch=98,gap=8;
-    for(let i=0;i<owned.length;i++){
-      const r=twoColCardRect(i,startY,ch,gap);
-      if(rectHit(cx,cy,r)){
-        if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('ship',owned[i].id,'warehouse')) return;
-        buyOrSelectShip(owned[i].id);
-        return;
-      }
-    }
-  }else if(warehouseTab==='custom'){
-    const listY=startY+48;
-    for(let i=0;i<SLOT_ORDER.length;i++){
-      const y=listY+i*82;
-      if(cx>=14&&cx<=W-14&&cy>=y&&cy<=y+74){
-        warehouseTab=SLOT_ORDER[i];
-        uiWarehouseTabAt=uiNow();
-        return;
-      }
-    }
-  }else{
-    const owned=PART_DEFS.filter(p=>p.type===warehouseTab&&meta.ownedParts[p.id]);
-    const listY=startY+50;
-    const cw=(W-36)/2,ch=82,gap=8;
-    for(let i=0;i<owned.length;i++){
-      const r=twoColCardRect(i,listY,ch,gap);
-      if(rectHit(cx,cy,r)){
-        if(rectHit(cx,cy,cardSellButtonRect(r.x,r.y,r.w,r.h))&&setPendingInventorySale('part',owned[i].id,'warehouse')) return;
-        toggleMountPart(owned[i].id);
-        return;
-      }
+  if(data.glow){
+    const pulse = 1 + Math.sin(t * (enemy.boss ? 4.2 : 5.8) + enemy.phase) * .16;
+    data.glow.scale.setScalar(data.glowBase * pulse);
+  }
+  if(data.detailVisible && data.rings){
+    for(let i=0;i<data.rings.length;i++){
+      const ring = data.rings[i];
+      ring.rotation.z += dt * (ring.userData.spin || .3) * (i % 2 ? -1 : 1);
     }
   }
 }
 
-// ── アップグレード画面（基礎ステータス恒久強化） ──
-function drawUpgradeScreen(){
-  drawBg();ctx.save();
-  drawSubBackdrop(.80);
-  drawSubHeader('アップグレード');
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('ベースアップ / アップごとに必要トークン上昇',W/2,61);
-  const startY=76,cw=(W-36)/2,ch=64,gapY=8;
-  for(let i=0;i<BASIC_STAT_DEFS.length;i++){
-    const d=BASIC_STAT_DEFS[i],col=i%2,row=Math.floor(i/2);
-    const x=14+col*(cw+8),y=startY+row*(ch+gapY);
-    const lv=meta.homeUpgrades[d.id]||0,cost=homeUpgradeCost(d.id),can=meta.tokens>=cost;
-    drawCutPanel(x,y,cw,ch,d.color,can);
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    drawStatusTag(x+8,y+10,32,20,d.icon,d.color,lv>0);
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;ctx.fillText(statName(d.id),x+48,y+16);
-    ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle=d.color;ctx.fillText(`Lv.${lv}`,x+48,y+32);
-    ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;ctx.fillText(homeStatBonus(d.id),x+10,y+52);
-    drawTokenAmount(x+cw-8,y+18,cost,'right',8);
-    drawStatusTag(x+cw-57,y+39,47,16,can?'UP':'不足',can?HOYO_UI.gold:HOYO_UI.faint,can);
-  }
-  ctx.restore();
-}
-function handleUpgradeClick(cx,cy){
-  if(hitBackBtn(cx,cy)){setHomeState('home');return;}
-  const startY=76,cw=(W-36)/2,ch=64,gapY=8;
-  for(let i=0;i<BASIC_STAT_DEFS.length;i++){
-    const col=i%2,row=Math.floor(i/2);
-    const x=14+col*(cw+8),y=startY+row*(ch+gapY);
-    if(cx>=x&&cx<=x+cw&&cy>=y&&cy<=y+ch){buyHomeUpgrade(BASIC_STAT_DEFS[i].id);return;}
-  }
+function angleDistance(a, b){
+  let d = normalizeAngle(a - b);
+  if(d > Math.PI) d -= TAU;
+  return Math.abs(d);
 }
 
-// ── 図鑑画面 ──
-function codexItems(){
-  if(codexTab==='basic'){
-    return BASIC_STAT_DEFS.map(d=>({
-      id:d.id,
-      name:statName(d.id),
-      icon:d.icon,
-      color:d.color,
-      meta:basicGainText(d.id,0),
-      desc:homeStatBonus(d.id)==='未アップ' ? 'バトル中とアップグレードで強化可能。' : homeStatBonus(d.id)
-    }));
-  }
-  return SPECIAL_DEFS.map(d=>({
-    id:d.id,
-    name:UI_COPY.special[d.id] || d.name,
-    icon:d.icon,
-    color:d.color,
-    meta:'Lv.1',
-    desc:d.desc(1)
-  }));
-}
-function codexPageCount(){
-  return Math.max(1,Math.ceil(codexItems().length/CODEX.pageSize));
-}
-function drawCodexRow(item,x,y,w,h){
-  drawCutPanel(x,y,w,h,item.color,false);
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  drawStatusTag(x+9,y+10,34,20,item.icon,item.color,false);
-  ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText(trimText(item.name,24),x+52,y+18);
-  ctx.textAlign='right';
-  drawStatusTag(x+w-72,y+9,58,18,trimText(item.meta,8),item.color,false);
-  ctx.textAlign='left';ctx.font=`bold 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(trimText(item.desc,42),x+14,y+42);
-}
-function drawCodexScreen(){
-  drawBg();ctx.save();
-  drawSubBackdrop(.80);
-  drawSubHeader('アーカイブ');
-  drawTabRow(['special','basic'],{special:'アビリティ',basic:'ベース'},codexTab,58);
-  const items=codexItems();
-  const pages=codexPageCount();
-  codexPage=Math.max(0,Math.min(pages-1,codexPage));
-  const start=codexPage*CODEX.pageSize;
-  const pageItems=items.slice(start,start+CODEX.pageSize);
-  for(let i=0;i<pageItems.length;i++){
-    drawCodexRow(pageItems[i],14,CODEX.startY+i*(CODEX.rowH+6),W-28,CODEX.rowH);
-  }
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(codexTab==='special'?'特殊アビリティはレベルアップ時にセレクトできます。':'ベース能力はバトル中とアップグレードで伸ばせます。',W/2,590);
-  const py=CODEX.pagerY, leftX=W/2-CODEX.btnW-14, rightX=W/2+14;
-  const canPrev=codexPage>0, canNext=codexPage<pages-1;
-  for(const b of [
-    {x:leftX,label:'前へ',on:canPrev},
-    {x:rightX,label:'次へ',on:canNext},
-  ]){
-    drawCutPanel(b.x,py,CODEX.btnW,CODEX.btnH,b.on?HOYO_UI.blue:HOYO_UI.faint,b.on);
-    ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=b.on?HOYO_UI.blue:HOYO_UI.faint;
-    ctx.fillText(b.label,b.x+CODEX.btnW/2,py+CODEX.btnH/2);
-  }
-  ctx.font=`900 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(`${codexPage+1} / ${pages}`,W/2,py+CODEX.btnH+18);
-  ctx.restore();
-}
-function handleCodexClick(cx,cy){
-  if(hitBackBtn(cx,cy)){setHomeState('home');return;}
-  const tab=hitTabRow(cx,cy,['special','basic'],58);
-  if(tab){codexTab=tab;codexPage=0;return;}
-  const py=CODEX.pagerY,leftX=W/2-CODEX.btnW-14,rightX=W/2+14,pages=codexPageCount();
-  if(cy>=py&&cy<=py+CODEX.btnH){
-    if(cx>=leftX&&cx<=leftX+CODEX.btnW&&codexPage>0){codexPage--;return;}
-    if(cx>=rightX&&cx<=rightX+CODEX.btnW&&codexPage<pages-1){codexPage++;return;}
-  }
+function normalizeAngle(a){
+  a %= TAU;
+  return a < 0 ? a + TAU : a;
 }
 
-// ── ランキング画面 ──
-function rankingAccountRect(){
-  return {x:14,y:74,w:W-28,h:70};
-}
-function drawRankingAccountCard(){
-  const r=rankingAccountRect();
-  const linked=!!accountState.profile;
-  const color=linked?HOYO_UI.jade:HOYO_UI.gold;
-  drawCutPanel(r.x,r.y,r.w,r.h,color,linked);
-  drawItemCardChrome(r.x,r.y,r.w,r.h,color,linked,linked?'ID':'GUEST');
-  drawStatusTag(r.x+14,r.y+14,62,26,linked?'GOOGLE':'GUEST',color,linked);
-  ctx.textAlign='left';
-  ctx.textBaseline='middle';
-  ctx.font=`900 16px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.text;
-  fillFitText(currentPlayerName(),r.x+90,r.y+24,r.w-178);
-  ctx.font=`bold 11px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  const sub=linked?'タップでユーザーネーム変更':'Googleログインでハイスコアをアカウントに紐づけ';
-  fillFitText(sub,r.x+90,r.y+48,r.w-108);
-  ctx.textAlign='right';
-  ctx.font=`900 10px ${UI_FONT}`;
-  ctx.fillStyle=color;
-  ctx.fillText(`BEST WAVE ${formatCompactNumber(highScoreWave())}`,r.x+r.w-16,r.y+22);
-  ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText(`SCORE ${formatCompactNumber(meta.highScore.score)}`,r.x+r.w-16,r.y+46);
-}
-function drawRankingRow(row,rank,y,me=false){
-  const h=42,x=14,w=W-28;
-  const color=rank===1?HOYO_UI.gold:(me?HOYO_UI.jade:HOYO_UI.blue);
-  drawCutPanel(x,y,w,h,color,me||rank<=3);
-  drawItemCardChrome(x,y,w,h,color,me||rank<=3,String(rank));
-  ctx.textAlign='center';
-  ctx.textBaseline='middle';
-  ctx.font=`900 15px ${UI_FONT}`;
-  ctx.fillStyle=rank<=3?color:HOYO_UI.muted;
-  ctx.fillText(`#${rank}`,x+28,y+h/2+1);
-  ctx.textAlign='left';
-  ctx.font=`900 13px ${UI_FONT}`;
-  ctx.fillStyle=me?HOYO_UI.jade:HOYO_UI.text;
-  fillFitText(row.name,x+58,y+15,132);
-  ctx.font=`bold 10px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  fillFitText(`${row.linked?'Google':'Local'} / ${displayName('ship',SHIP_BY_ID[row.ship]||selectedShipDef())}`,x+58,y+31,150);
-  ctx.textAlign='right';
-  ctx.font=`900 15px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText(formatCompactNumber(row.score),x+w-18,y+15);
-  ctx.font=`900 10px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(`WAVE ${formatCompactNumber(row.wave)}`,x+w-18,y+31);
-}
-function drawRankingScreen(){
-  drawBg();
-  ctx.save();
-  drawSubBackdrop(.80);
-  drawSubHeader('ランキング');
-  drawRankingAccountCard();
-  drawSectionLabel('ハイスコアランキング',24,166,HOYO_UI.gold);
-  const rows=rankingRows();
-  const meId=rankingPlayerId();
-  const top=184;
-  if(rows.length===0){
-    drawCutPanel(14,top,W-28,82,HOYO_UI.blue,false);
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.font=`900 14px ${UI_FONT}`;
-    ctx.fillStyle=HOYO_UI.muted;
-    ctx.fillText('まだランキング記録がありません',W/2,top+42);
-  }
-  for(let i=0;i<Math.min(rows.length,9);i++){
-    drawRankingRow(rows[i],i+1,top+i*47,rows[i].id===meId);
-  }
-  ctx.textAlign='center';
-  ctx.font=`bold 10px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.faint;
-  ctx.fillText('現在はこの端末内ランキングです。オンライン同期にはランキングAPIを追加します。',W/2,644);
-  ctx.restore();
-}
-function handleRankingClick(cx,cy){
-  if(hitBackBtn(cx,cy)){setHomeState('home');return;}
-  const r=rankingAccountRect();
-  if(cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h){
-    accountState.profile?setGameUserName():startGoogleSignIn();
-  }
+function clamp(v, min, max){
+  return Math.max(min, Math.min(max, v));
 }
 
-// ── 設定画面 ──
-const ACCOUNT_SECTION_Y = 284;
-const AUDIO_SECTION_Y = 374;
-function accountLinkRect(){
-  return {x:24,y:ACCOUNT_SECTION_Y,w:W-48,h:62};
+function formatNumber(n){
+  const v = Math.floor(Number(n) || 0);
+  if(v >= 1000000) return `${(v/1000000).toFixed(1)}M`;
+  if(v >= 10000) return `${Math.floor(v/1000)}K`;
+  return v.toLocaleString('ja-JP');
 }
-function accountLogoutRect(){
-  const r=accountLinkRect();
-  return {x:r.x+r.w-74,y:r.y+36,w:58,h:18};
+
+function colorCss(color){
+  if(typeof color === 'string') return color;
+  return `#${Number(color).toString(16).padStart(6, '0')}`;
 }
-function drawAccountLinkCard(){
-  const r=accountLinkRect();
-  const profile=accountState.profile;
-  const ready=hasGoogleClientId();
-  const color=profile?HOYO_UI.jade:(ready?HOYO_UI.gold:HOYO_UI.rose);
-  const title=profile?currentPlayerName():(accountState.loading?'ログイン準備中':(ready?'Googleでログイン':'Google Client ID 未設定'));
-  drawSectionLabel('アカウント連携',24,r.y-20,color);
-  drawCutPanel(r.x,r.y,r.w,r.h,color,!!profile);
-  drawStatusTag(r.x+12,r.y+14,58,26,profile?'LINK':'GOOGLE',color,!!profile);
-  ctx.textAlign='left';
-  ctx.textBaseline='middle';
-  ctx.font=`900 14px ${UI_FONT}`;
-  ctx.fillStyle=profile?HOYO_UI.text:color;
-  fillFitText(title,r.x+82,r.y+18,r.w-150);
-  ctx.font=`bold 11px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  const desc=profile
-    ? `${profile.email || 'Googleアカウント'} / タップで名前変更`
-    : (ready?'この端末のセーブをGoogleアカウントに紐づけます':'index.html の BARRAGE_GOOGLE_CLIENT_ID を設定してください');
-  fillFitText(desc,r.x+82,r.y+39,r.w-104);
-  ctx.textAlign='right';
-  ctx.font=`900 10px ${UI_FONT}`;
-  ctx.fillStyle=color;
-  ctx.fillText(profile?'PLAYER NAME':(accountState.loading?'LOADING':(ready?'SIGN IN':'SETUP')),r.x+r.w-16,r.y+18);
-  if(profile){
-    const out=accountLogoutRect();
-    drawStatusTag(out.x,out.y,out.w,out.h,'LOGOUT',HOYO_UI.rose,false);
-  }
-}
-function hitAccountLink(cx,cy){
-  const r=accountLinkRect();
-  return cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h;
-}
-function hitAccountLogout(cx,cy){
-  const r=accountLogoutRect();
-  return accountState.profile&&cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h;
-}
-function audioSettingsRows(startY=318){
-  return [
-    {key:'sound',label:'マスター音量',desc:'すべての音を切り替えます。',color:HOYO_UI.blue,y:startY},
-    {key:'music',label:'BGM',desc:'バトル中のミュージック。',color:'#b96cff',y:startY+60},
-    {key:'sfx',label:'SE',desc:'ショット・ヒット・アップ音。',color:HOYO_UI.gold,y:startY+120},
-  ];
-}
-function drawAudioSettingsRows(startY=318){
-  const bx=24,bw=W-48,bh=50;
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  drawSectionLabel('サウンド',24,startY-24,HOYO_UI.gold);
-  for(const row of audioSettingsRows(startY)){
-    const on=!!meta.settings[row.key];
-    drawCutPanel(bx,row.y,bw,bh,row.color,on);
-    ctx.font=`900 14px ${UI_FONT}`;
-    ctx.fillStyle=on?HOYO_UI.text:HOYO_UI.faint;
-    ctx.fillText(row.label,bx+18,row.y+18);
-    ctx.font=`bold 11px ${UI_FONT}`;
-    ctx.fillStyle=HOYO_UI.muted;
-    ctx.fillText(row.desc,bx+18,row.y+36);
-    const tx=bx+bw-70,ty=row.y+13,tw=52,th=24;
-    cutPanel(tx,ty,tw,th,10);
-    ctx.fillStyle=on?h2r(row.color,.35):'rgba(232,232,240,.08)';ctx.fill();
-    ctx.strokeStyle=on?h2r(row.color,.76):'rgba(232,232,240,.18)';ctx.lineWidth=1;cutPanel(tx,ty,tw,th,10);ctx.stroke();
-    ctx.beginPath();ctx.arc(tx+(on?tw-14:14),ty+th/2,8,0,Math.PI*2);
-    ctx.fillStyle=on?row.color:'rgba(232,232,240,.38)';ctx.fill();
-    ctx.textAlign='right';
-    ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-    ctx.fillStyle=on?'#e8e8f0':'rgba(232,232,240,.34)';
-    ctx.fillText(on?'オン':'オフ',tx-8,ty+th/2+1);
-    ctx.textAlign='left';
-  }
-}
-function handleAudioSettingsClick(cx,cy,startY=318){
-  const bx=24,bw=W-48,bh=50;
-  for(const row of audioSettingsRows(startY)){
-    if(cx>=bx&&cx<=bx+bw&&cy>=row.y&&cy<=row.y+bh){
-      setAudioToggle(row.key);
-      return true;
-    }
-  }
-  return false;
-}
-function resetDataButtonRect(){
-  return {x:24,y:616,w:W-48,h:54};
-}
-function drawResetDataButton(){
-  const b=resetDataButtonRect();
-  const confirming=resetConfirmFrames>0;
-  drawSectionLabel('セーブデータ',24,b.y-20,HOYO_UI.rose);
-  drawCutPanel(b.x,b.y,b.w,b.h,HOYO_UI.rose,confirming);
-  drawStatusTag(b.x+12,b.y+14,56,26,confirming?'確認':'RESET',HOYO_UI.rose,confirming);
-  ctx.textAlign='left';
-  ctx.textBaseline='middle';
-  ctx.font=`900 14px ${UI_FONT}`;
-  ctx.fillStyle=confirming?HOYO_UI.rose:HOYO_UI.text;
-  ctx.fillText(confirming?'もう一度タップで初期化':'データ初期化',b.x+82,b.y+19);
-  ctx.font=`bold 11px ${UI_FONT}`;
-  ctx.fillStyle=confirming?HOYO_UI.text:HOYO_UI.muted;
-  ctx.fillText(confirming?'この操作は取り消せません。':'トークン・機体・強化を初期状態に戻します。',b.x+82,b.y+38);
-}
-function hitResetDataButton(cx,cy){
-  const b=resetDataButtonRect();
-  return cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h;
-}
-function handleResetDataClick(){
-  if(resetConfirmFrames>0){
-    resetSaveData();
+
+function render(t){
+  if(state.mode !== 'play' && state.mode !== 'home'){
     return;
   }
-  resetConfirmFrames=RESET_CONFIRM_FRAMES;
-  shake(2);
-  addFloat(W/2,532,'もう一度タップで初期化',HOYO_UI.rose,11);
-  playSfx('select');
+  renderer.render(scene, camera);
 }
-function drawSettingsScreen(){
-  drawBg();ctx.save();
-  if(resetConfirmFrames>0) resetConfirmFrames--;
-  drawSubBackdrop(.80);
-  drawSubHeader('オプション');
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  drawSectionLabel('操作方法',24,88,HOYO_UI.gold);
-  const modes=[
-    {id:'buttons',label:'タップ操作',desc:'触れた位置へ移動します。',color:HOYO_UI.blue},
-    {id:'stick',label:'ドラッグスティック',desc:'仮想スティックで移動します。',color:HOYO_UI.jade},
-  ];
-  const bx=24, by=110, bw=W-48, bh=70, gap=12;
-  for(let i=0;i<modes.length;i++){
-    const m=modes[i], y=by+i*(bh+gap), active=touchControlMode()===m.id;
-    drawCutPanel(bx,y,bw,bh,m.color,active);
-    drawStatusTag(bx+12,y+17,48,36,i===0?'TAP':'DRAG',m.color,active);
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.font=`900 15px ${UI_FONT}`;ctx.fillStyle=active?m.color:HOYO_UI.text;
-    ctx.fillText(m.label,bx+74,y+24);ctx.shadowBlur=0;
-    ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-    ctx.fillText(m.desc,bx+74,y+47);
-    drawStatusTag(bx+bw-92,y+24,72,21,active?'使用中':'変更',active?HOYO_UI.gold:m.color,active);
-    ctx.textAlign='left';
-  }
-  drawAccountLinkCard();
-  drawAudioSettingsRows(AUDIO_SECTION_Y);
-  drawResetDataButton();
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.faint;
-  ctx.textAlign='center';
-  ctx.fillText('Google連携はオンライン時のみ利用できます。',W/2,580);
-  ctx.restore();
-}
-function handleSettingsClick(cx,cy){
-  if(hitBackBtn(cx,cy)){resetConfirmFrames=0;setHomeState('home');return;}
-  const bx=24, by=110, bw=W-48, bh=70, gap=12;
-  const modes=['buttons','stick'];
-  if(hitResetDataButton(cx,cy)){handleResetDataClick();return;}
-  if(hitAccountLogout(cx,cy)){resetConfirmFrames=0;signOutGoogle();return;}
-  if(hitAccountLink(cx,cy)){resetConfirmFrames=0;accountState.profile?setGameUserName():startGoogleSignIn();return;}
-  for(let i=0;i<modes.length;i++){
-    const y=by+i*(bh+gap);
-    if(cx>=bx&&cx<=bx+bw&&cy>=y&&cy<=y+bh){resetConfirmFrames=0;setTouchControlMode(modes[i]);return;}
-  }
-  if(handleAudioSettingsClick(cx,cy,AUDIO_SECTION_Y)){resetConfirmFrames=0;return;}
-  resetConfirmFrames=0;
-}
-
-// ── ホーム画面 ──
-function drawHomeScreen(){
-  drawBg();ctx.save();
-  ctx.fillStyle='rgba(6,6,14,.72)';ctx.fillRect(0,0,W,H);
-  ctx.fillStyle='rgba(12,16,28,.72)';ctx.fillRect(0,0,W,52);
-  ctx.strokeStyle='rgba(232,232,240,.12)';ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(0,52);ctx.lineTo(W,52);ctx.stroke();
-  ctx.font='34px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.shadowColor='#00f0ff';ctx.shadowBlur=8;ctx.fillStyle='#00f0ff';
-  ctx.fillText('BARRAGE',16,27);ctx.shadowBlur=0;
-  drawTokenAmount(W-16,27,meta.tokens,'right',10);
-  const ship=selectedShipDef();
-  rr(14,60,W-28,110,8);
-  const cg=ctx.createLinearGradient(14,60,W-14,170);
-  cg.addColorStop(0,h2r(ship.color,.16));cg.addColorStop(1,'rgba(6,6,14,.5)');
-  ctx.fillStyle=cg;ctx.fill();
-  ctx.strokeStyle=h2r(ship.color,.30);ctx.lineWidth=1;rr(14,60,W-28,110,8);ctx.stroke();
-  ctx.fillStyle=h2r(ship.color,.52);ctx.fillRect(14,60,3,110);
-  drawCraft(W/2,108,1.0);
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='#e8e8f0';ctx.fillText(ship.name,W/2,152);
-  ctx.font='13px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.fillStyle='rgba(232,232,240,.48)';
-  ctx.fillText(`CORE: ${selectedCoreDef().name}  Lv.${selectedCoreLevel()}  │  ${ship.role}`,W/2,164);
-
-  const actionBg=ctx.createLinearGradient(0,330,0,H);
-  actionBg.addColorStop(0,'rgba(6,6,14,0)');
-  actionBg.addColorStop(.34,'rgba(12,16,28,.62)');
-  actionBg.addColorStop(1,'rgba(6,6,14,.92)');
-  ctx.fillStyle=actionBg;
-  ctx.fillRect(0,330,W,H-330);
-  ctx.strokeStyle='rgba(232,232,240,.08)';
-  ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(18,356);ctx.lineTo(W-18,356);ctx.stroke();
-
-  drawBtn(W/2-BTN_W/2,HOME_START_Y,BTN_W,BTN_H,'スタート','#ff2d78');
-  for(let i=0;i<HOME_NAV_BTNS.length;i++){
-    const b=HOME_NAV_BTNS[i],col=i%2,row=Math.floor(i/2);
-    const bx=HOME_NAV.x+col*(HOME_NAV.w+HOME_NAV.gapX),by=HOME_NAV.y+row*(HOME_NAV.h+HOME_NAV.gapY);
-    rr(bx,by,HOME_NAV.w,HOME_NAV.h,6);ctx.fillStyle='rgba(232,232,240,.045)';ctx.fill();
-    ctx.shadowColor=b.color;ctx.shadowBlur=3;ctx.strokeStyle=h2r(b.color,.42);ctx.lineWidth=1;
-    rr(bx,by,HOME_NAV.w,HOME_NAV.h,6);ctx.stroke();ctx.shadowBlur=0;
-    ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=h2r(b.color,.88);ctx.shadowColor=b.color;ctx.shadowBlur=0;
-    ctx.fillText(b.label,bx+HOME_NAV.w/2,by+HOME_NAV.h/2);ctx.shadowBlur=0;
-  }
-  if(canShowInstallAction()){
-    rr(INSTALL_BTN.x,INSTALL_BTN.y,INSTALL_BTN.w,INSTALL_BTN.h,5);
-    ctx.fillStyle='rgba(0,221,119,.12)';ctx.fill();
-    ctx.strokeStyle='#00dd77';ctx.lineWidth=1.4;rr(INSTALL_BTN.x,INSTALL_BTN.y,INSTALL_BTN.w,INSTALL_BTN.h,5);ctx.stroke();
-    ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle='#00dd77';ctx.shadowColor='#00dd77';ctx.shadowBlur=8;
-    ctx.fillText(installPromptEvent?'アプリを追加':'ホームに追加',W/2,INSTALL_BTN.y+INSTALL_BTN.h/2);
-    ctx.shadowBlur=0;
-  }
-  ctx.restore();
-}
-function drawHomeScreenV2(){
-  drawBg();ctx.save();
-  ctx.fillStyle='rgba(4,6,12,.54)';ctx.fillRect(0,0,W,H);
-
-  const top=ctx.createLinearGradient(0,0,0,96);
-  top.addColorStop(0,'rgba(4,6,12,.96)');
-  top.addColorStop(.66,'rgba(22,24,32,.70)');
-  top.addColorStop(1,'rgba(4,6,12,0)');
-  ctx.fillStyle=top;ctx.fillRect(0,0,W,96);
-  ctx.fillStyle=HOYO_UI.goldSoft;ctx.fillRect(14,16,3,30);
-  ctx.font=`900 31px ${DISPLAY_FONT}`;ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.shadowColor=HOYO_UI.gold;ctx.shadowBlur=5;ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText('BARRAGE',24,32);ctx.shadowBlur=0;
-  ctx.font=`bold 12px ${UI_FONT}`;
-  ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('ネオン迎撃プラットフォーム',25,52);
-  drawTokenAmount(W-16,31,meta.tokens,'right',10);
-
-  const ship=selectedShipDef(), core=selectedCoreDef();
-  const hx=16, hy=74, hw=W-32, hh=254;
-  drawHoyoPanel(hx,hy,hw,hh,10,HOYO_UI.gold);
-  ctx.fillStyle=h2r(ship.color,.28);ctx.fillRect(hx,hy+16,3,hh-32);
-  ctx.fillStyle='rgba(238,247,255,.050)';
-  ctx.fillRect(hx+14,hy+42,hw-28,1);
-  ctx.fillRect(hx+14,hy+196,hw-28,1);
-  ctx.save();
-  ctx.beginPath();ctx.rect(hx,hy,hw,hh);ctx.clip();
-  ctx.strokeStyle='rgba(238,247,255,.055)';ctx.lineWidth=1;
-  for(let i=-4;i<9;i++){
-    const y=hy+138+i*18;
-    ctx.beginPath();ctx.moveTo(hx+18,y);ctx.lineTo(hx+hw-18,y+34);ctx.stroke();
-  }
-  ctx.strokeStyle=h2r(ship.color,.22);ctx.lineWidth=1.1;
-  ctx.beginPath();ctx.ellipse(W/2,hy+142,118,44,0,0,Math.PI*2);ctx.stroke();
-  ctx.beginPath();ctx.ellipse(W/2,hy+142,76,26,0,0,Math.PI*2);ctx.stroke();
-  ctx.restore();
-
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`bold 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText('セレクト中のマシン',hx+18,hy+20);
-  ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText(ship.name,hx+18,hy+39);
-  ctx.textAlign='right';ctx.font=`bold 12px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(`コア ${core.name} / Lv.${selectedCoreLevel()}`,hx+hw-18,hy+39);
-
-  ctx.save();
-  ctx.shadowColor=ship.color;ctx.shadowBlur=24;
-  drawCraft(W/2,hy+132,1.28);
-  ctx.restore();
-
-  ctx.textAlign='center';
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.fillText(slotText(ship).slice(0,54),W/2,hy+214);
-  ctx.fillStyle=h2r(ship.color,.76);
-  ctx.fillText(loadoutText(ship.id).slice(0,58),W/2,hy+232);
-
-  const actionBg=ctx.createLinearGradient(0,330,0,H);
-  actionBg.addColorStop(0,'rgba(4,6,12,0)');
-  actionBg.addColorStop(.30,'rgba(8,10,18,.72)');
-  actionBg.addColorStop(1,'rgba(4,6,12,.96)');
-  ctx.fillStyle=actionBg;ctx.fillRect(0,330,W,H-330);
-
-  const sx=W/2-BTN_W/2, sy=HOME_START_Y;
-  rr(sx,sy,BTN_W,BTN_H,10);
-  const sg=ctx.createLinearGradient(sx,sy,sx+BTN_W,sy+BTN_H);
-  sg.addColorStop(0,'rgba(184,167,255,.32)');
-  sg.addColorStop(.50,'rgba(184,167,255,.16)');
-  sg.addColorStop(1,'rgba(10,12,20,.90)');
-  ctx.fillStyle=sg;ctx.fill();
-  ctx.strokeStyle=HOYO_UI.goldSoft;ctx.lineWidth=1.4;rr(sx,sy,BTN_W,BTN_H,10);ctx.stroke();
-  ctx.fillStyle=HOYO_UI.goldSoft;ctx.fillRect(sx,sy+8,5,BTN_H-16);
-  ctx.font=`900 24px ${DISPLAY_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.shadowColor=HOYO_UI.gold;ctx.shadowBlur=6;ctx.fillStyle=HOYO_UI.text;
-  ctx.fillText('スタート',W/2,sy+BTN_H/2+2);ctx.shadowBlur=0;
-
-  for(let i=0;i<HOME_NAV_VIEW.length;i++){
-    const b=HOME_NAV_VIEW[i],col=i%2,row=Math.floor(i/2);
-    const bx=HOME_NAV.x+col*(HOME_NAV.w+HOME_NAV.gapX),by=HOME_NAV.y+row*(HOME_NAV.h+HOME_NAV.gapY);
-    rr(bx,by,HOME_NAV.w,HOME_NAV.h,8);
-    const ng=ctx.createLinearGradient(bx,by,bx+HOME_NAV.w,by+HOME_NAV.h);
-    ng.addColorStop(0,'rgba(238,247,255,.070)');
-    ng.addColorStop(1,'rgba(10,13,22,.86)');
-    ctx.fillStyle=ng;ctx.fill();
-    ctx.strokeStyle=HOYO_UI.line;ctx.lineWidth=1;rr(bx,by,HOME_NAV.w,HOME_NAV.h,8);ctx.stroke();
-    ctx.fillStyle=h2r(b.color,.36);ctx.fillRect(bx,by+8,3,HOME_NAV.h-16);
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.font=`900 14px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-    ctx.fillText(b.label,bx+14,by+21);
-    ctx.font=`11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-    ctx.fillText(b.sub,bx+14,by+39);
-    ctx.textAlign='right';ctx.font=`bold 14px ${UI_FONT}`;
-    ctx.fillStyle=HOYO_UI.faint;
-    ctx.fillText('>',bx+HOME_NAV.w-12,by+HOME_NAV.h/2);
-  }
-  if(canShowInstallAction()){
-    rr(INSTALL_BTN.x,INSTALL_BTN.y,INSTALL_BTN.w,INSTALL_BTN.h,5);
-    ctx.fillStyle='rgba(0,221,119,.10)';ctx.fill();
-    ctx.strokeStyle='rgba(0,221,119,.54)';ctx.lineWidth=1;rr(INSTALL_BTN.x,INSTALL_BTN.y,INSTALL_BTN.w,INSTALL_BTN.h,5);ctx.stroke();
-    ctx.font='bold 12px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle='#00dd77';
-    ctx.fillText(installPromptEvent?'アプリを追加':'ホームに追加',W/2,INSTALL_BTN.y+INSTALL_BTN.h/2);
-  }
-  ctx.restore();
-}
-function drawHomeScreenV3(){
-  drawBg();ctx.save();
-  drawSubBackdrop(.54);
-
-  drawBarrageLogo(0,0,1);
-  drawHomeTokenBadge();
-
-  const ship=selectedShipDef(), core=selectedCoreDef();
-  const hx=14, hy=78, hw=W-28, hh=276;
-  drawCutPanel(hx,hy,hw,hh,ship.color,true);
-  ctx.save();
-  ctx.beginPath();ctx.rect(hx,hy,hw,hh);ctx.clip();
-  ctx.fillStyle=h2r(ship.color,.10);
-  ctx.fillRect(hx,hy,hw,hh);
-  ctx.fillStyle='rgba(0,0,0,.18)';
-  ctx.fillRect(hx,hy+hh-74,hw,74);
-  ctx.strokeStyle='rgba(238,247,255,.060)';ctx.lineWidth=1;
-  for(let i=-3;i<9;i++){
-    const y=hy+24+i*30;
-    ctx.beginPath();ctx.moveTo(hx+28,y);ctx.lineTo(hx+hw-28,y+72);ctx.stroke();
-  }
-  ctx.fillStyle=h2r(HOYO_UI.gold,.88);
-  cutPanel(hx+16,hy+14,104,30,8);ctx.fill();
-  ctx.fillStyle=HOYO_UI.ink;
-  ctx.font=`900 14px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('SELECTED',hx+68,hy+30);
-  ctx.restore();
-  drawHighScoreBadge(hx+hw-128,hy+16,108,58);
-
-  ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.font=`900 28px ${DISPLAY_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(displayName('ship',ship),hx+20,hy+73,214);
-  ctx.font=`900 11px ${UI_FONT}`;ctx.fillStyle=h2r(ship.color,.95);
-  fillFitText(ship.role.toUpperCase(),hx+21,hy+99,178);
-
-  drawCutPanel(hx+20,hy+118,143,48,HOYO_UI.gold,false);
-  ctx.font=`900 9px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.gold;
-  ctx.fillText('コアモジュール',hx+34,hy+136);
-  ctx.font=`900 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.text;
-  fillFitText(`${displayName('core',core)}  Lv.${selectedCoreLevel()}`,hx+34,hy+153,112);
-
-  ctx.save();
-  ctx.shadowColor=ship.color;ctx.shadowBlur=30;
-  drawCraft(hx+hw-118,hy+132,1.56);
-  ctx.restore();
-
-  const infoY=hy+190;
-  drawCutPanel(hx+18,infoY,hw-36,54,ship.color,false);
-  ctx.font=`bold 11px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-  ctx.textAlign='left';
-  fillFitText(slotText(ship),hx+32,infoY+20,hw-64);
-  ctx.font=`900 12px ${UI_FONT}`;ctx.fillStyle=ship.color;
-  fillFitText(loadoutText(ship.id),hx+32,infoY+39,hw-64);
-  drawCheckpointButton();
-
-  const sx=W/2-BTN_W/2, sy=HOME_START_Y;
-  drawCutPanel(sx,sy,BTN_W,BTN_H,HOYO_UI.gold,true);
-  ctx.fillStyle=HOYO_UI.gold;
-  cutPanel(sx+2,sy+2,BTN_W-4,BTN_H-4,13);ctx.fill();
-  ctx.fillStyle='rgba(7,8,8,.20)';ctx.fillRect(sx+8,sy+8,5,BTN_H-16);
-  ctx.font=`900 31px ${DISPLAY_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=HOYO_UI.ink;
-  ctx.fillText('スタート',W/2,sy+BTN_H/2+1);
-  ctx.font=`900 10px ${UI_FONT}`;ctx.fillStyle='rgba(7,8,8,.70)';
-  ctx.fillText('READY',W/2,sy+BTN_H-9);
-
-  for(let i=0;i<HOME_NAV_VIEW.length;i++){
-    const b=HOME_NAV_VIEW[i],col=i%2,row=Math.floor(i/2);
-    const bx=HOME_NAV.x+col*(HOME_NAV.w+HOME_NAV.gapX),by=HOME_NAV.y+row*(HOME_NAV.h+HOME_NAV.gapY);
-    drawCutPanel(bx,by,HOME_NAV.w,HOME_NAV.h,b.color,false);
-    ctx.textAlign='left';ctx.textBaseline='middle';
-    ctx.font=`900 13px ${UI_FONT}`;ctx.fillStyle=h2r(b.color,.98);
-    fillFitText(b.label,bx+15,by+19,HOME_NAV.w-42);
-    ctx.font=`bold 10px ${UI_FONT}`;ctx.fillStyle=HOYO_UI.muted;
-    fillFitText(b.sub,bx+15,by+38,HOME_NAV.w-34);
-    ctx.fillStyle=h2r(b.color,.88);
-    ctx.font=`900 16px ${UI_FONT}`;
-    ctx.textAlign='right';
-    ctx.fillText('>',bx+HOME_NAV.w-12,by+HOME_NAV.h/2+1);
-  }
-  if(canShowInstallAction()){
-    drawCutPanel(INSTALL_BTN.x,INSTALL_BTN.y,INSTALL_BTN.w,INSTALL_BTN.h,HOYO_UI.jade,false);
-    ctx.font=`900 12px ${UI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=HOYO_UI.jade;
-    ctx.fillText(installPromptEvent?'アプリを追加':'ホームに追加',W/2,INSTALL_BTN.y+INSTALL_BTN.h/2);
-  }
-  ctx.restore();
-}
-function drawStartScreen(){
-  if(homeState==='store'){drawStoreScreen();return;}
-  if(homeState==='warehouse'){drawWarehouseScreen();return;}
-  if(homeState==='upgrade'){drawUpgradeScreen();return;}
-  if(homeState==='codex'){drawCodexScreen();return;}
-  if(homeState==='ranking'){drawRankingScreen();return;}
-  if(homeState==='settings'){drawSettingsScreen();return;}
-  drawHomeScreenV3();
-}
-function drawGameOver(){
-  ctx.save();
-  ctx.fillStyle='rgba(6,6,14,.82)'; ctx.fillRect(0,0,W,H);
-  ctx.font='66px "Teko","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif';
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.shadowColor='#ff2d78'; ctx.shadowBlur=12; ctx.fillStyle='#ff2d78';
-  ctx.fillText('GAME OVER',W/2,H/2-74); ctx.shadowBlur=0;
-  ctx.font='14px "Rajdhani","Zen Kaku Gothic New","Yu Gothic UI",Meiryo,sans-serif'; ctx.fillStyle='#c8c8e0';
-  ctx.fillText(`SCORE   ${formatCompactNumber(score)} / HI ${formatCompactNumber(meta.highScore.score)}`,W/2,H/2+6);
-  ctx.fillText(`WAVE    ${wave} / BEST ${formatCompactNumber(highScoreWave())}`,W/2,H/2+30);
-  ctx.globalAlpha=tokensEarned>0?1:.45;
-  drawTokenAmount(W/2,H/2+54,`+${tokensEarned}`,'center',14);
-  ctx.globalAlpha=1;
-  drawBtn(W/2-BTN_W/2,GAME_OVER_RETRY_Y,BTN_W,BTN_H,'リトライ','#00f0ff');
-  drawBtn(W/2-BTN_W/2,GAME_OVER_HOME_Y,BTN_W,BTN_H,'ホーム','#88aaff');
-  if(canUseHighScoreCheckpoint()) drawBtn(W/2-BTN_W/2,GAME_OVER_CHECKPOINT_Y,BTN_W,BTN_H,`WAVE ${highScoreCheckpointWave()}`,'#b8a7ff');
-  ctx.restore();
-}
-
-// ─────────────────────────────────────
-//  ゲーム開始・終了
-// ─────────────────────────────────────
-function startGame(startWave=1){
-  unlockAudio();
-  invalidateLoadoutCache();
-  const loadout=getLoadoutSnapshot();
-  const startAt=Math.max(1,Math.floor(Number(startWave)||1));
-  runStartWave=startAt;
-  state='play'; score=0; coins=0; wave=startAt; frame=0; hp=100; maxHp=100;
-  maxHp=Math.ceil(100*bodyMult('hp')); hp=maxHp;
-  xp=0; xpLevel=0; hitXpBank=0; tokensEarned=0; invincible=0; skillPoints=(loadout.ship.id==='coreOnly'?2:1)+Math.max(0,startAt-1); fireTimer=0; regenBank=0; shield=0; shieldCooldown=0; droneTimer=0; bitTimer=0; shotSeq=0; waveBanner=startAt>1?120:0; waveFrame=0;
-  arrows=[];enemies=[];enemyBullets=[];particles=[];epOrbs=[];floatTexts=[];pendingSpecials=[];upgradeZones=[];
-  statLevels   ={fireRate:0,bulletSpeed:0,damage:0,range:0,hp:0,xpMult:0,speed:0,critChance:0,critDamage:0,regen:0};
-  specialLevels=makeSpecialLevels();
-  player.x=W/2; player.y=PLAYER_Y; player.prevX=player.x; player.prevY=player.y;
-  if(startAt>1) addFloat(W/2,86,`CHECKPOINT WAVE ${startAt}`,HOYO_UI.gold,13);
-  if(startAt%BOSS_WAVE_INTERVAL===0) spawnBoss();
-  resetBgmTrack(true);
-  playBgm();
-  playSfx('start');
-}
-function endGame(){
-  if(state!=='dead'){
-    recordRunHighScore();
-    awardTokens();
-  }
-  state='dead';
-  pauseBgm();
-  playSfx('dead');
-}
-function returnHome(){
-  if(state==='play'||state==='pause'){
-    recordRunHighScore();
-    awardTokens();
-  }
-  state='start';
-  setHomeState('home');
-  pauseView='menu';
-  stopTouchMove();
-  activePointerId=null;
-  arrows=[];enemies=[];enemyBullets=[];epOrbs=[];upgradeZones=[];pendingSpecials=[];
-  pauseBgm();
-}
-function canShowInstallAction(){
-  return !appInstalled && (installPromptEvent || hasTouchInput);
-}
-async function installApp(){
-  if(installPromptEvent){
-    const promptEvent=installPromptEvent;
-    installPromptEvent=null;
-    promptEvent.prompt();
-    const choice=await promptEvent.userChoice.catch(()=>null);
-    if(choice?.outcome==='accepted') appInstalled=true;
-    return;
-  }
-  addFloat(W/2,H-110,'共有からホームに追加','#00dd77',11);
-  shake(3);
-}
-window.addEventListener('beforeinstallprompt',e=>{
-  e.preventDefault();
-  installPromptEvent=e;
-});
-window.addEventListener('appinstalled',()=>{
-  appInstalled=true;
-  installPromptEvent=null;
-});
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
-  });
-}
-
-// ─────────────────────────────────────
-//  入力
-// ─────────────────────────────────────
-window.addEventListener('keydown',e=>{
-  unlockAudio();
-  keys[e.key]=true;
-  if(e.key==='Enter'||e.key===' '){if(state==='start'||state==='dead') startGame();}
-  if(e.key==='Escape'){
-    if(state==='play') pauseGame();
-    else if(state==='pause') resumeGame();
-    else if(state==='skillTree') closeSkillTree();
-  }
-});
-window.addEventListener('keyup',e=>{keys[e.key]=false;});
-function canvasPoint(e){
-  const rect=canvas.getBoundingClientRect();
-  const cx=(e.clientX-rect.left)*(W/rect.width);
-  const cy=(e.clientY-rect.top)*(H/rect.height);
-  mouseX=cx;
-  mouseY=cy;
-  return {cx,cy,rect};
-}
-function startTouchMove(cx){
-  touchTargetX=Math.max(player.size,Math.min(W-player.size,cx));
-  touchDir=touchTargetX<player.x-6?-1:(touchTargetX>player.x+6?1:0);
-  touchAxis=touchDir;
-}
-function startStickMove(cx,cy){
-  const minY=H-HUD_B+8, maxY=H-24;
-  stickState.active=true;
-  stickState.baseX=Math.max(TOUCH_STICK.baseR+10,Math.min(W-TOUCH_STICK.baseR-10,cx));
-  stickState.baseY=Math.max(minY,Math.min(maxY,cy));
-  updateStickMove(cx,cy);
-}
-function updateStickMove(cx,cy){
-  if(!stickState.active) return;
-  const dx=Math.max(-TOUCH_STICK.max,Math.min(TOUCH_STICK.max,cx-stickState.baseX));
-  const dy=Math.max(-TOUCH_STICK.max,Math.min(TOUCH_STICK.max,cy-stickState.baseY));
-  const axis=dx/TOUCH_STICK.max;
-  touchAxis=Math.abs(axis)<TOUCH_STICK.dead ? 0 : axis;
-  touchDir=touchAxis<-TOUCH_STICK.dead ? -1 : (touchAxis>TOUCH_STICK.dead ? 1 : 0);
-  stickState.knobX=stickState.baseX+dx;
-  stickState.knobY=stickState.baseY+dy;
-}
-function startTouchControl(cx,cy){
-  if(touchControlMode()==='stick') startStickMove(cx,cy);
-  else startTouchMove(cx);
-}
-function updateTouchControl(cx,cy){
-  if(touchControlMode()==='stick') updateStickMove(cx,cy);
-  else startTouchMove(cx);
-}
-function stopTouchMove(){
-  touchDir=0;
-  touchAxis=0;
-  touchTargetX=null;
-  stickState.active=false;
-  stickState.baseX=TOUCH_STICK.idleX;
-  stickState.baseY=TOUCH_STICK.y;
-  stickState.knobX=TOUCH_STICK.idleX;
-  stickState.knobY=TOUCH_STICK.y;
-}
-function handleCanvasAction(cx,cy){
-  unlockAudio();
-  if(state==='specialUpgrade'){handleSpecialAt(cx,cy);return true;}
-  if(state==='skillTree'){handleSkillTreeClick(cx,cy);return true;}
-  if(state==='pause'){handlePauseClick(cx,cy);return true;}
-  if(state==='play'&&hitPause(cx,cy)){pauseGame();return true;}
-  if(state==='play'&&hitSkillOpen(cx,cy)){openSkillTree();return true;}
-  if(state==='start'){
-    if(homeState==='store'){handleStoreClick(cx,cy);return true;}
-    if(homeState==='warehouse'){handleWarehouseClick(cx,cy);return true;}
-    if(homeState==='upgrade'){handleUpgradeClick(cx,cy);return true;}
-    if(homeState==='codex'){handleCodexClick(cx,cy);return true;}
-    if(homeState==='ranking'){handleRankingClick(cx,cy);return true;}
-    if(homeState==='settings'){handleSettingsClick(cx,cy);return true;}
-    if(handleHomeClick(cx,cy)) return true;
-  }
-  if(state==='dead'){
-    if(hitRetry(cx,cy)){startGame();return true;}
-    if(hitGameOverHome(cx,cy)){returnHome();return true;}
-    if(hitGameOverCheckpoint(cx,cy)){startGame(highScoreCheckpointWave());return true;}
-  }
-  return false;
-}
-canvas.addEventListener('mousemove',e=>{
-  canvasPoint(e);
-});
-canvas.addEventListener('contextmenu',e=>e.preventDefault());
-canvas.addEventListener('selectstart',e=>e.preventDefault());
-canvas.addEventListener('dragstart',e=>e.preventDefault());
-// ホームボタン判定
-function hitBtn(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>HOME_START_Y&&cy<HOME_START_Y+BTN_H; }
-function hitCheckpointStart(cx,cy){
-  const r=checkpointButtonRect();
-  return canUseHighScoreCheckpoint()&&cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h;
-}
-function hitInstall(cx,cy){ return canShowInstallAction()&&cx>=INSTALL_BTN.x&&cx<=INSTALL_BTN.x+INSTALL_BTN.w&&cy>=INSTALL_BTN.y&&cy<=INSTALL_BTN.y+INSTALL_BTN.h; }
-function hitRetry(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>GAME_OVER_RETRY_Y&&cy<GAME_OVER_RETRY_Y+BTN_H; }
-function hitGameOverHome(cx,cy){ return cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>GAME_OVER_HOME_Y&&cy<GAME_OVER_HOME_Y+BTN_H; }
-function hitGameOverCheckpoint(cx,cy){ return canUseHighScoreCheckpoint()&&cx>W/2-BTN_W/2&&cx<W/2+BTN_W/2&&cy>GAME_OVER_CHECKPOINT_Y&&cy<GAME_OVER_CHECKPOINT_Y+BTN_H; }
-function hitPause(cx,cy){ return cx>=PAUSE_BTN.x&&cx<=PAUSE_BTN.x+PAUSE_BTN.w&&cy>=PAUSE_BTN.y&&cy<=PAUSE_BTN.y+PAUSE_BTN.h; }
-function hitNavBtn(cx,cy){
-  for(let i=0;i<HOME_NAV_BTNS.length;i++){
-    const col=i%2,row=Math.floor(i/2);
-    const bx=HOME_NAV.x+col*(HOME_NAV.w+HOME_NAV.gapX);
-    const by=HOME_NAV.y+row*(HOME_NAV.h+HOME_NAV.gapY);
-    if(cx>=bx&&cx<=bx+HOME_NAV.w&&cy>=by&&cy<=by+HOME_NAV.h) return HOME_NAV_BTNS[i].id;
-  }
-  return null;
-}
-function handleHomeClick(cx,cy){
-  if(hitInstall(cx,cy)){installApp();return true;}
-  if(hitCheckpointStart(cx,cy)){startGame(highScoreCheckpointWave());return true;}
-  if(hitBtn(cx,cy)){startGame();return true;}
-  const nav=hitNavBtn(cx,cy);
-  if(nav){setHomeState(nav);return true;}
-  return false;
-}
-
-canvas.addEventListener('click',e=>{
-  if(suppressNextClick){suppressNextClick=false;return;}
-  const {cx,cy}=canvasPoint(e);
-  handleCanvasAction(cx,cy);
-});
-if(window.PointerEvent){
-  canvas.addEventListener('pointerdown',e=>{
-    const {cx,cy}=canvasPoint(e);
-    suppressNextClick=true;
-    if(handleCanvasAction(cx,cy)) return;
-    if(state==='play'){
-      activePointerId=e.pointerId;
-      canvas.setPointerCapture?.(e.pointerId);
-      startTouchControl(cx,cy);
-      e.preventDefault();
-    }
-  });
-  canvas.addEventListener('pointermove',e=>{
-    const {cx,cy}=canvasPoint(e);
-    if(state==='play'&&activePointerId===e.pointerId){
-      updateTouchControl(cx,cy);
-      e.preventDefault();
-    }
-  });
-  const endPointer=e=>{
-    if(activePointerId===e.pointerId){
-      canvas.releasePointerCapture?.(e.pointerId);
-      activePointerId=null;
-      stopTouchMove();
-      e.preventDefault();
-    }
-  };
-  canvas.addEventListener('pointerup',endPointer);
-  canvas.addEventListener('pointercancel',endPointer);
-}else{
-  canvas.addEventListener('touchstart',e=>{
-    e.preventDefault();
-    const t0=e.touches[0];
-    const {cx,cy}=canvasPoint(t0);
-    if(handleCanvasAction(cx,cy)) return;
-    if(state==='play') startTouchControl(cx,cy);
-  },{passive:false});
-  canvas.addEventListener('touchmove',e=>{
-    e.preventDefault();
-    if(state!=='play') return;
-    const {cx,cy}=canvasPoint(e.touches[0]);
-    updateTouchControl(cx,cy);
-  },{passive:false});
-  canvas.addEventListener('touchend',e=>{e.preventDefault();stopTouchMove();},{passive:false});
-  canvas.addEventListener('touchcancel',e=>{e.preventDefault();stopTouchMove();},{passive:false});
-}
-
-// ─────────────────────────────────────
-//  ゲームループ
-// ─────────────────────────────────────
-function loop(){
-  requestAnimationFrame(loop);
-
-  if(state==='start'){
-    updateParticles();updateFloatTexts();
-    drawStartScreen();drawParticles();drawFloatTexts();return;
-  }
-  if(state==='dead'){
-    drawBg();
-    drawArrows();for(const e of enemies)drawEnemy(e);
-    drawEnemyBullets();
-    drawEpOrbs();drawStasisAura();drawSupportUnits();drawShield();drawPlayer();drawParticles();drawFloatTexts();
-    drawGameOver();return;
-  }
-  if(state==='pause'){
-    drawBg();
-    drawArrows();
-    for(const e of enemies)drawEnemy(e);
-    drawEnemyBullets();
-    drawEpOrbs();
-    drawStasisAura();
-    drawSupportUnits();
-    drawShield();
-    drawPlayer();
-    drawParticles();
-    drawFloatTexts();
-    drawHUDZZZ();
-    drawPauseMenuZZZ();
-    return;
-  }
-  if(state==='specialUpgrade'){
-    drawBg();updateParticles();updateEpOrbs();updateFloatTexts();
-    drawParticles();drawEpOrbs();
-    drawSpecialScreen();drawFloatTexts();return;
-  }
-  if(state==='skillTree'){
-    // スキルツリー中はゲーム側の時間を完全停止する。
-    drawFrozenPlayScene();
-    drawUpgradeDrawer();
-    drawFloatTexts();
-    return;
-  }
-
-  // ── プレイ中 ──
-  frame++;
-  advanceWaveTimer();
-
-  // シェイク計算
-  let sx=0, sy=0;
-  if(shakeT>0){shakeT--;const s=shakeAmp*(shakeT/14);sx=(Math.random()-.5)*s*2;sy=(Math.random()-.5)*s*2;}
-
-  // 移動
-  if(touchTargetX!==null){
-    touchDir=touchTargetX<player.x-6?-1:(touchTargetX>player.x+6?1:0);
-    touchAxis=touchDir;
-  }
-  let moveAxis=0;
-  if(keys['ArrowLeft']||keys['a']||keys['A']) moveAxis-=1;
-  if(keys['ArrowRight']||keys['d']||keys['D']) moveAxis+=1;
-  if(Math.abs(touchAxis)>0) moveAxis+=touchAxis;
-  moveAxis=Math.max(-1,Math.min(1,moveAxis));
-  const spd=moveSpeed();
-  player.prevX=player.x;
-  player.prevY=player.y;
-  player.x+=spd*moveAxis;
-  player.x=Math.max(player.size, Math.min(W-player.size, player.x));
-
-  // トレイル
-  // 発射
-  fireTimer++;
-  const shotInterval=fireInterval();
-  if(fireTimer>=shotInterval){fireTimer-=shotInterval;fireArrows();}
-
-  // 敵スポーン
-  if(frame>GRACE_FRAMES&&waveFrame>0){
-    const sr=enemySpawnInterval();
-    if(waveFrame%sr===0) spawnEnemyPack();
-  }
-
-  // ゲートタイマー
-  // 更新
-  updateSupportUnits();updateShield();updateArrows();updateEnemyBullets();updateEpOrbs();updateParticles();updateFloatTexts();
-  const stasisActive=specialLevels.stasisAura>0;
-  const stasisR=stasisActive?stasisRadius():0;
-  const stasisR2=stasisR*stasisR;
-  const stasisSlow=stasisActive?stasisMult():1;
-  for(let i=enemies.length-1;i>=0;i--){
-    const e=enemies[i];
-    const slow=stasisActive&&distSq(player.x,player.y,e.x,e.y)<stasisR2?stasisSlow:1;
-    if(e.boss) updateBoss(e,slow);
-    else{
-      e.x+=e.vx*slow;e.y+=e.vy*slow;
-      e.rot+=e.rotSpd*slow;
-      if(e.y>H+e.size*2) removeAtFast(enemies,i);
-    }
-  }
-  checkCollisions();
-
-  // 描画（シェイク付き）
-  ctx.save();
-  ctx.translate(sx,sy);
-  drawBg();
-  drawArrows();
-  for(const e of enemies)drawEnemy(e);
-  drawEnemyBullets();
-  drawEpOrbs();
-  drawStasisAura();
-  drawSupportUnits();
-  drawShield();
-  drawPlayer();
-  drawParticles();
-  drawFloatTexts();
-  drawWaveBanner();
-  ctx.restore();
-
-  // HUDはシェイクの外で描画
-  drawHUDZZZ();
-  drawTouchControls();
-}
-
-// ─────────────────────────────────────
-//  初期化
-// ─────────────────────────────────────
-loadAccountSession();
-loadMeta();
-initGoogleIdentity();
-resizeCanvas();
-initBg();
-loop();
-

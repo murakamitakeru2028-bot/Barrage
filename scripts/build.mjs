@@ -1,12 +1,25 @@
-import { cp, mkdir, copyFile, readFile, writeFile, readdir } from "node:fs/promises";
+import { cp, mkdir, copyFile, readFile, writeFile, readdir, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
-await mkdir("dist", { recursive: true });
-await copyFile("index.html", "dist/index.html");
-await cp("public", "dist", { recursive: true });
-await cp("src", "dist/src", { recursive: true });
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const distDir = resolve(projectRoot, "dist");
+
+async function resetDist() {
+  if (relative(projectRoot, distDir) !== "dist") {
+    throw new Error(`Refusing to clean unexpected dist path: ${distDir}`);
+  }
+
+  await rm(distDir, { recursive: true, force: true });
+  await mkdir(distDir, { recursive: true });
+}
+
+await resetDist();
+await copyFile(join(projectRoot, "index.html"), join(distDir, "index.html"));
+await cp(join(projectRoot, "public"), distDir, { recursive: true });
+await cp(join(projectRoot, "src"), join(distDir, "src"), { recursive: true });
 
 const crcTable = new Uint32Array(256);
 for (let i = 0; i < 256; i++) {
@@ -75,8 +88,8 @@ function makeIcon(size) {
   ]);
 }
 
-await writeFile("dist/icon-192.png", makeIcon(192));
-await writeFile("dist/icon-512.png", makeIcon(512));
+await writeFile(join(distDir, "icon-192.png"), makeIcon(192));
+await writeFile(join(distDir, "icon-512.png"), makeIcon(512));
 
 async function listFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -92,17 +105,17 @@ async function listFiles(dir) {
   return files;
 }
 
-const distFiles = (await listFiles("dist"))
+const distFiles = (await listFiles(distDir))
   .filter(file => !file.endsWith(`${sep}sw.js`))
-  .map(file => relative("dist", file).split(sep).join("/"))
+  .map(file => relative(distDir, file).split(sep).join("/"))
   .sort();
 const precacheAssets = ["./", ...distFiles];
-const sw = await readFile("dist/sw.js", "utf8");
-const cacheInputs = await Promise.all(distFiles.map(file => readFile(`dist/${file}`)));
+const sw = await readFile(join(distDir, "sw.js"), "utf8");
+const cacheInputs = await Promise.all(distFiles.map(file => readFile(join(distDir, file))));
 cacheInputs.push(Buffer.from(sw));
 const cacheVersion = createHash("sha256").update(Buffer.concat(cacheInputs)).digest("hex").slice(0, 12);
 await writeFile(
-  "dist/sw.js",
+  join(distDir, "sw.js"),
   sw
     .replace("__CACHE_VERSION__", cacheVersion)
     .replace("__PRECACHE_ASSETS__", JSON.stringify(precacheAssets, null, 2)),

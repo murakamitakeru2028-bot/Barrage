@@ -13,7 +13,6 @@
   <link rel="icon" href="icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icon-192.png">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Rajdhani:wght@500;600;700&family=Teko:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap');
     *, *::before, *::after {
       margin:0; padding:0; box-sizing:border-box;
       -webkit-tap-highlight-color: transparent;
@@ -46,6 +45,26 @@
 <canvas id="canvas" width="390" height="700"></canvas>
 <script>
   window.BARRAGE_GOOGLE_CLIENT_ID = "1014896137390-a99h1cgd0bebkh2h88frac5l3gq6llpr.apps.googleusercontent.com";
+  window.__BARRAGE_ERROR__ = "";
+  window.addEventListener("error", event => {
+    window.__BARRAGE_ERROR__ = event.message || String(event.error || "error");
+  });
+  window.addEventListener("unhandledrejection", event => {
+    window.__BARRAGE_ERROR__ = String(event.reason?.message || event.reason || "rejection");
+  });
+  const canUseServiceWorker =
+    "serviceWorker" in navigator &&
+    (location.protocol === "https:" ||
+      location.hostname === "localhost" ||
+      location.hostname === "127.0.0.1" ||
+      location.hostname === "::1");
+  if (canUseServiceWorker) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(error => {
+        window.__BARRAGE_SW_ERROR__ = error.message || String(error);
+      });
+    });
+  }
 </script>
 <script type="module" src="src/game.js"></script>
 </body>
