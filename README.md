@@ -2,6 +2,8 @@
 
 Single-page canvas game.
 
+Play online: https://murakamitakeru2028-bot.github.io/Barrage/
+
 ## Scripts
 
 - `npm run build` copies `index.html` to `dist/` for deployment.

@@ -1,5 +1,5 @@
 {
-  "id": "/",
+  "id": ".",
   "name": "BARRAGE",
   "short_name": "BARRAGE",
   "description": "A vertical canvas barrage shooter.",
