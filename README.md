@@ -2,7 +2,7 @@
 
 Single-page canvas game.
 
-Play online: https://raw.githack.com/murakamitakeru2028-bot/Barrage/gh-pages/index.html
+Play online: https://barrage-beige.vercel.app/
 
 ## Scripts
 
