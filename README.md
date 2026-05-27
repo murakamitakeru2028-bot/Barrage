@@ -2,7 +2,7 @@
 
 Single-page canvas game.
 
-Play online: https://murakamitakeru2028-bot.github.io/Barrage/
+Play online: https://raw.githack.com/murakamitakeru2028-bot/Barrage/gh-pages/index.html
 
 ## Scripts
 
