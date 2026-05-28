@@ -5,14 +5,14 @@ const canvas = document.getElementById('canvas');
 const W = 390;
 const H = 700;
 const TAU = Math.PI * 2;
-const PIPE_RADIUS = 19.4;
+const PIPE_RADIUS = 28.0;
 const PIPE_ARC = Math.PI;
 const PIPE_Z_NEAR = 8.0;
 const PIPE_Z_FAR = -282;
 const PIPE_RING_SPACING = 9.6;
 const PIPE_RING_LOOP = 304;
 const PLAYER_Z = -2.15;
-const PLAYER_RADIAL = .62;
+const PLAYER_RADIAL = .36;
 const PLAYER_Y = -PIPE_RADIUS * PLAYER_RADIAL;
 const CAMERA_BASE_Y = 2.65;
 const CAMERA_BASE_Z = 11.8;
@@ -22,7 +22,7 @@ const ENEMY_VISIBLE_ARC = 2.25;
 const ENEMY_FADE_DISTANCE = 148;
 const BOSS_FADE_DISTANCE = 122;
 const BOSS_SIGHT_Z = -230;
-const CONTROL_TURN_SPEED = 1.78;
+const CONTROL_TURN_SPEED = 0.178;
 const CONTROL_RESPONSE = 5.9;
 const CONTROL_POINTER_RANGE = .46;
 const PLAYER_BANK_SCALE = .20;
@@ -74,12 +74,33 @@ const ENEMY_TYPES = [
 
 const BASIC_STAT_DEFS = [
   { id:'fireRate', name:'連射速度', icon:'FR', color:COLORS.cyan, text:'ショット間隔を短縮' },
-  { id:'bulletSpeed', name:'弾速', icon:'>>', color:COLORS.violet, text:'弾速と射程を強化' },
   { id:'damage', name:'ダメージ', icon:'DM', color:COLORS.rose, text:'全ショット火力を強化' },
+  { id:'bulletSpeed', name:'弾速', icon:'>>', color:COLORS.violet, text:'弾速と射程を強化' },
+  { id:'range', name:'射程距離', icon:'RG', color:0x82d7ff, text:'弾の持続時間を延長' },
   { id:'hp', name:'耐久', icon:'HP', color:0xff6b93, text:'最大耐久と回復量を強化' },
   { id:'speed', name:'機動力', icon:'MV', color:COLORS.cyan, text:'ロール操作を強化' },
+  { id:'critChance', name:'クリティカル率', icon:'CR', color:COLORS.gold, text:'一定確率でクリティカル' },
+  { id:'critDamage', name:'クリティカル倍率', icon:'CD', color:COLORS.orange, text:'クリティカル時の倍率を強化' },
+  { id:'regen', name:'自動回復', icon:'RP', color:COLORS.jade, text:'戦闘中に耐久を自動回復' },
   { id:'xpMult', name:'経験値', icon:'XP', color:COLORS.jade, text:'獲得XPを増加' }
 ];
+const BASIC_STAT_DEFS_BY_ID = Object.fromEntries(BASIC_STAT_DEFS.map(def => [def.id, def]));
+const RUN_BASIC_CAP = 12;
+const BASIC_SKILL_TREE = [
+  { id:'fireRate', row:1, col:2, requires:null, tag:'START' },
+  { id:'damage', row:2, col:1, requires:'fireRate', tag:'POW' },
+  { id:'bulletSpeed', row:2, col:3, requires:'fireRate', tag:'BLS' },
+  { id:'critChance', row:3, col:1, requires:'damage', tag:'CRT' },
+  { id:'hp', row:3, col:2, requires:'damage', tag:'BODY' },
+  { id:'range', row:3, col:3, requires:'bulletSpeed', tag:'RNG' },
+  { id:'critDamage', row:4, col:1, requires:'critChance', tag:'FIN' },
+  { id:'regen', row:4, col:2, requires:'hp', tag:'REC' },
+  { id:'speed', row:4, col:3, requires:'bulletSpeed', tag:'MOV' },
+  { id:'xpMult', row:5, col:3, requires:'speed', tag:'GRW' }
+];
+const BASIC_SKILL_DEFS_BY_ID = Object.fromEntries(
+  BASIC_SKILL_TREE.map((node, index) => [node.id, {...BASIC_STAT_DEFS_BY_ID[node.id], ...node, index}])
+);
 
 const HOME_UPGRADE_CAP = 10;
 const HOME_UPGRADE_PATHS = [
@@ -120,13 +141,29 @@ const HOME_UPGRADE_DEFS = Object.fromEntries(
 );
 
 const SPECIAL_UPGRADE_DEFS = [
-  { id:'barrelMultishot', family:'barrel', name:'マルチショット', icon:'MS', color:COLORS.cyan, text:'弾丸を扇状に拡散して発射', max:1 },
-  { id:'barrelDouble', family:'barrel', name:'ダブルバレル', icon:'DB', color:COLORS.gold, text:'銃身を増設。Lv.3でクアッドバレル', max:3 },
-  { id:'barrelGatling', family:'barrel', name:'ガトリング', icon:'GT', color:COLORS.orange, text:'連射速度を大幅上昇、単発火力は低下', max:1 },
-  { id:'barrelShotgun', family:'barrel', name:'ショットガン', icon:'SG', color:COLORS.rose, text:'短射程の散弾。至近距離火力が非常に高い', max:1 },
-  { id:'barrelSniper', family:'barrel', name:'スナイパー', icon:'SR', color:COLORS.violet, text:'低連射の高速高威力弾を撃つ', max:1 }
+  { id:'barrelMultishot', family:'barrel', name:'マルチショット', icon:'MS', color:COLORS.cyan, text:'弾丸を扇状に拡散。武装の射撃型を決める', max:1, tag:'武装' },
+  { id:'barrelDouble', family:'barrel', name:'ダブルバレル', icon:'DB', color:COLORS.gold, text:'銃身を増設。Lv.3でクアッドバレル', max:3, tag:'武装' },
+  { id:'barrelGatling', family:'barrel', name:'ガトリング', icon:'GT', color:COLORS.orange, text:'連射速度を大幅上昇、単発火力は低下', max:1, tag:'武装' },
+  { id:'barrelShotgun', family:'barrel', name:'ショットガン', icon:'SG', color:COLORS.rose, text:'短射程の散弾。至近距離火力が非常に高い', max:1, tag:'武装' },
+  { id:'barrelSniper', family:'barrel', name:'スナイパー', icon:'SR', color:COLORS.violet, text:'低連射の高速高威力弾を撃つ', max:1, tag:'武装' },
+  { id:'powerShot', family:'payload', name:'パワーショット', icon:'PW', color:COLORS.rose, text:'全弾の威力を上げる特殊弾。武装型と併用可能', max:5, tag:'弾種' },
+  { id:'adrenaline', family:'core', name:'アドレナリン', icon:'AD', color:COLORS.orange, text:'耐久が低いほど射撃威力が上がる', max:4, tag:'コア' },
+  { id:'energyShield', family:'guard', name:'エネルギーシールド', icon:'SH', color:0x9cf5ff, text:'被ダメージを軽減。防御寄りの特殊強化', max:4, tag:'防御' },
+  { id:'stasisAura', family:'field', name:'ステイシスオーラ', icon:'ST', color:COLORS.violet, text:'正面近くの敵の接近速度を落とす領域効果', max:4, tag:'領域' }
 ];
 const SPECIAL_UPGRADE_DEFS_BY_ID = Object.fromEntries(SPECIAL_UPGRADE_DEFS.map(def => [def.id, def]));
+const SPECIAL_SLOT_LIMIT = 5;
+const SPECIAL_SLOT_LABELS = {
+  barrelMultishot: 'マルチ',
+  barrelDouble: 'ダブル',
+  barrelGatling: 'ガト',
+  barrelShotgun: '散弾',
+  barrelSniper: '狙撃',
+  powerShot: '火力弾',
+  adrenaline: '低HP',
+  energyShield: 'シールド',
+  stasisAura: '減速'
+};
 
 const SHIP_DEFS = [
   { id:'nu_arc', name:'NU-3D アーク', role:'標準ロールフレーム', cost:0, color:'#8eefff', partPower:1.35, slots:{barrel:1, innerFrame:1, drone:0}, mult:{hp:1, defense:1, damage:1, fireRate:1, speed:1} },
@@ -144,17 +181,18 @@ const PART_TYPE_LABELS = {
   drone: 'ドローン'
 };
 const PART_DEFS = [
-  { id:'barrel_pulse', type:'barrel', name:'パルスバレル', rarity:'標準', color:COLORS.cyan, text:'連射性能を少し上げる', buff:{fireRate:.035} },
-  { id:'barrel_lance', type:'barrel', name:'ランスバレル', rarity:'火力', color:COLORS.rose, text:'弾丸ダメージを少し上げる', buff:{damage:.030} },
-  { id:'barrel_vector', type:'barrel', name:'ベクターバレル', rarity:'制御', color:COLORS.violet, text:'弾速と射程を少し上げる', buff:{bulletSpeed:.025, range:.020} },
-  { id:'frame_vital', type:'innerFrame', name:'バイタルフレーム', rarity:'耐久', color:0xff6b93, text:'最大HPを上げる', buff:{hp:.045} },
-  { id:'frame_aegis', type:'innerFrame', name:'イージスフレーム', rarity:'防御', color:'#d8e2ea', text:'被ダメージを軽減する', buff:{defense:.030} },
-  { id:'frame_gyro', type:'innerFrame', name:'ジャイロフレーム', rarity:'機動', color:COLORS.jade, text:'移動と回避を少し上げる', buff:{speed:.025, evasion:.012} },
-  { id:'drone_scout', type:'drone', name:'スカウトドローン', rarity:'探索', color:COLORS.jade, text:'XP取得を少し上げる', buff:{xp:.035} },
-  { id:'drone_cargo', type:'drone', name:'カーゴドローン', rarity:'回収', color:COLORS.gold, text:'トークン取得を少し上げる', buff:{token:.030} },
-  { id:'drone_strike', type:'drone', name:'ストライクドローン', rarity:'攻撃', color:COLORS.rose, text:'弾丸ダメージを少し上げる', buff:{damage:.025} }
+  { id:'barrel_pulse', type:'barrel', name:'パルスバレル', rarity:'標準', cost:0, starter:true, color:COLORS.cyan, text:'連射性能を少し上げる', buff:{fireRate:.035} },
+  { id:'barrel_lance', type:'barrel', name:'ランスバレル', rarity:'火力', cost:360, color:COLORS.rose, text:'弾丸ダメージを少し上げる', buff:{damage:.030} },
+  { id:'barrel_vector', type:'barrel', name:'ベクターバレル', rarity:'制御', cost:420, color:COLORS.violet, text:'弾速と射程を少し上げる', buff:{bulletSpeed:.025, range:.020} },
+  { id:'frame_vital', type:'innerFrame', name:'バイタルフレーム', rarity:'耐久', cost:0, starter:true, color:0xff6b93, text:'最大HPを上げる', buff:{hp:.045} },
+  { id:'frame_aegis', type:'innerFrame', name:'イージスフレーム', rarity:'防御', cost:380, color:'#d8e2ea', text:'被ダメージを軽減する', buff:{defense:.030} },
+  { id:'frame_gyro', type:'innerFrame', name:'ジャイロフレーム', rarity:'機動', cost:440, color:COLORS.jade, text:'移動と回避を少し上げる', buff:{speed:.025, evasion:.012} },
+  { id:'drone_scout', type:'drone', name:'スカウトドローン', rarity:'探索', cost:0, starter:true, color:COLORS.jade, text:'XP取得を少し上げる', buff:{xp:.035} },
+  { id:'drone_cargo', type:'drone', name:'カーゴドローン', rarity:'回収', cost:520, color:COLORS.gold, text:'トークン取得を少し上げる', buff:{token:.030} },
+  { id:'drone_strike', type:'drone', name:'ストライクドローン', rarity:'攻撃', cost:560, color:COLORS.rose, text:'弾丸ダメージを少し上げる', buff:{damage:.025} }
 ];
 const PART_BY_ID = Object.fromEntries(PART_DEFS.map(part => [part.id, part]));
+const STARTER_PART_IDS = PART_DEFS.filter(part => part.starter).map(part => part.id);
 
 const GACHA_COST = 120;
 const COSMETIC_RARITIES = [
@@ -332,9 +370,25 @@ let ringPhase = 0;
 let uiDirty = true;
 let activePointer = null;
 let canvas3dActive = false;
+let sceneVisualMode = '';
+let lastVisualFrameAt = 0;
 let bulletsDirty = true;
 let particlesDirty = true;
 let cosmeticBuffCache = null;
+let loadoutBuffCache = null;
+let loadoutMultCache = null;
+let statLevelCache = null;
+const uiBoundsCache = {left:null, top:null, width:null, height:null, scale:null};
+let canvasVisibilityState = null;
+const homeShipDrag = {
+  pointer: null,
+  lastX: 0,
+  lastY: 0,
+  yaw: .22,
+  pitch: -.02,
+  velocity: .10
+};
+const renderSize = {w:0, h:0, dpr:0};
 const hudCache = {};
 
 const ui = createUi();
@@ -345,7 +399,8 @@ bindInput();
 requestAnimationFrame(loop);
 
 function freshStatMap(){
-  return Object.fromEntries(Object.keys(HOME_UPGRADE_DEFS).map(id => [id, 0]));
+  const ids = new Set([...Object.keys(HOME_UPGRADE_DEFS), ...Object.keys(BASIC_SKILL_DEFS_BY_ID)]);
+  return Object.fromEntries([...ids].map(id => [id, 0]));
 }
 
 function freshHomeUpgradeMap(){
@@ -361,11 +416,16 @@ function freshEquippedParts(){
 }
 
 function freshGarageState(){
+  const equippedParts = freshEquippedParts();
+  equippedParts.barrel[0] = 'barrel_pulse';
+  equippedParts.innerFrame[0] = 'frame_vital';
+  equippedParts.drone[0] = 'drone_scout';
   return {
+    partsStoreVersion: 1,
     ownedShips: {[DEFAULT_SHIP_ID]: 1},
     selectedShipId: DEFAULT_SHIP_ID,
-    ownedParts: Object.fromEntries(PART_DEFS.map(part => [part.id, 1])),
-    equippedParts: freshEquippedParts()
+    ownedParts: Object.fromEntries(STARTER_PART_IDS.map(id => [id, 1])),
+    equippedParts
   };
 }
 
@@ -376,8 +436,20 @@ function normalizeGarageState(raw){
   ownedShips[DEFAULT_SHIP_ID] = 1;
   if(!ownedShips[selectedShipId]) selectedShipId = DEFAULT_SHIP_ID;
 
-  const ownedParts = {...base.ownedParts, ...(raw?.ownedParts || {})};
-  for(const part of PART_DEFS) ownedParts[part.id] = Math.max(1, Number(ownedParts[part.id]) || 1);
+  const rawOwnedParts = raw?.ownedParts || {};
+  const legacyFreeParts = !raw?.partsStoreVersion && Object.keys(rawOwnedParts).length >= PART_DEFS.length;
+  const ownedParts = legacyFreeParts ? {...base.ownedParts} : {...base.ownedParts, ...rawOwnedParts};
+  for(const id of STARTER_PART_IDS) ownedParts[id] = Math.max(1, Number(ownedParts[id]) || 1);
+  for(const part of PART_DEFS) ownedParts[part.id] = Math.max(0, Number(ownedParts[part.id]) || 0);
+
+  if(legacyFreeParts){
+    for(const parts of Object.values(raw?.equippedParts || {})){
+      if(!Array.isArray(parts)) continue;
+      for(const id of parts){
+        if(PART_BY_ID[id]) ownedParts[id] = 1;
+      }
+    }
+  }
 
   const equippedParts = freshEquippedParts();
   for(const type of PART_TYPES){
@@ -391,7 +463,7 @@ function normalizeGarageState(raw){
       seen.add(id);
     }
   }
-  return {ownedShips, selectedShipId, ownedParts, equippedParts};
+  return {partsStoreVersion:1, ownedShips, selectedShipId, ownedParts, equippedParts};
 }
 
 function freshCosmeticState(){
@@ -457,7 +529,7 @@ function saveRun(){
 }
 
 function statDef(id){
-  return HOME_UPGRADE_DEFS[id] || BASIC_STAT_DEFS.find(d => d.id === id) || BASIC_STAT_DEFS[0];
+  return HOME_UPGRADE_DEFS[id] || BASIC_STAT_DEFS_BY_ID[id] || BASIC_STAT_DEFS[0];
 }
 
 function homeUpgradeDef(id){
@@ -481,21 +553,24 @@ function isHomeUpgradeMaxed(id){
 
 function runBasicLevel(id){
   const lv = Math.max(0, Math.floor(Number(state.statLevels?.[id]) || 0));
-  return homeUpgradeDef(id).tier === 'base' ? Math.min(HOME_UPGRADE_CAP, lv) : lv;
+  return BASIC_SKILL_DEFS_BY_ID[id] ? Math.min(RUN_BASIC_CAP, lv) : 0;
 }
 
 function isRunBasicUnlocked(id){
-  const def = homeUpgradeDef(id);
-  return !def.parent || runBasicLevel(def.parent) >= HOME_UPGRADE_CAP;
+  const def = BASIC_SKILL_DEFS_BY_ID[id];
+  return !!def && (!def.requires || runBasicLevel(def.requires) > 0);
 }
 
 function isRunBasicMaxed(id){
-  const def = homeUpgradeDef(id);
-  return def.tier === 'base' && runBasicLevel(id) >= HOME_UPGRADE_CAP;
+  return !!BASIC_SKILL_DEFS_BY_ID[id] && runBasicLevel(id) >= RUN_BASIC_CAP;
 }
 
 function statLevel(id){
-  return Math.max(0, Number(state.statLevels[id]) || 0) + homeUpgradeLevel(id);
+  if(!statLevelCache) statLevelCache = {};
+  if(statLevelCache[id] !== undefined) return statLevelCache[id];
+  const level = Math.max(0, Number(state.statLevels[id]) || 0) + homeUpgradeLevel(id);
+  statLevelCache[id] = level;
+  return level;
 }
 
 function specialUpgradeDef(id){
@@ -506,8 +581,20 @@ function specialUpgradeLevel(id){
   return Math.max(0, Math.floor(Number(state.specialUpgrades?.[id]) || 0));
 }
 
+function invalidateStatCache(){
+  statLevelCache = null;
+}
+
 function selectedSpecialInFamily(family){
   return SPECIAL_UPGRADE_DEFS.find(def => def.family === family && specialUpgradeLevel(def.id) > 0)?.id || null;
+}
+
+function selectedSpecialSlotDefs(){
+  return SPECIAL_UPGRADE_DEFS.filter(def => specialUpgradeLevel(def.id) > 0);
+}
+
+function specialSlotLabel(def){
+  return SPECIAL_SLOT_LABELS[def?.id] || def?.name || '---';
 }
 
 function canOfferSpecialUpgrade(id){
@@ -515,7 +602,9 @@ function canOfferSpecialUpgrade(id){
   if(!def) return false;
   if(specialUpgradeLevel(id) >= def.max) return false;
   const selected = selectedSpecialInFamily(def.family);
-  return !selected || selected === id;
+  if(selected && selected !== id) return false;
+  if(!selected && selectedSpecialSlotDefs().length >= SPECIAL_SLOT_LIMIT) return false;
+  return true;
 }
 
 function runUpgradeDef(id){
@@ -535,6 +624,20 @@ function barrelFireBoost(){
   return 1;
 }
 
+function specialDamageMultiplier(){
+  let mult = 1 + specialUpgradeLevel('powerShot') * .18;
+  const adrenaline = specialUpgradeLevel('adrenaline');
+  if(adrenaline > 0){
+    const missingHp = 1 - Math.max(0, Math.min(1, state.hp / Math.max(1, state.maxHp)));
+    mult *= 1 + adrenaline * .22 * missingHp;
+  }
+  return mult;
+}
+
+function specialDefenseMultiplier(){
+  return Math.max(.58, 1 - specialUpgradeLevel('energyShield') * .09);
+}
+
 function currentShip(){
   return SHIP_BY_ID[state.garage?.selectedShipId] || SHIP_BY_ID[DEFAULT_SHIP_ID];
 }
@@ -551,23 +654,39 @@ function shipSlotCount(type, ship = currentShip()){
   return Math.max(0, Math.min(3, Math.floor(Number(ship.slots?.[type]) || 0)));
 }
 
-function loadoutBuff(key){
+function invalidateLoadoutCache(){
+  loadoutBuffCache = null;
+  loadoutMultCache = null;
+}
+
+function rebuildLoadoutBuffCache(){
   const ship = currentShip();
   const power = Number(ship.partPower) || 1;
-  let total = 0;
+  const cache = {};
   for(const type of PART_TYPES){
     const slots = shipSlotCount(type, ship);
     const equipped = state.garage?.equippedParts?.[type] || [];
     for(let i=0;i<slots;i++){
       const part = PART_BY_ID[equipped[i]];
-      if(part?.buff?.[key]) total += part.buff[key] * power;
+      if(!part?.buff) continue;
+      for(const key in part.buff){
+        cache[key] = (cache[key] || 0) + part.buff[key] * power;
+      }
     }
   }
-  return Math.min(.24, total);
+  loadoutBuffCache = cache;
+  loadoutMultCache = {};
+}
+
+function loadoutBuff(key){
+  if(!loadoutBuffCache) rebuildLoadoutBuffCache();
+  return Math.min(.24, loadoutBuffCache[key] || 0);
 }
 
 function loadoutMult(key){
-  return shipMult(key) * (1 + loadoutBuff(key));
+  if(!loadoutMultCache) loadoutMultCache = {};
+  if(loadoutMultCache[key] == null) loadoutMultCache[key] = shipMult(key) * (1 + loadoutBuff(key));
+  return loadoutMultCache[key];
 }
 
 function refreshLoadoutVitals(){
@@ -654,12 +773,10 @@ function homeUpgradeCost(id){
 }
 
 function runBasicUpgradeCost(id){
-  const def = homeUpgradeDef(id);
+  const def = BASIC_SKILL_DEFS_BY_ID[id];
+  if(!def) return Infinity;
   const lv = runBasicLevel(id);
-  if(def.tier === 'base'){
-    return lv >= HOME_UPGRADE_CAP ? Infinity : 1;
-  }
-  return 2 + Math.floor(lv / 6);
+  return lv >= RUN_BASIC_CAP ? Infinity : 1 + Math.floor(lv / 4);
 }
 
 function calculateTokenReward(){
@@ -736,12 +853,13 @@ function applyRunUpgrade(id){
 }
 
 function buyRunBasicUpgrade(id){
-  if(!HOME_UPGRADE_DEFS[id] || !isRunBasicUnlocked(id) || isRunBasicMaxed(id)) return;
+  if(!BASIC_SKILL_DEFS_BY_ID[id] || !isRunBasicUnlocked(id) || isRunBasicMaxed(id)) return;
   const cost = runBasicUpgradeCost(id);
   if(!Number.isFinite(cost) || state.basicPoints < cost) return;
   const beforeMax = state.maxHp;
   state.basicPoints -= cost;
   state.statLevels[id] = runBasicLevel(id) + 1;
+  invalidateStatCache();
   if(id === 'hp'){
     state.maxHp = hpMax();
     state.hp = Math.min(state.maxHp, state.hp + Math.max(0, state.maxHp - beforeMax) + 18);
@@ -755,6 +873,7 @@ function buyHomeUpgrade(id){
   if(!Number.isFinite(cost) || state.tokens < cost) return;
   state.tokens -= cost;
   state.homeUpgrades[id] = homeUpgradeLevel(id) + 1;
+  invalidateStatCache();
   state.maxHp = hpMax();
   state.hp = Math.min(state.maxHp, state.hp || state.maxHp);
   saveProgress();
@@ -772,6 +891,39 @@ function buyShip(id){
   state.tokens -= ship.cost;
   state.garage.ownedShips[id] = 1;
   state.garage.selectedShipId = id;
+  invalidateLoadoutCache();
+  refreshLoadoutVitals();
+  saveProgress();
+  renderUi2();
+}
+
+function partOwned(id){
+  return !!state.garage?.ownedParts?.[id];
+}
+
+function partCost(part){
+  return Math.max(0, Math.floor(Number(part?.cost) || 0));
+}
+
+function buyPart(id){
+  const part = PART_BY_ID[id];
+  if(!part) return;
+  if(partOwned(id)){
+    setMode('garage');
+    return;
+  }
+  const cost = partCost(part);
+  if(state.tokens < cost) return;
+  state.tokens -= cost;
+  state.garage.ownedParts[id] = 1;
+  const equipped = state.garage.equippedParts[part.type] || Array(3).fill(null);
+  state.garage.equippedParts[part.type] = equipped;
+  const slots = shipSlotCount(part.type);
+  const emptySlot = equipped.slice(0, slots).findIndex(value => !value);
+  if(slots > 0 && emptySlot >= 0 && !equipped.includes(id)){
+    equipped[emptySlot] = id;
+  }
+  invalidateLoadoutCache();
   refreshLoadoutVitals();
   saveProgress();
   renderUi2();
@@ -780,6 +932,7 @@ function buyShip(id){
 function equipShip(id){
   if(!SHIP_BY_ID[id] || !shipOwned(id)) return;
   state.garage.selectedShipId = id;
+  invalidateLoadoutCache();
   refreshLoadoutVitals();
   saveProgress();
   applyCosmetics();
@@ -802,6 +955,7 @@ function equipPart(type, index, id){
     }
     equipped[slot] = id;
   }
+  invalidateLoadoutCache();
   refreshLoadoutVitals();
   saveProgress();
   renderUi2();
@@ -4939,6 +5093,3852 @@ function createUi(){
     #barrage-ui .basic-upgrade-list{
       bottom:72px;
     }
+
+    /* Smartphone-first scale pass: larger labels, denser thumb targets, fewer cramped two-column cards. */
+    #barrage-ui button{
+      min-height:48px;
+      font-size:15px;
+    }
+    #barrage-ui .home-screen::after{
+      bottom:314px;
+    }
+    #barrage-ui .home-hub::before,
+    #barrage-ui .hangar-visual{
+      top:72px;
+      height:300px;
+    }
+    #barrage-ui .home-hub::after{
+      top:372px;
+    }
+    #barrage-ui .mission-tag{
+      top:88px;
+      height:34px;
+      min-width:112px;
+      font-size:14px;
+    }
+    #barrage-ui .record-stack{
+      top:92px;
+      width:126px;
+    }
+    #barrage-ui .record-pill{
+      min-height:66px;
+      padding:10px 11px;
+    }
+    #barrage-ui .record-pill b{
+      font-size:10px;
+    }
+    #barrage-ui .record-pill span{
+      font-size:18px;
+    }
+    #barrage-ui .record-pill small{
+      font-size:11px;
+    }
+    #barrage-ui .hangar-status{
+      top:270px;
+      height:28px;
+    }
+    #barrage-ui .loadout-panel{
+      top:382px;
+      height:78px;
+      padding:12px 13px;
+      grid-template-columns:minmax(0,1fr) 92px;
+    }
+    #barrage-ui .loadout-copy b{
+      font-size:11px;
+    }
+    #barrage-ui .loadout-copy h1{
+      max-width:220px;
+      font-size:25px;
+      line-height:.98;
+    }
+    #barrage-ui .loadout-copy p{
+      font-size:11px;
+      line-height:1.2;
+    }
+    #barrage-ui .base-sync span{
+      font-size:10px;
+    }
+    #barrage-ui .base-sync strong{
+      font-size:18px;
+    }
+    #barrage-ui .primary-start{
+      top:470px;
+      height:62px;
+    }
+    #barrage-ui .primary-start span{
+      font-size:38px;
+    }
+    #barrage-ui .primary-start small{
+      font-size:11px;
+    }
+    #barrage-ui .home-actions{
+      top:542px;
+      gap:7px 9px;
+    }
+    #barrage-ui .action-tile{
+      height:47px;
+      min-height:47px;
+      padding:8px 27px 8px 13px;
+    }
+    #barrage-ui .action-tile b{
+      font-size:13px;
+      line-height:1;
+    }
+    #barrage-ui .action-tile span{
+      margin-top:5px;
+      font-size:10px;
+      line-height:1;
+    }
+    #barrage-ui .page-stage{
+      padding:14px;
+    }
+    #barrage-ui .page-header{
+      height:82px;
+      grid-template-columns:1fr;
+      gap:10px;
+    }
+    #barrage-ui .page-title{
+      padding:15px 16px;
+    }
+    #barrage-ui .page-title h1{
+      font-size:32px;
+    }
+    #barrage-ui .page-title p{
+      margin-top:8px;
+      font-size:12px;
+      line-height:1.15;
+    }
+    #barrage-ui .page-back{
+      position:absolute;
+      right:14px;
+      bottom:14px;
+      width:126px;
+      height:54px;
+      font-size:16px;
+    }
+    #barrage-ui .catalog-grid,
+    #barrage-ui .garage-panel,
+    #barrage-ui .gacha-panel,
+    #barrage-ui .ranking-list{
+      left:14px;
+      right:14px;
+      top:108px;
+      bottom:78px;
+      gap:10px;
+    }
+    #barrage-ui .ranking-list{
+      grid-auto-rows:58px;
+      overflow-y:auto;
+    }
+    #barrage-ui .ranking-row{
+      grid-template-columns:44px minmax(0,1fr) 90px 64px;
+      padding:0 13px;
+      gap:8px;
+    }
+    #barrage-ui .ranking-row b,
+    #barrage-ui .ranking-row span{
+      font-size:15px;
+    }
+    #barrage-ui .ranking-row strong{
+      font-size:16px;
+    }
+    #barrage-ui .ranking-row small{
+      font-size:11px;
+    }
+    #barrage-ui .ship-card{
+      min-height:152px;
+      padding:15px 104px 14px 14px;
+    }
+    #barrage-ui .ship-card-head b,
+    #barrage-ui .garage-summary b,
+    #barrage-ui .part-slot b{
+      font-size:11px;
+    }
+    #barrage-ui .ship-card-head strong,
+    #barrage-ui .garage-summary strong{
+      font-size:21px;
+    }
+    #barrage-ui .ship-card-head small,
+    #barrage-ui .garage-summary span,
+    #barrage-ui .garage-summary small,
+    #barrage-ui .garage-summary em,
+    #barrage-ui .ship-card-body span,
+    #barrage-ui .ship-card-body em,
+    #barrage-ui .ship-card-body i{
+      font-size:12px;
+      line-height:1.28;
+    }
+    #barrage-ui .ship-card button{
+      width:84px;
+      height:60px;
+      font-size:13px;
+    }
+    #barrage-ui .garage-summary,
+    #barrage-ui .part-section,
+    #barrage-ui .garage-skin-section{
+      padding:14px;
+    }
+    #barrage-ui .garage-ship-strip{
+      grid-auto-columns:154px;
+      gap:8px;
+    }
+    #barrage-ui .garage-ship{
+      height:58px;
+      padding:8px 10px;
+    }
+    #barrage-ui .garage-ship b{
+      font-size:12px;
+    }
+    #barrage-ui .garage-ship span{
+      font-size:11px;
+    }
+    #barrage-ui .garage-section-head b{
+      font-size:15px;
+    }
+    #barrage-ui .garage-section-head span{
+      font-size:12px;
+    }
+    #barrage-ui .part-slot span{
+      font-size:16px;
+    }
+    #barrage-ui .part-slot small{
+      font-size:11px;
+      line-height:1.3;
+    }
+    #barrage-ui .part-picker button{
+      height:38px;
+      font-size:11px;
+    }
+    #barrage-ui .gacha-panel{
+      grid-template-rows:58px 86px 92px 1fr;
+    }
+    #barrage-ui .gacha-roll{
+      height:58px;
+      font-size:20px;
+    }
+    #barrage-ui .gacha-result b,
+    #barrage-ui .equipped-card b,
+    #barrage-ui .cosmetic-row b{
+      font-size:11px;
+    }
+    #barrage-ui .gacha-result span,
+    #barrage-ui .equipped-card span,
+    #barrage-ui .cosmetic-row span{
+      font-size:16px;
+    }
+    #barrage-ui .gacha-result small,
+    #barrage-ui .equipped-card small,
+    #barrage-ui .cosmetic-row small{
+      font-size:11px;
+      line-height:1.2;
+    }
+    #barrage-ui .cosmetic-list{
+      grid-auto-rows:82px;
+      gap:8px;
+    }
+    #barrage-ui .cosmetic-row{
+      padding:12px 98px 11px 12px;
+    }
+    #barrage-ui .cosmetic-row button{
+      height:56px;
+      min-width:80px;
+      font-size:12px;
+    }
+    #barrage-ui .upgrade-path{
+      grid-template-columns:1fr;
+      min-height:0;
+      gap:8px;
+    }
+    #barrage-ui .upgrade-link{
+      height:22px;
+      font-size:12px;
+      border:1px solid rgba(246,248,250,.10);
+      background:rgba(246,248,250,.035);
+    }
+    #barrage-ui .upgrade-card{
+      min-height:120px;
+      padding:14px 104px 14px 14px;
+    }
+    #barrage-ui .upgrade-card b{
+      font-size:11px;
+    }
+    #barrage-ui .upgrade-card span{
+      font-size:18px;
+    }
+    #barrage-ui .upgrade-card small,
+    #barrage-ui .upgrade-card em{
+      font-size:11px;
+      line-height:1.28;
+    }
+    #barrage-ui .upgrade-card button{
+      width:86px;
+      height:54px;
+      font-size:13px;
+    }
+    #barrage-ui .hud::after{
+      height:210px;
+      background:linear-gradient(180deg,transparent,rgba(5,6,7,.50) 14%,rgba(5,6,7,.94));
+    }
+    #barrage-ui .hud-topbar{
+      height:54px;
+      grid-template-columns:142px minmax(0,1fr);
+    }
+    #barrage-ui .hud-wave,
+    #barrage-ui .hud-counter{
+      width:142px;
+      height:52px;
+    }
+    #barrage-ui .hud-stat b,
+    #barrage-ui .counter-line b{
+      font-size:10px;
+    }
+    #barrage-ui .hud-wave > span,
+    #barrage-ui .counter-line span{
+      font-size:17px;
+    }
+    #barrage-ui .hud-wave small,
+    #barrage-ui .hud-wave small span{
+      font-size:10px;
+    }
+    #barrage-ui .hud-dock{
+      height:184px;
+      padding:10px;
+      grid-template-rows:auto 32px 50px;
+      gap:8px;
+    }
+    #barrage-ui .hud-meters{
+      gap:6px;
+    }
+    #barrage-ui .meter-row{
+      grid-template-columns:58px minmax(0,1fr) 82px;
+      height:18px;
+      font-size:11px;
+    }
+    #barrage-ui .meter-row.is-primary{
+      grid-template-columns:58px minmax(0,1fr) 82px;
+      height:22px;
+    }
+    #barrage-ui .meter-row strong{
+      font-size:11px;
+    }
+    #barrage-ui .meter-row.is-primary span,
+    #barrage-ui .meter-row.is-primary strong{
+      font-size:12px;
+    }
+    #barrage-ui .meter-track{
+      height:12px;
+    }
+    #barrage-ui .meter-row.is-primary .meter-track{
+      height:16px;
+    }
+    #barrage-ui .run-chips{
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:7px;
+    }
+    #barrage-ui .run-chip{
+      height:32px;
+      padding:0 8px;
+    }
+    #barrage-ui .run-chip b{
+      font-size:9px;
+    }
+    #barrage-ui .run-chip span{
+      font-size:15px;
+    }
+    #barrage-ui .hud-actions{
+      grid-template-columns:118px minmax(0,1fr);
+      gap:8px;
+    }
+    #barrage-ui .hud-actions .pause-control,
+    #barrage-ui .hud-actions .skill-control{
+      height:50px;
+      font-size:15px;
+    }
+    #barrage-ui .level-dialog{
+      top:92px;
+      padding:16px;
+    }
+    #barrage-ui .level-title{
+      font-size:31px;
+    }
+    #barrage-ui .level-note{
+      font-size:12px;
+      line-height:1.32;
+    }
+    #barrage-ui .level-sp{
+      height:34px;
+      min-width:84px;
+      font-size:14px;
+    }
+    #barrage-ui .level-dialog .upgrade-grid{
+      gap:9px;
+    }
+    #barrage-ui .level-dialog .upgrade-card{
+      min-height:106px;
+      padding:13px 96px 13px 14px;
+    }
+    #barrage-ui .level-dialog .upgrade-card b{
+      font-size:11px;
+    }
+    #barrage-ui .level-dialog .upgrade-card span{
+      font-size:20px;
+    }
+    #barrage-ui .level-dialog .upgrade-card small{
+      font-size:12px;
+      line-height:1.3;
+    }
+    #barrage-ui .level-dialog .upgrade-card button{
+      width:78px;
+      height:54px;
+      font-size:14px;
+    }
+    #barrage-ui .basic-actions{
+      grid-template-columns:1fr 132px;
+    }
+    #barrage-ui .basic-actions .level-sp,
+    #barrage-ui .basic-actions button{
+      height:50px;
+      font-size:15px;
+    }
+    #barrage-ui .basic-upgrade-list{
+      bottom:86px;
+    }
+    #barrage-ui .dialog-card{
+      left:20px;
+      right:20px;
+      top:160px;
+      padding:18px;
+    }
+    #barrage-ui .dialog-title{
+      font-size:34px;
+    }
+    #barrage-ui .dialog-actions button{
+      height:56px;
+      font-size:16px;
+    }
+    #barrage-ui .result-stat b{
+      font-size:11px;
+    }
+    #barrage-ui .result-stat span{
+      font-size:20px;
+    }
+
+    /* 2D canvas UI reference pass: cut panels, neon accents, clear home hierarchy. */
+    #barrage-ui{
+      --ui-bg:#070808;
+      --ui-panel:rgba(8,10,10,.94);
+      --ui-panel-strong:rgba(28,28,25,.94);
+      --ui-line:rgba(238,247,255,.18);
+      --ui-line-strong:rgba(238,247,255,.34);
+      --ui-text:#eef7ff;
+      --ui-muted:rgba(238,247,255,.67);
+      --ui-faint:rgba(238,247,255,.27);
+      --ui-cyan:#1ed6ff;
+      --ui-red:#ff3b62;
+      --ui-green:#36f39b;
+      --ui-silver:#b8a7ff;
+      color:var(--ui-text);
+    }
+    #barrage-ui .screen{
+      background:linear-gradient(180deg,rgba(4,6,10,.38),rgba(4,5,8,.08) 40%,rgba(5,6,7,.86) 60%,rgba(5,6,7,.98));
+    }
+    #barrage-ui .screen::before{
+      opacity:.28;
+      background:
+        linear-gradient(rgba(238,247,255,.045) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(238,247,255,.035) 1px,transparent 1px);
+      background-size:56px 56px;
+      transform:perspective(360px) rotateX(54deg) translateY(48px) scale(1.4);
+      transform-origin:center bottom;
+    }
+    #barrage-ui .screen::after{
+      top:354px;
+      bottom:auto;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(30,214,255,.58),rgba(184,167,255,.38),transparent);
+      box-shadow:0 0 24px rgba(30,214,255,.16);
+      opacity:1;
+    }
+    #barrage-ui button,
+    #barrage-ui .glass-panel,
+    #barrage-ui .action-tile,
+    #barrage-ui .hud-stat,
+    #barrage-ui .hud-counter,
+    #barrage-ui .hud-dock,
+    #barrage-ui .ship-card,
+    #barrage-ui .garage-summary,
+    #barrage-ui .part-section,
+    #barrage-ui .garage-skin-section,
+    #barrage-ui .gacha-result,
+    #barrage-ui .equipped-card,
+    #barrage-ui .cosmetic-row,
+    #barrage-ui .upgrade-card,
+    #barrage-ui .ranking-row,
+    #barrage-ui .record-pill,
+    #barrage-ui .loadout-panel{
+      border-radius:0;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+      box-shadow:0 12px 28px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui button{
+      border-color:rgba(238,247,255,.20);
+      background:linear-gradient(180deg,rgba(238,247,255,.075),rgba(5,6,7,.78));
+      color:var(--ui-text);
+    }
+    #barrage-ui button:hover{
+      border-color:rgba(30,214,255,.44);
+      background:linear-gradient(180deg,rgba(30,214,255,.13),rgba(5,6,7,.82));
+    }
+    #barrage-ui .home-screen{
+      background:linear-gradient(180deg,rgba(5,6,7,.42),rgba(5,6,7,.10) 42%,rgba(5,6,7,.90) 58%,rgba(5,6,7,.98));
+    }
+    #barrage-ui .home-screen::after{
+      top:354px;
+      bottom:auto;
+    }
+    #barrage-ui .home-hub::before{
+      left:14px;
+      right:14px;
+      top:78px;
+      height:276px;
+      border:1px solid rgba(30,214,255,.34);
+      border-left:4px solid rgba(30,214,255,.62);
+      background:
+        linear-gradient(90deg,rgba(30,214,255,.34) 0 3px,transparent 3px),
+        linear-gradient(180deg,rgba(30,214,255,.11),rgba(5,6,7,.24));
+      box-shadow:inset 0 -74px 0 rgba(0,0,0,.20),0 20px 42px rgba(0,0,0,.24);
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+    }
+    #barrage-ui .home-hub::after{
+      top:354px;
+      background:
+        linear-gradient(180deg,rgba(5,6,7,.92),rgba(5,6,7,.98)),
+        repeating-linear-gradient(0deg,rgba(238,247,255,.026) 0 1px,transparent 1px 18px);
+    }
+    #barrage-ui .brand-lockup{
+      left:14px;
+      top:10px;
+      width:208px;
+      height:54px;
+      padding:12px 14px 0;
+      border:0;
+      background:transparent;
+      box-shadow:none;
+      clip-path:none;
+    }
+    #barrage-ui .brand-lockup::before{
+      left:0;
+      top:8px;
+      width:3px;
+      height:34px;
+      background:rgba(184,167,255,.82);
+      box-shadow:0 0 12px rgba(184,167,255,.30);
+    }
+    #barrage-ui .brand-lockup::after{
+      display:none;
+    }
+    #barrage-ui .brand-lockup span{
+      font-size:35px;
+      line-height:.88;
+      color:var(--ui-text);
+      text-shadow:0 0 14px rgba(30,214,255,.50);
+      transform:none;
+    }
+    #barrage-ui .wallet-chip{
+      right:14px;
+      top:12px;
+      width:138px;
+      height:42px;
+      padding:8px 12px 0 18px;
+      text-align:left;
+      border:1px solid rgba(184,167,255,.34);
+      border-left:4px solid rgba(184,167,255,.82);
+      background:linear-gradient(180deg,rgba(28,28,25,.94),rgba(8,10,10,.97));
+      box-shadow:0 12px 28px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .wallet-chip b{
+      color:var(--ui-muted);
+      font-size:9px;
+    }
+    #barrage-ui .wallet-chip span{
+      margin-top:3px;
+      color:var(--ui-text);
+      font-size:16px;
+    }
+    #barrage-ui .wallet-chip::after{
+      right:12px;
+      top:20px;
+      width:12px;
+      height:12px;
+      border-color:rgba(30,214,255,.74);
+      box-shadow:0 0 10px rgba(30,214,255,.28);
+    }
+    #barrage-ui .hangar-visual{
+      left:14px;
+      right:14px;
+      top:78px;
+      height:276px;
+      overflow:hidden;
+    }
+    #barrage-ui .hangar-visual::after{
+      left:28px;
+      right:28px;
+      bottom:22px;
+      height:78px;
+      background:
+        radial-gradient(ellipse at 50% 50%,rgba(30,214,255,.18),transparent 58%),
+        linear-gradient(90deg,transparent,rgba(238,247,255,.14),transparent);
+      opacity:.64;
+    }
+    #barrage-ui .mission-tag{
+      left:30px;
+      top:92px;
+      height:30px;
+      min-width:106px;
+      padding:0 17px;
+      color:#070808;
+      background:linear-gradient(180deg,#b8a7ff,#8f82d6);
+      box-shadow:4px 4px 0 rgba(0,0,0,.42);
+      font-size:13px;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .record-stack{
+      right:30px;
+      top:94px;
+      width:116px;
+    }
+    #barrage-ui .record-pill{
+      min-height:60px;
+      padding:9px 10px;
+      border:1px solid rgba(184,167,255,.28);
+      border-left:4px solid rgba(184,167,255,.82);
+      background:linear-gradient(180deg,rgba(28,28,25,.94),rgba(8,10,10,.96));
+    }
+    #barrage-ui .record-pill b{
+      color:#b8a7ff;
+      font-size:9px;
+    }
+    #barrage-ui .record-pill span{
+      margin-top:6px;
+      font-size:16px;
+      color:var(--ui-text);
+    }
+    #barrage-ui .record-pill small{
+      margin-top:5px;
+      color:var(--ui-muted);
+      font-size:10px;
+    }
+    #barrage-ui .hangar-status{
+      left:34px;
+      right:34px;
+      top:326px;
+      height:24px;
+      color:var(--ui-faint);
+      border:1px solid rgba(238,247,255,.14);
+      background:rgba(5,6,7,.72);
+      box-shadow:none;
+    }
+    #barrage-ui .loadout-panel{
+      left:32px;
+      right:32px;
+      top:268px;
+      height:54px;
+      padding:9px 14px;
+      grid-template-columns:minmax(0,1fr) 88px;
+      border:1px solid rgba(30,214,255,.22);
+      border-left:4px solid rgba(30,214,255,.72);
+      background:linear-gradient(180deg,rgba(28,28,25,.94),rgba(8,10,10,.96));
+    }
+    #barrage-ui .loadout-copy b{
+      color:var(--ui-muted);
+      font-size:9px;
+    }
+    #barrage-ui .loadout-copy h1{
+      margin-top:4px;
+      max-width:188px;
+      color:var(--ui-text);
+      font-size:22px;
+      line-height:.96;
+    }
+    #barrage-ui .loadout-copy p{
+      margin-top:4px;
+      color:#1ed6ff;
+      font-size:10px;
+      line-height:1;
+    }
+    #barrage-ui .base-sync span{
+      color:var(--ui-muted);
+      font-size:9px;
+    }
+    #barrage-ui .base-sync strong{
+      color:var(--ui-text);
+      font-size:17px;
+    }
+    #barrage-ui .sync-track{
+      height:7px;
+      background:rgba(238,247,255,.07);
+      border-color:rgba(238,247,255,.18);
+    }
+    #barrage-ui .sync-track i{
+      background:linear-gradient(90deg,#1ed6ff,#b8a7ff);
+      box-shadow:0 0 12px rgba(30,214,255,.30);
+    }
+    #barrage-ui .primary-start{
+      left:75px;
+      top:366px;
+      width:240px;
+      height:56px;
+      color:#070808;
+      border:1px solid rgba(184,167,255,.80);
+      background:linear-gradient(180deg,#b8a7ff,#d8d2ff);
+      box-shadow:5px 5px 0 rgba(0,0,0,.38),0 0 28px rgba(184,167,255,.18);
+    }
+    #barrage-ui .primary-start span{
+      color:#070808;
+      font-size:34px;
+      line-height:.92;
+      text-shadow:none;
+    }
+    #barrage-ui .primary-start small{
+      margin-top:3px;
+      color:rgba(7,8,8,.68);
+      font-size:10px;
+    }
+    #barrage-ui .home-actions{
+      left:24px;
+      right:auto;
+      top:432px;
+      width:342px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px 18px;
+    }
+    #barrage-ui .action-tile{
+      height:54px;
+      min-height:54px;
+      padding:10px 28px 9px 15px;
+      border:1px solid rgba(238,247,255,.16);
+      border-left:4px solid var(--accent);
+      background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,7,10,.78));
+      box-shadow:4px 4px 0 rgba(0,0,0,.36);
+    }
+    #barrage-ui .action-tile b{
+      color:var(--accent);
+      font-size:13px;
+      line-height:1;
+    }
+    #barrage-ui .action-tile span{
+      margin-top:8px;
+      color:var(--ui-muted);
+      font-size:10px;
+      line-height:1;
+    }
+    #barrage-ui .action-tile::after{
+      top:18px;
+      color:var(--accent);
+    }
+    #barrage-ui .page-title,
+    #barrage-ui .page-back,
+    #barrage-ui .ship-card,
+    #barrage-ui .garage-summary,
+    #barrage-ui .part-section,
+    #barrage-ui .garage-skin-section,
+    #barrage-ui .gacha-result,
+    #barrage-ui .equipped-card,
+    #barrage-ui .cosmetic-row,
+    #barrage-ui .upgrade-card,
+    #barrage-ui .ranking-row{
+      background:linear-gradient(180deg,rgba(28,28,25,.94),rgba(8,10,10,.96));
+    }
+    #barrage-ui .page-title{
+      border-left:4px solid #1ed6ff;
+    }
+    #barrage-ui .page-back{
+      border-color:rgba(184,167,255,.34);
+      color:#b8a7ff;
+    }
+    #barrage-ui .ship-card,
+    #barrage-ui .garage-summary,
+    #barrage-ui .part-section,
+    #barrage-ui .garage-skin-section,
+    #barrage-ui .gacha-result,
+    #barrage-ui .equipped-card,
+    #barrage-ui .cosmetic-row,
+    #barrage-ui .upgrade-card{
+      border-left-width:4px;
+    }
+    #barrage-ui .hud::before{
+      height:64px;
+      background:linear-gradient(180deg,rgba(5,6,7,.90),rgba(5,6,7,.34) 68%,transparent);
+    }
+    #barrage-ui .hud::after{
+      height:178px;
+      background:linear-gradient(180deg,transparent,rgba(5,6,7,.42) 16%,rgba(5,6,7,.92));
+      border-top:1px solid rgba(238,247,255,.16);
+    }
+    #barrage-ui .hud-topbar{
+      left:8px;
+      right:8px;
+      top:7px;
+      height:46px;
+      grid-template-columns:112px minmax(0,1fr) 128px;
+      gap:7px;
+    }
+    #barrage-ui .hud-wave{
+      grid-column:2;
+      justify-self:center;
+      width:128px;
+      height:46px;
+      padding:7px 10px 5px;
+      border-color:rgba(255,59,98,.38);
+      border-left:4px solid #ff3b62;
+      background:linear-gradient(180deg,rgba(28,28,25,.94),rgba(8,10,10,.96));
+    }
+    #barrage-ui .hud-counter{
+      grid-column:3;
+      justify-self:end;
+      width:128px;
+      height:46px;
+      padding:7px 10px 6px 12px;
+      border-color:rgba(30,214,255,.28);
+      border-left:4px solid #1ed6ff;
+      background:linear-gradient(180deg,rgba(28,28,25,.94),rgba(8,10,10,.96));
+    }
+    #barrage-ui .hud-wave > span,
+    #barrage-ui .counter-line span{
+      font-size:16px;
+    }
+    #barrage-ui .wave-timer i{
+      background:linear-gradient(90deg,#ff3b62,#b8a7ff);
+    }
+    #barrage-ui .hud-dock{
+      left:10px;
+      right:10px;
+      bottom:8px;
+      height:166px;
+      padding:10px;
+      grid-template-rows:auto 28px 46px;
+      gap:8px;
+      border:1px solid rgba(238,247,255,.16);
+      background:linear-gradient(180deg,rgba(28,28,25,.86),rgba(5,6,7,.94));
+    }
+    #barrage-ui .meter-row{
+      grid-template-columns:54px minmax(0,1fr) 78px;
+      height:17px;
+      font-size:11px;
+    }
+    #barrage-ui .meter-row.is-primary{
+      grid-template-columns:54px minmax(0,1fr) 78px;
+      height:20px;
+    }
+    #barrage-ui .meter-track{
+      height:11px;
+      border-color:rgba(238,247,255,.16);
+      background:rgba(238,247,255,.06);
+    }
+    #barrage-ui .meter-row.is-primary .meter-track{
+      height:15px;
+    }
+    #barrage-ui .run-chip{
+      height:28px;
+      border-color:rgba(238,247,255,.13);
+      background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,8,13,.56));
+    }
+    #barrage-ui .run-chip b{
+      color:var(--ui-faint);
+      font-size:9px;
+    }
+    #barrage-ui .run-chip span{
+      color:var(--ui-text);
+      font-size:14px;
+    }
+    #barrage-ui .hud-actions{
+      grid-template-columns:112px minmax(0,1fr);
+    }
+    #barrage-ui .hud-actions .pause-control,
+    #barrage-ui .hud-actions .skill-control{
+      height:46px;
+      font-size:14px;
+    }
+    #barrage-ui .hud-actions .skill-control{
+      border-color:rgba(184,167,255,.34);
+      background:linear-gradient(180deg,rgba(184,167,255,.14),rgba(5,6,7,.82));
+      color:#b8a7ff;
+    }
+    #barrage-ui .level-dialog,
+    #barrage-ui .basic-dialog,
+    #barrage-ui .dialog-card{
+      background:linear-gradient(180deg,rgba(28,28,25,.96),rgba(8,10,10,.96));
+      border-left:4px solid #b8a7ff;
+    }
+    #barrage-ui .level-dialog .upgrade-card,
+    #barrage-ui .run-basic-card{
+      background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,7,10,.82));
+    }
+    #barrage-ui .level-dialog .special-upgrade-card{
+      min-height:124px;
+      padding:13px 102px 13px 15px;
+    }
+    #barrage-ui .special-upgrade-card em{
+      display:block;
+      margin-top:7px;
+      color:var(--ui-faint);
+      font-size:10px;
+      line-height:1.2;
+      font-weight:900;
+    }
+    #barrage-ui .basic-upgrade-list{
+      padding:0 2px 16px;
+    }
+    #barrage-ui .basic-tree{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      grid-auto-rows:minmax(132px,auto);
+      gap:10px;
+      position:relative;
+    }
+    #barrage-ui .basic-tree::before{
+      content:"";
+      position:absolute;
+      left:50%;
+      top:26px;
+      bottom:26px;
+      width:1px;
+      background:linear-gradient(180deg,transparent,rgba(30,214,255,.26),rgba(184,167,255,.22),transparent);
+      pointer-events:none;
+    }
+    #barrage-ui .run-basic-card{
+      min-height:132px;
+      padding:12px 9px 52px 12px;
+      overflow:hidden;
+    }
+    #barrage-ui .run-basic-card:first-child{
+      grid-column:1 / -1;
+      min-height:116px;
+    }
+    #barrage-ui .run-basic-card b{
+      font-size:9px;
+      line-height:1.15;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .run-basic-card span{
+      font-size:15px;
+      line-height:1.05;
+    }
+    #barrage-ui .run-basic-card small,
+    #barrage-ui .run-basic-card em{
+      font-size:10px;
+      line-height:1.24;
+    }
+    #barrage-ui .run-basic-card button{
+      left:8px;
+      right:8px;
+      top:auto;
+      bottom:8px;
+      width:auto;
+      height:42px;
+      min-height:42px;
+      transform:none;
+      font-size:12px;
+    }
+    #barrage-ui .run-basic-card button:active{
+      transform:translateY(1px);
+    }
+    #barrage-ui .run-basic-card.locked{
+      opacity:.72;
+    }
+    #barrage-ui .settings-panel{
+      position:absolute;
+      left:14px;
+      right:14px;
+      top:108px;
+      bottom:78px;
+      display:grid;
+      grid-auto-rows:minmax(76px,auto);
+      align-content:start;
+      gap:10px;
+      overflow-y:auto;
+      padding-right:4px;
+      pointer-events:auto;
+    }
+    #barrage-ui .settings-row{
+      position:relative;
+      min-height:76px;
+      padding:13px 15px 12px 18px;
+      border:1px solid rgba(238,247,255,.16);
+      border-left:4px solid var(--accent);
+      background:linear-gradient(180deg,rgba(28,28,25,.94),rgba(8,10,10,.96));
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+      box-shadow:0 12px 28px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .settings-row::after{
+      content:"";
+      position:absolute;
+      right:12px;
+      top:12px;
+      width:38px;
+      height:3px;
+      background:linear-gradient(90deg,transparent,var(--accent));
+      opacity:.76;
+      box-shadow:0 0 12px var(--accent);
+    }
+    #barrage-ui .settings-row b{
+      display:block;
+      color:var(--accent);
+      font-size:11px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .settings-row span{
+      display:block;
+      margin-top:8px;
+      color:var(--ui-text);
+      font-size:20px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .settings-row small{
+      display:block;
+      margin-top:8px;
+      color:var(--ui-muted);
+      font-size:11px;
+      line-height:1.2;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .ship-card.selected::after,
+    #barrage-ui .garage-ship.selected::after,
+    #barrage-ui .cosmetic-row.equipped::after,
+    #barrage-ui .upgrade-card.maxed::after{
+      content:"ACTIVE";
+      position:absolute;
+      right:10px;
+      top:9px;
+      height:18px;
+      display:grid;
+      place-items:center;
+      padding:0 7px;
+      color:#070808;
+      background:var(--accent,#b8a7ff);
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+      clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+      box-shadow:0 0 14px color-mix(in srgb,var(--accent,#b8a7ff) 36%,transparent);
+    }
+    #barrage-ui .upgrade-card.maxed::after{
+      content:"MAX";
+    }
+    #barrage-ui .cosmetic-row.equipped::after{
+      content:"SET";
+    }
+    #barrage-ui .ship-card.locked:not(.owned),
+    #barrage-ui .garage-ship.locked,
+    #barrage-ui .cosmetic-row.locked,
+    #barrage-ui .upgrade-card.locked{
+      background:
+        repeating-linear-gradient(135deg,rgba(238,247,255,.025) 0 6px,transparent 6px 12px),
+        linear-gradient(180deg,rgba(28,28,25,.70),rgba(8,10,10,.88));
+    }
+    #barrage-ui .page-title::before,
+    #barrage-ui .dialog-card::before,
+    #barrage-ui .level-dialog::before,
+    #barrage-ui .basic-dialog::before{
+      content:"";
+      position:absolute;
+      left:12px;
+      right:12px;
+      top:10px;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(238,247,255,.22),transparent);
+      pointer-events:none;
+    }
+    #barrage-ui .primary-start:focus-visible,
+    #barrage-ui .action-tile:focus-visible,
+    #barrage-ui .page-back:focus-visible,
+    #barrage-ui .hud-actions button:focus-visible{
+      outline:2px solid #1ed6ff;
+      outline-offset:3px;
+      box-shadow:0 0 0 4px rgba(30,214,255,.16),5px 5px 0 rgba(0,0,0,.38),0 0 24px rgba(30,214,255,.18);
+    }
+
+    /* In-game UI rebuild: home-style panels, larger mobile text, fixed thumb targets. */
+    #barrage-ui .hud::before{
+      height:74px;
+      background:linear-gradient(180deg,rgba(5,6,7,.92),rgba(5,6,7,.34) 72%,transparent);
+    }
+    #barrage-ui .hud::after{
+      height:214px;
+      background:linear-gradient(180deg,transparent,rgba(5,6,7,.46) 12%,rgba(5,6,7,.95));
+      border-top:1px solid rgba(238,247,255,.15);
+    }
+    #barrage-ui .hud-topbar{
+      left:10px;
+      right:10px;
+      top:10px;
+      height:58px;
+      display:grid;
+      grid-template-columns:150px minmax(0,1fr);
+      gap:8px;
+      pointer-events:none;
+    }
+    #barrage-ui .hud-wave,
+    #barrage-ui .hud-counter{
+      grid-column:auto;
+      justify-self:stretch;
+      width:auto;
+      height:56px;
+      padding:8px 11px 7px 13px;
+      border:1px solid rgba(238,247,255,.18);
+      background:linear-gradient(180deg,rgba(28,28,25,.94),rgba(8,10,10,.96));
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+      box-shadow:4px 4px 0 rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .hud-wave{
+      border-left:4px solid #ff3b62;
+    }
+    #barrage-ui .hud-counter{
+      border-left:4px solid #1ed6ff;
+    }
+    #barrage-ui .hud-stat b,
+    #barrage-ui .counter-line b{
+      font-size:10px;
+      line-height:1;
+      letter-spacing:0;
+    }
+    #barrage-ui .hud-wave > span,
+    #barrage-ui .counter-line span{
+      font-size:18px;
+      line-height:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .hud-wave small,
+    #barrage-ui .hud-wave small span{
+      font-size:10px;
+      line-height:1;
+      white-space:nowrap;
+    }
+    #barrage-ui .wave-timer{
+      height:7px;
+      margin-top:5px;
+      border-color:rgba(238,247,255,.18);
+      background:rgba(238,247,255,.07);
+    }
+    #barrage-ui .hud-dock{
+      left:10px;
+      right:10px;
+      bottom:10px;
+      height:186px;
+      padding:12px;
+      display:grid;
+      grid-template-rows:66px 36px 54px;
+      gap:9px;
+      border:1px solid rgba(238,247,255,.16);
+      border-left:4px solid #b8a7ff;
+      background:linear-gradient(180deg,rgba(28,28,25,.92),rgba(5,6,7,.96));
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+      box-shadow:0 14px 32px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06);
+      pointer-events:auto;
+    }
+    #barrage-ui .hud-dock::before{
+      left:14px;
+      right:14px;
+      top:9px;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(238,247,255,.22),transparent);
+    }
+    #barrage-ui .hud-meters,
+    #barrage-ui .run-chips{
+      position:relative;
+      left:auto;
+      right:auto;
+      top:auto;
+      min-width:0;
+    }
+    #barrage-ui .hud-meters{
+      display:grid;
+      gap:7px;
+    }
+    #barrage-ui .meter-row,
+    #barrage-ui .meter-row.is-primary{
+      height:17px;
+      grid-template-columns:56px minmax(0,1fr) 88px;
+      gap:8px;
+      align-items:center;
+      color:var(--ui-text);
+    }
+    #barrage-ui .meter-row.is-primary{
+      height:20px;
+    }
+    #barrage-ui .meter-row span,
+    #barrage-ui .meter-row strong{
+      min-width:0;
+      font-size:11px;
+      line-height:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .meter-row.is-primary span,
+    #barrage-ui .meter-row.is-primary strong{
+      font-size:12px;
+    }
+    #barrage-ui .meter-track{
+      height:12px;
+      border-color:rgba(238,247,255,.16);
+      background:rgba(238,247,255,.07);
+    }
+    #barrage-ui .meter-row.is-primary .meter-track{
+      height:15px;
+    }
+    #barrage-ui .meter-track i{
+      background:linear-gradient(90deg,var(--meter-a),var(--meter-b));
+      box-shadow:0 0 12px color-mix(in srgb,var(--meter-a) 32%,transparent);
+    }
+    #barrage-ui .run-chips{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:7px;
+    }
+    #barrage-ui .run-chip{
+      min-width:0;
+      height:36px;
+      padding:0 8px;
+      border:1px solid rgba(238,247,255,.14);
+      background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,8,13,.64));
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .run-chip b{
+      font-size:9px;
+      line-height:1;
+    }
+    #barrage-ui .run-chip span{
+      max-width:100%;
+      font-size:15px;
+      line-height:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .hud-actions{
+      display:grid;
+      grid-template-columns:108px minmax(0,1fr);
+      gap:9px;
+      min-width:0;
+    }
+    #barrage-ui .hud-actions .pause-control,
+    #barrage-ui .hud-actions .skill-control{
+      position:relative;
+      left:auto;
+      right:auto;
+      top:auto;
+      bottom:auto;
+      width:auto;
+      height:54px;
+      min-height:54px;
+      min-width:0;
+      padding:0 12px;
+      display:grid;
+      place-items:center;
+      font-size:15px;
+      line-height:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+      box-shadow:4px 4px 0 rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .hud-actions .pause-control{
+      border-color:rgba(238,247,255,.20);
+      color:var(--ui-text);
+      background:linear-gradient(180deg,rgba(238,247,255,.08),rgba(5,6,7,.80));
+    }
+    #barrage-ui .hud-actions .skill-control{
+      border-color:rgba(184,167,255,.42);
+      color:#b8a7ff;
+      background:linear-gradient(180deg,rgba(184,167,255,.16),rgba(5,6,7,.84));
+    }
+    #barrage-ui .hud.has-bp .skill-control{
+      border-color:rgba(30,214,255,.56);
+      color:#1ed6ff;
+      box-shadow:4px 4px 0 rgba(0,0,0,.32),0 0 18px rgba(30,214,255,.16),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .upgrade-overlay{
+      background:
+        linear-gradient(180deg,rgba(4,6,10,.96),rgba(5,6,7,.98)),
+        repeating-linear-gradient(0deg,rgba(238,247,255,.028) 0 1px,transparent 1px 18px);
+    }
+    #barrage-ui .level-dialog,
+    #barrage-ui .basic-dialog{
+      left:10px;
+      right:10px;
+      top:14px;
+      bottom:14px;
+      padding:0;
+      border:1px solid rgba(238,247,255,.16);
+      border-left:4px solid #b8a7ff;
+      background:linear-gradient(180deg,rgba(28,28,25,.96),rgba(8,10,10,.97));
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+      box-shadow:0 18px 42px rgba(0,0,0,.40),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .level-dialog::before,
+    #barrage-ui .basic-dialog::before{
+      left:12px;
+      right:12px;
+      top:12px;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(238,247,255,.22),transparent);
+      border:0;
+    }
+    #barrage-ui .level-dialog::after{
+      display:none;
+    }
+    #barrage-ui .level-head,
+    #barrage-ui .basic-head{
+      left:14px;
+      right:14px;
+      top:18px;
+      height:auto;
+      padding:0;
+      display:block;
+      text-align:left;
+    }
+    #barrage-ui .level-title{
+      font-size:32px;
+      line-height:1;
+      color:var(--ui-text);
+      text-shadow:0 0 14px rgba(30,214,255,.30);
+    }
+    #barrage-ui .level-note{
+      max-width:260px;
+      margin-top:8px;
+      color:var(--ui-muted);
+      font-size:12px;
+      line-height:1.3;
+      text-align:left;
+    }
+    #barrage-ui .level-sp{
+      right:14px;
+      top:0;
+      min-width:80px;
+      height:36px;
+      display:grid;
+      place-items:center;
+      color:#070808;
+      border:0;
+      background:linear-gradient(180deg,#b8a7ff,#d8d2ff);
+      font-size:14px;
+      box-shadow:4px 4px 0 rgba(0,0,0,.34);
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .level-dialog .upgrade-grid{
+      left:14px;
+      right:14px;
+      top:120px;
+      bottom:18px;
+      display:grid;
+      grid-template-columns:1fr;
+      grid-auto-rows:minmax(128px,auto);
+      align-content:start;
+      gap:10px;
+      overflow-y:auto;
+      padding:0 4px 4px 0;
+    }
+    #barrage-ui .level-dialog .upgrade-card,
+    #barrage-ui .level-dialog .special-upgrade-card{
+      min-height:128px;
+      height:auto;
+      padding:13px 102px 36px 15px;
+      text-align:left;
+      border:1px solid rgba(238,247,255,.16);
+      border-left:4px solid var(--accent);
+      background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,7,10,.84));
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+      box-shadow:4px 4px 0 rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .level-dialog .upgrade-card::before,
+    #barrage-ui .level-dialog .upgrade-card::after{
+      display:none;
+    }
+    #barrage-ui .level-dialog .upgrade-card b{
+      position:static;
+      min-height:0;
+      display:block;
+      padding:0;
+      color:var(--accent);
+      border:0;
+      background:transparent;
+      clip-path:none;
+      font-size:11px;
+      line-height:1.1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .level-dialog .upgrade-card span{
+      margin-top:8px;
+      min-height:0;
+      display:block;
+      color:var(--ui-text);
+      font-size:20px;
+      line-height:1.08;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .level-dialog .upgrade-card small{
+      margin-top:8px;
+      max-height:none;
+      color:var(--ui-muted);
+      font-size:12px;
+      line-height:1.35;
+      overflow:visible;
+    }
+    #barrage-ui .special-upgrade-card em{
+      margin-top:7px;
+      color:var(--ui-faint);
+      font-size:11px;
+      line-height:1.25;
+    }
+    #barrage-ui .level-dialog .upgrade-card button{
+      left:auto;
+      right:12px;
+      top:50%;
+      bottom:auto;
+      width:78px;
+      height:56px;
+      min-height:56px;
+      transform:translateY(-50%);
+      color:#070808;
+      border:0;
+      background:linear-gradient(180deg,var(--accent),#eef7ff);
+      font-size:14px;
+      box-shadow:4px 4px 0 rgba(0,0,0,.34);
+    }
+    #barrage-ui .level-dialog .upgrade-card button:active{
+      transform:translateY(calc(-50% + 1px));
+    }
+    #barrage-ui .basic-actions{
+      position:absolute;
+      left:14px;
+      right:14px;
+      top:104px;
+      bottom:auto;
+      z-index:4;
+      display:grid;
+      grid-template-columns:1fr 118px;
+      gap:9px;
+    }
+    #barrage-ui .basic-actions .level-sp,
+    #barrage-ui .basic-actions button{
+      position:relative;
+      left:auto;
+      right:auto;
+      top:auto;
+      bottom:auto;
+      width:auto;
+      min-width:0;
+      height:48px;
+      min-height:48px;
+      transform:none;
+      font-size:14px;
+    }
+    #barrage-ui .basic-actions .level-sp{
+      color:#070808;
+      background:linear-gradient(180deg,#1ed6ff,#d8fbff);
+    }
+    #barrage-ui .basic-upgrade-list{
+      left:14px;
+      right:14px;
+      top:166px;
+      bottom:16px;
+      display:block;
+      overflow-y:auto;
+      padding:0 4px 14px 0;
+    }
+    #barrage-ui .basic-tree{
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      grid-auto-rows:minmax(138px,auto);
+      gap:10px;
+    }
+    #barrage-ui .run-basic-card{
+      min-height:138px;
+      padding:12px 10px 54px 12px;
+    }
+    #barrage-ui .run-basic-card:first-child{
+      min-height:118px;
+    }
+    #barrage-ui .run-basic-card span{
+      font-size:16px;
+      line-height:1.08;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .run-basic-card small,
+    #barrage-ui .run-basic-card em{
+      font-size:10px;
+      line-height:1.3;
+    }
+    #barrage-ui .run-basic-card.cap-open::before{
+      display:none;
+    }
+    #barrage-ui .dialog-card{
+      left:18px;
+      right:18px;
+      top:170px;
+      padding:18px;
+      border-left:4px solid #b8a7ff;
+      background:linear-gradient(180deg,rgba(28,28,25,.96),rgba(8,10,10,.97));
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+    }
+    #barrage-ui .dialog-title{
+      font-size:34px;
+      line-height:1;
+    }
+    #barrage-ui .dialog-actions button{
+      height:56px;
+      min-height:56px;
+      font-size:16px;
+    }
+
+    /* Home ship viewer: keep the upper-right lane clear for the 3D model. */
+    #barrage-ui .home-hub::before{
+      top:70px;
+      height:322px;
+    }
+    #barrage-ui .home-hub::after{
+      top:392px;
+    }
+    #barrage-ui .hangar-visual{
+      top:70px;
+      height:322px;
+    }
+    #barrage-ui .record-stack{
+      left:28px;
+      right:auto;
+      top:134px;
+      width:116px;
+    }
+    #barrage-ui .mission-tag{
+      left:28px;
+      top:96px;
+    }
+    #barrage-ui .hangar-status{
+      left:30px;
+      right:auto;
+      top:338px;
+      width:148px;
+    }
+    #barrage-ui .loadout-panel{
+      top:360px;
+    }
+    #barrage-ui .primary-start{
+      top:428px;
+    }
+    #barrage-ui .home-actions{
+      top:500px;
+    }
+
+    /* Commerce rebuild: store buys frames/parts, garage equips, supply manages cosmetics. */
+    #barrage-ui .commerce-panel,
+    #barrage-ui .garage-panel,
+    #barrage-ui .gacha-panel{
+      left:14px;
+      right:14px;
+      top:108px;
+      bottom:78px;
+      display:block;
+      overflow-y:auto;
+      padding:0 4px 18px 0;
+      background:transparent;
+      box-shadow:none;
+      clip-path:none;
+    }
+    #barrage-ui .commerce-panel::-webkit-scrollbar,
+    #barrage-ui .garage-panel::-webkit-scrollbar,
+    #barrage-ui .gacha-panel::-webkit-scrollbar{width:6px}
+    #barrage-ui .commerce-panel::-webkit-scrollbar-thumb,
+    #barrage-ui .garage-panel::-webkit-scrollbar-thumb,
+    #barrage-ui .gacha-panel::-webkit-scrollbar-thumb{background:rgba(238,247,255,.22)}
+    #barrage-ui .commerce-hero,
+    #barrage-ui .supply-hero,
+    #barrage-ui .garage-summary{
+      position:relative;
+      min-height:92px;
+      margin-bottom:12px;
+      padding:15px 120px 14px 16px;
+      border:1px solid rgba(238,247,255,.16);
+      border-left:4px solid var(--accent,#1ed6ff);
+      background:linear-gradient(180deg,rgba(28,28,25,.94),rgba(8,10,10,.96));
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+      box-shadow:4px 4px 0 rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .commerce-hero{--accent:#1ed6ff}
+    #barrage-ui .supply-hero{--accent:#b8a7ff}
+    #barrage-ui .commerce-hero b,
+    #barrage-ui .supply-hero b,
+    #barrage-ui .garage-summary b,
+    #barrage-ui .market-section-head b,
+    #barrage-ui .market-subhead b,
+    #barrage-ui .garage-section-head b{
+      display:block;
+      color:var(--accent,#1ed6ff);
+      font-size:11px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .commerce-hero strong,
+    #barrage-ui .supply-hero strong,
+    #barrage-ui .garage-summary strong{
+      display:block;
+      margin-top:8px;
+      color:var(--ui-text);
+      font-size:25px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .commerce-hero span,
+    #barrage-ui .supply-hero span,
+    #barrage-ui .garage-summary span,
+    #barrage-ui .garage-summary small,
+    #barrage-ui .garage-summary em{
+      display:block;
+      margin-top:7px;
+      color:var(--ui-muted);
+      font-size:11px;
+      line-height:1.25;
+      font-weight:900;
+    }
+    #barrage-ui .commerce-hero button,
+    #barrage-ui .supply-hero button,
+    #barrage-ui .garage-supply-link{
+      position:absolute;
+      right:12px;
+      top:50%;
+      width:94px;
+      height:56px;
+      min-height:56px;
+      transform:translateY(-50%);
+      color:#070808;
+      border:0;
+      background:linear-gradient(180deg,var(--accent,#1ed6ff),#eef7ff);
+      font-size:14px;
+      box-shadow:4px 4px 0 rgba(0,0,0,.34);
+    }
+    #barrage-ui .market-section,
+    #barrage-ui .garage-module,
+    #barrage-ui .supply-section{
+      margin-top:12px;
+    }
+    #barrage-ui .market-section-head,
+    #barrage-ui .market-subhead,
+    #barrage-ui .garage-section-head{
+      min-height:30px;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      align-items:center;
+      gap:10px;
+      margin:0 0 8px;
+      padding:0 2px;
+    }
+    #barrage-ui .market-section-head span,
+    #barrage-ui .market-subhead span,
+    #barrage-ui .garage-section-head span{
+      color:var(--ui-faint);
+      font-size:11px;
+      font-weight:900;
+      line-height:1;
+    }
+    #barrage-ui .market-list{
+      display:grid;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    #barrage-ui .market-card{
+      position:relative;
+      min-height:132px;
+      padding:14px 106px 13px 15px;
+      border:1px solid rgba(238,247,255,.16);
+      border-left:4px solid var(--accent);
+      background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,7,10,.84));
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+      box-shadow:4px 4px 0 rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .market-card.owned{
+      border-color:color-mix(in srgb,var(--accent) 45%,rgba(238,247,255,.16));
+    }
+    #barrage-ui .market-card b{
+      display:block;
+      color:var(--accent);
+      font-size:11px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .market-card span{
+      display:block;
+      margin-top:8px;
+      color:var(--ui-text);
+      font-size:20px;
+      line-height:1.05;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .market-card small,
+    #barrage-ui .market-card em,
+    #barrage-ui .market-card i{
+      display:block;
+      margin-top:7px;
+      color:var(--ui-muted);
+      font-size:11px;
+      line-height:1.25;
+      font-weight:900;
+      font-style:normal;
+    }
+    #barrage-ui .market-card button{
+      position:absolute;
+      right:12px;
+      top:50%;
+      width:78px;
+      height:56px;
+      min-height:56px;
+      transform:translateY(-50%);
+      color:#070808;
+      border:0;
+      background:linear-gradient(180deg,var(--accent),#eef7ff);
+      font-size:13px;
+      box-shadow:4px 4px 0 rgba(0,0,0,.34);
+    }
+    #barrage-ui .market-card button:disabled{
+      color:rgba(238,247,255,.45);
+      border:1px solid rgba(238,247,255,.12);
+      background:rgba(238,247,255,.045);
+      box-shadow:none;
+    }
+    #barrage-ui .garage-layout{
+      display:grid;
+      gap:12px;
+    }
+    #barrage-ui .garage-module{
+      position:relative;
+      padding:12px;
+      border:1px solid rgba(238,247,255,.13);
+      background:linear-gradient(180deg,rgba(28,28,25,.72),rgba(8,10,10,.76));
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+    }
+    #barrage-ui .garage-ship-strip{
+      display:grid;
+      grid-auto-flow:column;
+      grid-auto-columns:168px;
+      gap:8px;
+      overflow-x:auto;
+      padding-bottom:3px;
+    }
+    #barrage-ui .garage-ship{
+      height:60px;
+      min-height:60px;
+      padding:9px 11px;
+      text-align:left;
+      border-left:4px solid var(--accent);
+      background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,7,10,.84));
+    }
+    #barrage-ui .garage-ship b,
+    #barrage-ui .garage-ship span{
+      display:block;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .garage-ship b{font-size:12px;color:var(--ui-text)}
+    #barrage-ui .garage-ship span{margin-top:6px;font-size:11px;color:var(--accent)}
+    #barrage-ui .garage-ship.selected::after{
+      display:none;
+    }
+    #barrage-ui .part-section{
+      margin-top:10px;
+      padding:0;
+      border:0;
+      background:transparent;
+      box-shadow:none;
+      clip-path:none;
+    }
+    #barrage-ui .part-slot-grid{
+      display:grid;
+      gap:9px;
+    }
+    #barrage-ui .part-slot{
+      min-height:142px;
+      padding:13px;
+      border-left:4px solid var(--accent);
+      background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,7,10,.84));
+    }
+    #barrage-ui .part-slot span{
+      margin-top:8px;
+      font-size:18px;
+      line-height:1.05;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .part-slot small{
+      margin-top:7px;
+      font-size:11px;
+      line-height:1.25;
+    }
+    #barrage-ui .part-picker{
+      margin-top:10px;
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:7px;
+    }
+    #barrage-ui .part-picker button{
+      position:relative;
+      height:42px;
+      min-height:42px;
+      padding:0 8px;
+      font-size:11px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      box-shadow:none;
+    }
+    #barrage-ui .garage-skin-section .equipped-grid,
+    #barrage-ui .supply-section .equipped-grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:8px;
+    }
+    #barrage-ui .garage-supply-link{
+      position:relative;
+      right:auto;
+      top:auto;
+      width:100%;
+      margin-top:10px;
+      transform:none;
+    }
+    #barrage-ui .supply-hero{
+      margin-bottom:10px;
+    }
+    #barrage-ui .gacha-result{
+      min-height:84px;
+      margin-bottom:10px;
+      padding:13px 15px;
+      border-left:4px solid var(--accent,#b8a7ff);
+      background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,7,10,.84));
+    }
+    #barrage-ui .gacha-result b,
+    #barrage-ui .gacha-result span,
+    #barrage-ui .gacha-result small{
+      display:block;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .gacha-result b{color:var(--accent,#b8a7ff);font-size:11px}
+    #barrage-ui .gacha-result span{margin-top:8px;color:var(--ui-text);font-size:20px;font-weight:900}
+    #barrage-ui .gacha-result small{margin-top:7px;color:var(--ui-muted);font-size:11px;font-weight:900}
+    #barrage-ui .supply-odds{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:7px;
+      margin-bottom:12px;
+    }
+    #barrage-ui .supply-odds span{
+      min-height:42px;
+      padding:8px;
+      border:1px solid rgba(238,247,255,.13);
+      border-left:3px solid var(--accent);
+      background:rgba(238,247,255,.045);
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    }
+    #barrage-ui .supply-odds b,
+    #barrage-ui .supply-odds em{
+      display:block;
+      font-size:9px;
+      line-height:1;
+      font-style:normal;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .supply-odds b{color:var(--accent)}
+    #barrage-ui .supply-odds em{margin-top:6px;color:var(--ui-muted)}
+    #barrage-ui .supply-section .cosmetic-list{
+      position:relative;
+      left:auto;
+      right:auto;
+      top:auto;
+      bottom:auto;
+      display:grid;
+      grid-auto-rows:auto;
+      gap:9px;
+      overflow:visible;
+    }
+    #barrage-ui .supply-section .cosmetic-row{
+      min-height:96px;
+      padding:13px 100px 13px 14px;
+    }
+    #barrage-ui .supply-section .cosmetic-row button{
+      right:10px;
+      top:50%;
+      height:54px;
+      min-height:54px;
+      transform:translateY(-50%);
+    }
+
+    /* Gameplay HUD rebuild: 2D layout, home visual language. */
+    #barrage-ui .game-hud{
+      display:none;
+      position:absolute;
+      inset:0;
+      overflow:hidden;
+      pointer-events:none;
+    }
+    #barrage-ui .game-hud.on{
+      display:block;
+    }
+    #barrage-ui .game-hud::before{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:0;
+      height:100px;
+      background:linear-gradient(180deg,rgba(5,6,7,.88),rgba(5,6,7,.36) 70%,transparent);
+      pointer-events:none;
+    }
+    #barrage-ui .game-hud::after{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      bottom:0;
+      height:194px;
+      background:linear-gradient(180deg,transparent,rgba(5,6,7,.56) 18%,rgba(5,6,7,.96));
+      border-top:1px solid rgba(238,247,255,.14);
+      pointer-events:none;
+    }
+    #barrage-ui .game-top{
+      position:absolute;
+      z-index:2;
+      left:8px;
+      right:8px;
+      top:8px;
+      height:74px;
+      display:grid;
+      grid-template-columns:118px minmax(0,1fr) 54px;
+      gap:8px;
+      align-items:stretch;
+    }
+    #barrage-ui .game-top-card,
+    #barrage-ui .game-pause,
+    #barrage-ui .game-bottom{
+      border:1px solid rgba(238,247,255,.16);
+      background:linear-gradient(180deg,rgba(28,28,25,.94),rgba(8,10,10,.96));
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+      box-shadow:4px 4px 0 rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .game-top-card{
+      min-width:0;
+      padding:8px 10px 17px 13px;
+      border-left:4px solid var(--accent);
+    }
+    #barrage-ui .game-wave{--accent:#ff3b62}
+    #barrage-ui .game-score{--accent:#1ed6ff}
+    #barrage-ui .game-top-card b,
+    #barrage-ui .game-meter b,
+    #barrage-ui .game-chip b{
+      display:block;
+      color:var(--accent,#1ed6ff);
+      font-size:10px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    #barrage-ui .game-top-card span{
+      display:block;
+      margin-top:5px;
+      color:var(--ui-text);
+      font-size:20px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .game-top-card small{
+      display:block;
+      margin-top:4px;
+      color:var(--ui-muted);
+      font-size:10px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .game-top-card small i{
+      color:var(--ui-text);
+      font-style:normal;
+    }
+    #barrage-ui .game-wave-track{
+      position:absolute;
+      left:13px;
+      right:10px;
+      bottom:7px;
+      height:5px;
+      border:1px solid rgba(238,247,255,.14);
+      background:rgba(238,247,255,.06);
+    }
+    #barrage-ui .game-wave-track i{
+      display:block;
+      height:100%;
+      background:linear-gradient(90deg,#ff3b62,#b8a7ff);
+      box-shadow:0 0 10px rgba(255,59,98,.32);
+    }
+    #barrage-ui .game-pause{
+      min-width:0;
+      min-height:0;
+      height:74px;
+      padding:0;
+      border-left:4px solid #d8e2ea;
+      pointer-events:auto;
+      display:grid;
+      place-items:center;
+    }
+    #barrage-ui .game-pause span{
+      width:16px;
+      height:20px;
+      display:block;
+      font-size:0;
+      border-left:5px solid #eef7ff;
+      border-right:5px solid #eef7ff;
+      filter:drop-shadow(0 0 8px rgba(30,214,255,.26));
+    }
+    #barrage-ui .game-bottom{
+      position:absolute;
+      z-index:2;
+      left:8px;
+      right:8px;
+      bottom:8px;
+      height:176px;
+      padding:12px;
+      display:grid;
+      grid-template-rows:78px 66px;
+      gap:10px;
+      border-left:4px solid #b8a7ff;
+      pointer-events:auto;
+    }
+    #barrage-ui .game-bottom::before{
+      content:"";
+      position:absolute;
+      left:14px;
+      right:14px;
+      top:9px;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(238,247,255,.22),transparent);
+    }
+    #barrage-ui .game-bars{
+      display:grid;
+      gap:7px;
+      min-width:0;
+    }
+    #barrage-ui .game-meter{
+      display:grid;
+      grid-template-columns:42px minmax(0,1fr) 82px;
+      gap:8px;
+      align-items:center;
+      min-width:0;
+      height:20px;
+      --accent:var(--meter-a);
+    }
+    #barrage-ui .game-meter.is-hp{
+      height:24px;
+      grid-template-columns:42px minmax(0,1fr) 86px;
+    }
+    #barrage-ui .game-meter-track{
+      height:12px;
+      border:1px solid rgba(238,247,255,.16);
+      background:rgba(238,247,255,.07);
+      overflow:hidden;
+      clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+    }
+    #barrage-ui .game-meter.is-hp .game-meter-track{
+      height:16px;
+    }
+    #barrage-ui .game-meter-track i{
+      display:block;
+      height:100%;
+      background:linear-gradient(90deg,var(--meter-a),var(--meter-b));
+      box-shadow:0 0 12px color-mix(in srgb,var(--meter-a) 34%,transparent);
+    }
+    #barrage-ui .game-meter span{
+      color:var(--ui-text);
+      font-size:12px;
+      line-height:1;
+      font-weight:900;
+      text-align:right;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .game-meter.is-hp span{
+      font-size:13px;
+    }
+    #barrage-ui .game-console{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 118px;
+      gap:9px;
+      min-width:0;
+    }
+    #barrage-ui .game-chips{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:7px;
+      min-width:0;
+    }
+    #barrage-ui .game-chip{
+      min-width:0;
+      height:58px;
+      padding:8px 8px 7px;
+      border:1px solid rgba(238,247,255,.14);
+      border-left:3px solid rgba(238,247,255,.26);
+      background:linear-gradient(180deg,rgba(238,247,255,.055),rgba(5,8,13,.64));
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .game-chip span{
+      display:block;
+      margin-top:8px;
+      color:var(--ui-text);
+      font-size:16px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .game-upgrade{
+      height:58px;
+      min-height:58px;
+      min-width:0;
+      padding:0 10px;
+      color:#070808;
+      border:0;
+      background:linear-gradient(180deg,#b8a7ff,#eef7ff);
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+      box-shadow:4px 4px 0 rgba(0,0,0,.34);
+      font-size:14px;
+      line-height:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .game-hud.has-bp .game-upgrade{
+      background:linear-gradient(180deg,#1ed6ff,#d8fbff);
+      box-shadow:4px 4px 0 rgba(0,0,0,.34),0 0 18px rgba(30,214,255,.18);
+    }
+    #barrage-ui .game-hud.critical .game-meter.is-hp .game-meter-track{
+      border-color:rgba(255,59,98,.58);
+      box-shadow:0 0 18px rgba(255,59,98,.18);
+    }
+    #barrage-ui .game-hud.leveling .game-top,
+    #barrage-ui .game-hud.leveling .game-bottom{
+      opacity:.34;
+      filter:saturate(.75);
+      pointer-events:none;
+    }
+    #barrage-ui .upgrade-overlay.on{
+      display:block;
+      pointer-events:auto;
+      background:linear-gradient(180deg,rgba(4,6,10,.76),rgba(5,6,7,.96));
+    }
+    #barrage-ui .level-dialog,
+    #barrage-ui .basic-dialog{
+      left:10px;
+      right:10px;
+      top:82px;
+      bottom:14px;
+      padding:0;
+      border:1px solid rgba(238,247,255,.16);
+      border-left:4px solid #b8a7ff;
+      background:linear-gradient(180deg,rgba(28,28,25,.96),rgba(8,10,10,.97));
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+      box-shadow:0 18px 42px rgba(0,0,0,.40),inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    #barrage-ui .level-head,
+    #barrage-ui .basic-head{
+      left:14px;
+      right:14px;
+      top:16px;
+      height:auto;
+      padding:0;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:10px;
+      align-items:start;
+      text-align:left;
+    }
+    #barrage-ui .level-title{
+      font-size:30px;
+      line-height:1;
+    }
+    #barrage-ui .level-note{
+      max-width:250px;
+      margin-top:7px;
+      font-size:12px;
+      line-height:1.25;
+    }
+    #barrage-ui .level-sp{
+      position:relative;
+      right:auto;
+      top:auto;
+      min-width:82px;
+      height:38px;
+      transform:none;
+      color:#070808;
+      border:0;
+      background:linear-gradient(180deg,#b8a7ff,#eef7ff);
+      font-size:14px;
+      box-shadow:4px 4px 0 rgba(0,0,0,.34);
+    }
+    #barrage-ui .level-dialog .upgrade-grid{
+      left:14px;
+      right:14px;
+      top:104px;
+      bottom:16px;
+      display:grid;
+      grid-template-columns:1fr;
+      grid-auto-rows:minmax(128px,auto);
+      align-content:start;
+      gap:10px;
+      overflow-y:auto;
+      padding:0 4px 4px 0;
+    }
+    #barrage-ui .basic-actions{
+      left:14px;
+      right:14px;
+      top:102px;
+      grid-template-columns:1fr 112px;
+      gap:9px;
+    }
+    #barrage-ui .basic-actions .level-sp,
+    #barrage-ui .basic-actions button{
+      height:50px;
+      min-height:50px;
+      font-size:14px;
+    }
+    #barrage-ui .basic-upgrade-list{
+      left:14px;
+      right:14px;
+      top:166px;
+      bottom:16px;
+      padding:0 4px 14px 0;
+    }
+    #barrage-ui .dialog-card{
+      left:18px;
+      right:18px;
+      top:172px;
+      padding:18px;
+      border-left:4px solid #b8a7ff;
+      background:linear-gradient(180deg,rgba(28,28,25,.96),rgba(8,10,10,.97));
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+    }
+
+    /* Readability pass: prevent compact mobile panels from crushing or overlapping text. */
+    #barrage-ui :is(b,span,strong,small,em,i,h1,p,button){
+      min-width:0;
+    }
+    #barrage-ui button{
+      display:grid;
+      place-items:center;
+      text-align:center;
+      line-height:1.12;
+      overflow-wrap:anywhere;
+    }
+    #barrage-ui :is(.page-title p,.level-note,.action-tile span,.loadout-copy p,.commerce-hero span,.supply-hero span,.garage-summary span,.garage-summary small,.garage-summary em,.market-card small,.market-card em,.market-card i,.part-slot small,.cosmetic-row small,.settings-row small,.run-basic-card small,.run-basic-card em){
+      white-space:normal;
+      overflow:visible;
+      text-overflow:clip;
+      line-height:1.28;
+      overflow-wrap:anywhere;
+    }
+    #barrage-ui :is(.market-card span,.part-slot span,.gacha-result span,.garage-summary strong,.supply-hero strong,.commerce-hero strong,.settings-row span,.run-basic-card span,.level-dialog .upgrade-card span){
+      overflow-wrap:anywhere;
+    }
+    #barrage-ui .page-title{
+      padding-right:14px;
+    }
+    #barrage-ui .page-title h1{
+      max-width:100%;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .page-back{
+      display:grid;
+      place-items:center;
+      padding:0 10px;
+      white-space:normal;
+    }
+    #barrage-ui .loadout-panel{
+      height:auto;
+      min-height:60px;
+      align-items:center;
+    }
+    #barrage-ui .loadout-copy h1{
+      max-width:100%;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .primary-start{
+      z-index:4;
+    }
+    #barrage-ui .action-tile{
+      height:auto;
+      min-height:58px;
+      align-content:center;
+    }
+    #barrage-ui .action-tile span{
+      margin-top:5px;
+    }
+    #barrage-ui .commerce-hero,
+    #barrage-ui .supply-hero,
+    #barrage-ui .garage-summary{
+      min-height:104px;
+    }
+    #barrage-ui .market-card{
+      min-height:144px;
+    }
+    #barrage-ui .part-slot{
+      min-height:154px;
+    }
+    #barrage-ui .cosmetic-row{
+      min-height:104px;
+    }
+    #barrage-ui .supply-section .cosmetic-row{
+      min-height:108px;
+    }
+    #barrage-ui .run-basic-card{
+      min-height:148px;
+    }
+    #barrage-ui .run-basic-card:first-child{
+      min-height:128px;
+    }
+    #barrage-ui .level-dialog .upgrade-card,
+    #barrage-ui .level-dialog .special-upgrade-card{
+      min-height:142px;
+    }
+    #barrage-ui .game-top-card{
+      overflow:hidden;
+    }
+    #barrage-ui .game-meter b,
+    #barrage-ui .game-meter span,
+    #barrage-ui .game-chip span,
+    #barrage-ui .game-upgrade{
+      min-width:0;
+    }
+    @media (max-height: 660px){
+      #barrage-ui .primary-start{top:416px}
+      #barrage-ui .home-actions{top:486px}
+      #barrage-ui .action-tile{min-height:54px}
+      #barrage-ui .action-tile span{display:none}
+    }
+
+    /* Gameplay visual polish: sleeker combat HUD with less screen blockage. */
+    #barrage-ui .game-hud{
+      --hud-bg:rgba(7,10,13,.62);
+      --hud-bg-strong:rgba(9,12,15,.82);
+      --hud-line:rgba(238,247,255,.18);
+      --hud-glow:rgba(30,214,255,.22);
+    }
+    #barrage-ui .game-hud::before{
+      height:112px;
+      background:
+        linear-gradient(180deg,rgba(4,6,9,.84),rgba(4,6,9,.28) 64%,transparent),
+        linear-gradient(90deg,transparent 0 12%,rgba(30,214,255,.16) 50%,transparent 88% 100%);
+      border-bottom:1px solid rgba(238,247,255,.06);
+    }
+    #barrage-ui .game-hud::after{
+      height:190px;
+      background:
+        linear-gradient(180deg,transparent,rgba(5,7,10,.30) 18%,rgba(5,7,10,.82)),
+        linear-gradient(90deg,rgba(184,167,255,.16),transparent 28%,transparent 72%,rgba(30,214,255,.12));
+      border-top:1px solid rgba(238,247,255,.10);
+    }
+    #barrage-ui .game-top{
+      left:12px;
+      right:12px;
+      top:10px;
+      height:68px;
+      grid-template-columns:106px minmax(0,1fr) 50px;
+      gap:9px;
+    }
+    #barrage-ui .game-top::after{
+      content:"";
+      position:absolute;
+      left:8px;
+      right:8px;
+      bottom:-7px;
+      height:1px;
+      background:linear-gradient(90deg,transparent,rgba(30,214,255,.46),rgba(184,167,255,.30),transparent);
+      box-shadow:0 0 16px rgba(30,214,255,.18);
+      pointer-events:none;
+    }
+    #barrage-ui .game-top-card,
+    #barrage-ui .game-pause{
+      border:1px solid var(--hud-line);
+      background:
+        linear-gradient(135deg,rgba(238,247,255,.075),transparent 38%),
+        linear-gradient(180deg,var(--hud-bg),rgba(5,7,10,.74));
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.08),
+        inset 0 -1px 0 rgba(0,0,0,.42),
+        0 10px 24px rgba(0,0,0,.30),
+        0 0 22px rgba(30,214,255,.055);
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+    }
+    #barrage-ui .game-top-card{
+      padding:9px 11px 16px 13px;
+      border-left:3px solid var(--accent);
+      position:relative;
+    }
+    #barrage-ui .game-top-card::before{
+      content:"";
+      position:absolute;
+      left:10px;
+      right:10px;
+      top:7px;
+      height:1px;
+      background:linear-gradient(90deg,var(--accent),transparent);
+      opacity:.65;
+    }
+    #barrage-ui .game-top-card b{
+      color:var(--accent);
+      font-size:9px;
+      letter-spacing:0;
+      opacity:.95;
+    }
+    #barrage-ui .game-top-card span{
+      margin-top:6px;
+      font-size:22px;
+      line-height:.92;
+      color:#f8fdff;
+      text-shadow:0 0 14px color-mix(in srgb,var(--accent) 42%,transparent);
+    }
+    #barrage-ui .game-top-card small{
+      margin-top:4px;
+      font-size:9px;
+      color:rgba(216,226,234,.74);
+    }
+    #barrage-ui .game-wave-track{
+      left:13px;
+      right:11px;
+      bottom:8px;
+      height:4px;
+      border:0;
+      background:rgba(238,247,255,.10);
+      clip-path:polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%);
+    }
+    #barrage-ui .game-wave-track i{
+      background:linear-gradient(90deg,#ff3b62,#ff8fab,#b8a7ff);
+      box-shadow:0 0 12px rgba(255,59,98,.36);
+    }
+    #barrage-ui .game-pause{
+      height:68px;
+      border-left:3px solid rgba(238,247,255,.74);
+      background:
+        linear-gradient(180deg,rgba(238,247,255,.11),rgba(5,7,10,.72)),
+        linear-gradient(135deg,rgba(30,214,255,.12),transparent);
+    }
+    #barrage-ui .game-pause span{
+      width:15px;
+      height:20px;
+      border-left-width:5px;
+      border-right-width:5px;
+      filter:drop-shadow(0 0 10px rgba(238,247,255,.40));
+    }
+    #barrage-ui .game-bottom{
+      left:12px;
+      right:12px;
+      bottom:10px;
+      height:154px;
+      padding:11px 12px 12px;
+      grid-template-rows:62px 54px;
+      gap:10px;
+      border:1px solid rgba(238,247,255,.15);
+      border-left:3px solid #b8a7ff;
+      background:
+        linear-gradient(135deg,rgba(184,167,255,.11),transparent 35%),
+        linear-gradient(180deg,rgba(8,11,14,.68),rgba(5,7,10,.88));
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.08),
+        0 -10px 32px rgba(0,0,0,.22),
+        0 0 30px rgba(184,167,255,.055);
+      backdrop-filter:blur(8px);
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+    }
+    #barrage-ui .game-bottom::before{
+      left:16px;
+      right:16px;
+      top:8px;
+      background:linear-gradient(90deg,transparent,rgba(184,167,255,.48),rgba(30,214,255,.30),transparent);
+      opacity:.72;
+    }
+    #barrage-ui .game-bottom::after{
+      content:"";
+      position:absolute;
+      right:14px;
+      top:12px;
+      width:42px;
+      height:3px;
+      background:linear-gradient(90deg,transparent,#1ed6ff);
+      box-shadow:0 0 14px rgba(30,214,255,.32);
+      opacity:.78;
+    }
+    #barrage-ui .game-bars{
+      gap:6px;
+      align-content:center;
+    }
+    #barrage-ui .game-meter,
+    #barrage-ui .game-meter.is-hp{
+      height:18px;
+      grid-template-columns:40px minmax(0,1fr) 78px;
+      gap:8px;
+    }
+    #barrage-ui .game-meter b{
+      color:var(--meter-a);
+      font-size:10px;
+      text-shadow:0 0 10px color-mix(in srgb,var(--meter-a) 40%,transparent);
+    }
+    #barrage-ui .game-meter-track,
+    #barrage-ui .game-meter.is-hp .game-meter-track{
+      height:10px;
+      border:1px solid rgba(238,247,255,.12);
+      background:linear-gradient(180deg,rgba(238,247,255,.08),rgba(238,247,255,.035));
+      box-shadow:inset 0 0 10px rgba(0,0,0,.34);
+    }
+    #barrage-ui .game-meter-track i{
+      box-shadow:
+        0 0 12px color-mix(in srgb,var(--meter-a) 36%,transparent),
+        inset 0 1px 0 rgba(255,255,255,.28);
+    }
+    #barrage-ui .game-meter span{
+      font-size:11px;
+      color:#f8fdff;
+      opacity:.92;
+    }
+    #barrage-ui .game-console{
+      grid-template-columns:minmax(0,1fr) 116px;
+      gap:9px;
+    }
+    #barrage-ui .game-chips{
+      gap:6px;
+    }
+    #barrage-ui .game-chip{
+      height:52px;
+      padding:7px 7px 6px;
+      border-color:rgba(238,247,255,.12);
+      border-left:2px solid rgba(238,247,255,.26);
+      background:
+        linear-gradient(180deg,rgba(238,247,255,.055),rgba(4,6,9,.62)),
+        repeating-linear-gradient(135deg,rgba(238,247,255,.030) 0 1px,transparent 1px 9px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    #barrage-ui .game-chip:nth-child(1){border-left-color:#1ed6ff}
+    #barrage-ui .game-chip:nth-child(2){border-left-color:#b8a7ff}
+    #barrage-ui .game-chip:nth-child(3){border-left-color:#36f39b}
+    #barrage-ui .game-chip:nth-child(4){border-left-color:#d8e2ea}
+    #barrage-ui .game-chip b{
+      color:rgba(216,226,234,.62);
+      font-size:9px;
+    }
+    #barrage-ui .game-chip span{
+      margin-top:7px;
+      font-size:18px;
+      color:#f8fdff;
+      text-shadow:0 0 12px rgba(30,214,255,.14);
+    }
+    #barrage-ui .game-upgrade{
+      height:52px;
+      min-height:52px;
+      padding:0 9px;
+      color:#f2f0ff;
+      border:1px solid rgba(184,167,255,.34);
+      border-left:3px solid #b8a7ff;
+      background:
+        linear-gradient(135deg,rgba(184,167,255,.20),transparent 42%),
+        linear-gradient(180deg,rgba(25,22,34,.86),rgba(8,8,12,.92));
+      box-shadow:
+        4px 4px 0 rgba(0,0,0,.34),
+        inset 0 1px 0 rgba(255,255,255,.08),
+        0 0 20px rgba(184,167,255,.12);
+      font-size:13px;
+      font-weight:900;
+      text-shadow:0 0 12px rgba(184,167,255,.22);
+    }
+    #barrage-ui .game-upgrade::after{
+      content:">";
+      position:absolute;
+      right:9px;
+      color:#b8a7ff;
+      font-size:15px;
+      text-shadow:0 0 10px rgba(184,167,255,.42);
+    }
+    #barrage-ui .game-hud.has-bp .game-upgrade{
+      background:
+        linear-gradient(135deg,rgba(30,214,255,.28),transparent 42%),
+        linear-gradient(180deg,rgba(15,43,50,.90),rgba(6,12,16,.94));
+      border-color:rgba(30,214,255,.46);
+      border-left-color:#1ed6ff;
+      color:#d8fbff;
+      box-shadow:4px 4px 0 rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.08),0 0 22px rgba(30,214,255,.24);
+    }
+    #barrage-ui .game-hud.has-bp .game-upgrade::after{
+      color:#1ed6ff;
+    }
+    #barrage-ui .game-hud.critical .game-bottom{
+      border-left-color:#ff3b62;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 28px rgba(255,59,98,.10);
+    }
+    @media (max-height: 660px){
+      #barrage-ui .game-top{height:62px;grid-template-columns:100px minmax(0,1fr) 48px}
+      #barrage-ui .game-pause{height:62px}
+      #barrage-ui .game-bottom{height:144px;grid-template-rows:58px 50px}
+      #barrage-ui .game-chip,
+      #barrage-ui .game-upgrade{height:48px;min-height:48px}
+    }
+
+    /* No-gradient finish: restrained, solid UI surfaces instead of cheap sheen. */
+    #barrage-ui,
+    #barrage-ui *,
+    #barrage-ui *::before,
+    #barrage-ui *::after{
+      background-image:none !important;
+    }
+    #barrage-ui .screen{
+      background-color:#05070b !important;
+    }
+    #barrage-ui .screen::before{
+      opacity:.10;
+      background-color:transparent !important;
+    }
+    #barrage-ui .screen::after{
+      background-color:rgba(238,247,255,.16) !important;
+    }
+    #barrage-ui :is(.panel,.glass-panel,.page-title,.page-back,.record-pill,.loadout-panel,.action-tile,.commerce-hero,.supply-hero,.garage-summary,.market-card,.garage-module,.garage-ship,.part-slot,.gacha-result,.equipped-card,.cosmetic-row,.upgrade-card,.run-basic-card,.settings-row,.ranking-row,.dialog-card,.level-dialog,.basic-dialog,.game-top-card,.game-pause,.game-bottom,.game-chip){
+      background-color:rgba(8,10,13,.88) !important;
+      background-image:none !important;
+    }
+    #barrage-ui :is(.home-screen,.home-hub,.hangar-visual,.catalog-grid,.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.basic-upgrade-list,.upgrade-overlay){
+      background-color:transparent !important;
+      background-image:none !important;
+    }
+    #barrage-ui .upgrade-overlay.on{
+      background-color:rgba(4,6,10,.86) !important;
+    }
+    #barrage-ui :is(button,.part-picker button,.game-upgrade,.garage-supply-link,.gacha-roll){
+      background-color:rgba(12,15,19,.90) !important;
+      background-image:none !important;
+    }
+    #barrage-ui :is(.primary-start,.mission-tag,.commerce-hero button,.supply-hero button,.market-card button,.level-sp,.basic-actions .level-sp){
+      color:#08090b !important;
+      background-color:#b8a7ff !important;
+      background-image:none !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui :is(.commerce-hero button,.supply-hero button,.market-card button){
+      border:1px solid rgba(238,247,255,.18) !important;
+    }
+    #barrage-ui :is(.game-hud.has-bp .game-upgrade,.basic-actions .level-sp){
+      color:#061014 !important;
+      background-color:#1ed6ff !important;
+    }
+    #barrage-ui :is(.game-wave-track,.wave-timer,.sync-track,.game-meter-track,.meter-track,.bar){
+      background-color:rgba(238,247,255,.08) !important;
+      background-image:none !important;
+    }
+    #barrage-ui :is(.game-wave-track i,.wave-timer i){
+      background-color:#ff3b62 !important;
+      background-image:none !important;
+    }
+    #barrage-ui :is(.sync-track i){
+      background-color:#1ed6ff !important;
+      background-image:none !important;
+    }
+    #barrage-ui :is(.game-meter-track i,.meter-track i,.bar i){
+      background-color:var(--meter-a,#1ed6ff) !important;
+      background-image:none !important;
+    }
+    #barrage-ui .game-upgrade{
+      color:#f2f0ff !important;
+      border-color:rgba(184,167,255,.36) !important;
+      border-left-color:#b8a7ff !important;
+      background-color:rgba(14,12,20,.92) !important;
+    }
+    #barrage-ui .game-hud.has-bp .game-upgrade{
+      color:#d8fbff !important;
+      border-color:rgba(30,214,255,.48) !important;
+      border-left-color:#1ed6ff !important;
+      background-color:rgba(7,24,30,.94) !important;
+    }
+    #barrage-ui :is(.home-dots,.hangar-rails,.hollow-tape){
+      opacity:.45;
+    }
+    @media (max-height: 660px){
+      #barrage-ui .loadout-panel{
+        top:348px !important;
+        height:58px !important;
+        min-height:58px !important;
+        padding-top:8px !important;
+        padding-bottom:8px !important;
+        overflow:hidden;
+      }
+      #barrage-ui .loadout-copy h1{
+        font-size:20px;
+      }
+      #barrage-ui .primary-start{
+        top:420px !important;
+      }
+      #barrage-ui .home-actions{
+        top:486px !important;
+      }
+    }
+
+    /* Whole-UI polish pass: clearer layout, consistent spacing, no decorative horizon lines. */
+    #barrage-ui .screen::after{
+      display:none !important;
+    }
+    #barrage-ui .page-stage{
+      padding:12px 12px 88px !important;
+    }
+    #barrage-ui .page-header{
+      height:76px !important;
+      display:block !important;
+    }
+    #barrage-ui .page-title{
+      position:absolute !important;
+      left:12px !important;
+      right:12px !important;
+      top:12px !important;
+      height:76px !important;
+      padding:14px 16px 12px !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      border-left:4px solid #1ed6ff !important;
+      box-shadow:0 10px 24px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.05) !important;
+    }
+    #barrage-ui .page-title h1{
+      font-size:27px !important;
+      line-height:1.05 !important;
+    }
+    #barrage-ui .page-title p{
+      margin-top:7px !important;
+      font-size:10px !important;
+      line-height:1.2 !important;
+      color:rgba(216,226,234,.76) !important;
+    }
+    #barrage-ui .page-back{
+      position:absolute !important;
+      z-index:30 !important;
+      right:12px !important;
+      bottom:12px !important;
+      width:108px !important;
+      height:50px !important;
+      min-height:50px !important;
+      padding:0 16px !important;
+      border-left:3px solid #b8a7ff !important;
+      color:#d8d2ff !important;
+      background-color:rgba(10,12,17,.96) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.06) !important;
+    }
+    #barrage-ui :is(.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.upgrade-path-list){
+      left:12px !important;
+      right:12px !important;
+      top:102px !important;
+      bottom:76px !important;
+      padding:0 4px 28px 0 !important;
+      overflow-y:auto !important;
+      scrollbar-width:thin;
+    }
+    #barrage-ui :is(.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.upgrade-path-list)::-webkit-scrollbar{
+      width:5px;
+    }
+    #barrage-ui :is(.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.upgrade-path-list)::-webkit-scrollbar-thumb{
+      background-color:rgba(238,247,255,.20) !important;
+    }
+    #barrage-ui :is(.commerce-hero,.supply-hero,.garage-summary,.market-card,.garage-module,.part-slot,.gacha-result,.equipped-card,.cosmetic-row,.settings-row,.ranking-row,.upgrade-card){
+      border-color:rgba(238,247,255,.14) !important;
+      box-shadow:0 8px 20px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.045) !important;
+    }
+    #barrage-ui :is(.commerce-hero,.supply-hero,.garage-summary){
+      min-height:96px !important;
+      padding-top:14px !important;
+      padding-bottom:14px !important;
+    }
+    #barrage-ui .market-card{
+      min-height:136px !important;
+      padding:13px 102px 13px 14px !important;
+    }
+    #barrage-ui .market-card button{
+      width:74px !important;
+      height:52px !important;
+      min-height:52px !important;
+      font-size:12px !important;
+    }
+    #barrage-ui .part-slot{
+      min-height:146px !important;
+    }
+    #barrage-ui .garage-module{
+      margin-top:0 !important;
+      padding:12px !important;
+    }
+    #barrage-ui .garage-layout{
+      gap:12px !important;
+    }
+    #barrage-ui .garage-ship-strip{
+      grid-auto-columns:154px !important;
+    }
+    #barrage-ui .supply-odds{
+      gap:8px !important;
+    }
+    #barrage-ui .settings-panel{
+      gap:10px !important;
+    }
+    #barrage-ui .settings-row{
+      min-height:72px !important;
+      padding:12px 15px 11px 17px !important;
+    }
+    #barrage-ui .settings-row::after{
+      display:none !important;
+    }
+    #barrage-ui .loadout-panel{
+      height:64px !important;
+      min-height:64px !important;
+      padding-top:9px !important;
+      padding-bottom:9px !important;
+    }
+    #barrage-ui .loadout-copy h1{
+      font-size:21px !important;
+      line-height:1.02 !important;
+    }
+    #barrage-ui .loadout-copy p{
+      margin-top:3px !important;
+      font-size:9px !important;
+      line-height:1.15 !important;
+    }
+    #barrage-ui .primary-start{
+      top:432px !important;
+    }
+    #barrage-ui .home-actions{
+      top:500px !important;
+    }
+    #barrage-ui .ranking-empty{
+      min-height:112px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:rgba(216,226,234,.72) !important;
+    }
+    #barrage-ui .upgrade-path-list{
+      display:block !important;
+    }
+    #barrage-ui .upgrade-path{
+      display:block !important;
+      min-height:0 !important;
+      margin-bottom:12px !important;
+    }
+    #barrage-ui .upgrade-link{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-path .upgrade-card{
+      margin-bottom:8px !important;
+    }
+    #barrage-ui .upgrade-card{
+      min-height:104px !important;
+      padding:13px 88px 13px 14px !important;
+    }
+    #barrage-ui .upgrade-card span{
+      font-size:17px !important;
+      line-height:1.12 !important;
+    }
+    #barrage-ui .upgrade-card small,
+    #barrage-ui .upgrade-card em{
+      font-size:10px !important;
+      line-height:1.28 !important;
+    }
+    #barrage-ui .upgrade-card button{
+      right:10px !important;
+      width:66px !important;
+      height:46px !important;
+      min-height:46px !important;
+      font-size:11px !important;
+    }
+    #barrage-ui .game-top{
+      height:72px !important;
+    }
+    #barrage-ui .game-pause{
+      height:72px !important;
+    }
+    #barrage-ui .game-top-card{
+      padding-bottom:19px !important;
+    }
+    #barrage-ui .game-top-card span{
+      font-size:21px !important;
+    }
+    #barrage-ui .game-top-card small{
+      margin-top:5px !important;
+    }
+
+    /* Active special-upgrade slots: five fixed slots visible during play. */
+    #barrage-ui .game-hud::before{
+      height:148px !important;
+      background-color:rgba(4,6,10,.56) !important;
+    }
+    #barrage-ui .game-special-slots{
+      position:absolute;
+      z-index:3;
+      left:12px;
+      right:12px;
+      top:88px;
+      height:48px;
+      display:grid;
+      grid-template-columns:repeat(5,minmax(0,1fr));
+      gap:6px;
+      pointer-events:none;
+    }
+    #barrage-ui .special-slot{
+      min-width:0;
+      height:48px;
+      padding:7px 5px 5px;
+      display:grid;
+      grid-template-rows:12px 1fr 10px;
+      align-items:center;
+      justify-items:center;
+      border:1px solid rgba(238,247,255,.15);
+      border-left:3px solid var(--accent,rgba(238,247,255,.28));
+      background-color:rgba(8,10,13,.90) !important;
+      box-shadow:0 8px 18px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.045);
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .special-slot b{
+      width:100%;
+      color:var(--accent,#d8e2ea);
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+      text-align:center;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .special-slot span{
+      width:100%;
+      color:#f6f8fa;
+      font-size:11px;
+      line-height:1;
+      font-weight:900;
+      text-align:center;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .special-slot small{
+      width:100%;
+      color:rgba(216,226,234,.70);
+      font-size:8px;
+      line-height:1;
+      font-weight:900;
+      text-align:center;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .special-slot.empty{
+      border-left-color:rgba(238,247,255,.18);
+      background-color:rgba(8,10,13,.56) !important;
+      opacity:.72;
+    }
+    #barrage-ui .special-slot.empty span{
+      color:rgba(216,226,234,.42);
+      font-size:9px;
+    }
+    @media (max-height: 660px){
+      #barrage-ui .game-special-slots{
+        top:80px;
+        height:44px;
+        gap:5px;
+      }
+      #barrage-ui .special-slot{
+        height:44px;
+        padding-top:6px;
+      }
+      #barrage-ui .special-slot span{
+        font-size:10px;
+      }
+      #barrage-ui .special-slot small{
+        font-size:7px;
+      }
+    }
+
+    /* In-run upgrade picker: large whole-card buttons, positioned slightly below center. */
+    #barrage-ui .upgrade-overlay.on{
+      display:block !important;
+      pointer-events:auto !important;
+      background-color:rgba(3,5,9,.82) !important;
+    }
+    #barrage-ui .upgrade-overlay::before{
+      display:none !important;
+    }
+    #barrage-ui .level-dialog,
+    #barrage-ui .basic-dialog{
+      pointer-events:auto !important;
+      position:absolute !important;
+      left:16px !important;
+      right:16px !important;
+      top:55% !important;
+      bottom:auto !important;
+      max-height:72vh !important;
+      transform:translateY(-44%) !important;
+      padding:14px !important;
+      overflow:hidden !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      border-left:4px solid #b8a7ff !important;
+      background-color:rgba(7,9,12,.96) !important;
+      box-shadow:0 18px 42px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px) !important;
+    }
+    #barrage-ui .level-head,
+    #barrage-ui .basic-head{
+      position:relative !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      height:auto !important;
+      margin:0 !important;
+      padding:0 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      gap:10px !important;
+      align-items:start !important;
+      text-align:left !important;
+    }
+    #barrage-ui :is(.level-dialog,.basic-dialog) .level-title{
+      font-size:28px !important;
+      line-height:1.04 !important;
+      color:#f6f8fa !important;
+      text-shadow:none !important;
+      white-space:normal !important;
+      overflow:visible !important;
+      text-overflow:clip !important;
+    }
+    #barrage-ui :is(.level-dialog,.basic-dialog) .level-note{
+      max-width:none !important;
+      margin-top:7px !important;
+      color:rgba(216,226,234,.76) !important;
+      font-size:12px !important;
+      line-height:1.25 !important;
+      white-space:normal !important;
+      overflow:visible !important;
+      text-overflow:clip !important;
+    }
+    #barrage-ui :is(.level-dialog,.basic-dialog) .level-sp{
+      position:relative !important;
+      right:auto !important;
+      top:auto !important;
+      width:auto !important;
+      min-width:78px !important;
+      height:42px !important;
+      transform:none !important;
+      color:#061014 !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      background-color:#1ed6ff !important;
+      box-shadow:4px 4px 0 rgba(0,0,0,.30) !important;
+      font-size:14px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .level-dialog .upgrade-grid,
+    #barrage-ui .basic-upgrade-list{
+      position:relative !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      gap:10px !important;
+      align-content:start !important;
+      margin-top:12px !important;
+      padding:0 4px 4px 0 !important;
+      max-height:calc(72vh - 104px) !important;
+      overflow-y:auto !important;
+      scrollbar-width:thin;
+    }
+    #barrage-ui .basic-actions{
+      position:relative !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 104px !important;
+      gap:10px !important;
+      margin-top:12px !important;
+      z-index:1 !important;
+    }
+    #barrage-ui .basic-actions button{
+      height:42px !important;
+      min-height:42px !important;
+      border-left:3px solid #b8a7ff !important;
+      color:#d8d2ff !important;
+      background-color:rgba(10,12,17,.96) !important;
+      font-size:14px !important;
+    }
+    #barrage-ui .basic-upgrade-list{
+      max-height:calc(72vh - 164px) !important;
+    }
+    #barrage-ui .basic-dialog .basic-tree{
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      gap:10px !important;
+      height:auto !important;
+    }
+    #barrage-ui .basic-dialog .basic-tree::before{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-choice{
+      appearance:none !important;
+      cursor:pointer;
+      position:relative !important;
+      width:100% !important;
+      min-height:112px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 72px !important;
+      grid-template-areas:
+        "meta action"
+        "title action"
+        "body action"
+        "note action" !important;
+      column-gap:12px !important;
+      row-gap:4px !important;
+      align-items:center !important;
+      grid-row:auto !important;
+      grid-column:auto !important;
+      padding:12px 12px 12px 14px !important;
+      text-align:left !important;
+      color:var(--ui-text) !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      border-left:4px solid var(--accent) !important;
+      background-color:rgba(9,11,15,.96) !important;
+      box-shadow:0 10px 24px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+    }
+    #barrage-ui .upgrade-choice::before,
+    #barrage-ui .upgrade-choice::after{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-choice b{
+      grid-area:meta;
+      display:block !important;
+      color:var(--accent) !important;
+      font-size:10px !important;
+      line-height:1.1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-choice span{
+      grid-area:title;
+      display:block !important;
+      margin-top:0 !important;
+      color:#f6f8fa !important;
+      font-size:18px !important;
+      line-height:1.12 !important;
+      white-space:normal !important;
+      overflow:visible !important;
+      text-overflow:clip !important;
+    }
+    #barrage-ui .upgrade-choice small{
+      grid-area:body;
+      display:-webkit-box !important;
+      max-width:none !important;
+      margin-top:0 !important;
+      color:rgba(216,226,234,.82) !important;
+      font-size:12px !important;
+      line-height:1.26 !important;
+      white-space:normal !important;
+      overflow:hidden !important;
+      text-overflow:clip !important;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+    }
+    #barrage-ui .upgrade-choice em{
+      grid-area:note;
+      display:block !important;
+      margin-top:0 !important;
+      color:rgba(216,226,234,.58) !important;
+      font-size:10px !important;
+      line-height:1.15 !important;
+      font-style:normal !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-choice strong{
+      grid-area:action;
+      align-self:stretch;
+      min-height:56px;
+      display:grid;
+      place-items:center;
+      padding:0 6px;
+      color:var(--accent);
+      border:1px solid color-mix(in srgb,var(--accent) 42%,rgba(238,247,255,.14));
+      background-color:rgba(238,247,255,.045) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+      font-size:13px;
+      font-weight:900;
+      line-height:1;
+      white-space:nowrap;
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .upgrade-choice:not(:disabled):active{
+      transform:translateY(1px) scale(.995);
+    }
+    #barrage-ui .upgrade-choice:focus-visible{
+      outline:2px solid var(--accent);
+      outline-offset:2px;
+    }
+    #barrage-ui .upgrade-choice:disabled,
+    #barrage-ui .upgrade-choice.disabled{
+      cursor:default;
+      opacity:.82;
+      filter:saturate(.78);
+    }
+    @media (max-height: 660px){
+      #barrage-ui .level-dialog,
+      #barrage-ui .basic-dialog{
+        max-height:76vh !important;
+      }
+      #barrage-ui .level-dialog .upgrade-grid{
+        max-height:calc(76vh - 94px) !important;
+      }
+      #barrage-ui .basic-upgrade-list{
+        max-height:calc(76vh - 148px) !important;
+      }
+      #barrage-ui :is(.level-dialog,.basic-dialog) .level-title{
+        font-size:24px !important;
+      }
+      #barrage-ui .upgrade-choice{
+        min-height:96px !important;
+        grid-template-columns:minmax(0,1fr) 66px !important;
+      }
+      #barrage-ui .upgrade-choice small{
+        -webkit-line-clamp:1;
+      }
+      #barrage-ui .upgrade-choice strong{
+        min-height:48px;
+      }
+    }
+
+    /* Readability sweep: prevent horizontal spill and keep disabled labels legible. */
+    #barrage-ui :is(.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.upgrade-path-list,.basic-upgrade-list){
+      overflow-x:hidden !important;
+    }
+    #barrage-ui :is(.garage-layout,.garage-module,.garage-summary,.garage-ship-strip,.garage-ship,.part-section,.part-slot,.part-picker,.equipped-grid){
+      box-sizing:border-box !important;
+      min-width:0 !important;
+      max-width:100% !important;
+    }
+    #barrage-ui .garage-layout{
+      width:100% !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .garage-module{
+      width:100% !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .garage-summary{
+      width:100% !important;
+      padding-right:16px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .garage-summary :is(strong,span,small,em){
+      max-width:100% !important;
+      overflow-wrap:anywhere !important;
+    }
+    #barrage-ui .garage-ship-strip{
+      width:100% !important;
+      grid-auto-columns:minmax(136px,154px) !important;
+      overflow-x:auto !important;
+      overflow-y:hidden !important;
+    }
+    #barrage-ui .part-picker button{
+      height:44px !important;
+      min-height:44px !important;
+    }
+    #barrage-ui :is(.market-card button:disabled,.upgrade-card button:disabled,.garage-ship:disabled,.part-picker button:disabled){
+      color:rgba(238,247,255,.72) !important;
+      background-color:rgba(238,247,255,.075) !important;
+      border-color:rgba(238,247,255,.18) !important;
+    }
+    #barrage-ui .upgrade-choice:disabled strong,
+    #barrage-ui .upgrade-choice.disabled strong{
+      color:color-mix(in srgb,var(--accent) 72%,#f6f8fa) !important;
+      background-color:rgba(238,247,255,.065) !important;
+    }
+    #barrage-ui .hangar-status{
+      width:172px !important;
+    }
+
+    /* Store/Garage rebuild: live ship showroom on top, compact rails below. */
+    #barrage-ui :is(.store-screen,.garage-screen){
+      background-color:transparent !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen)::before,
+    #barrage-ui :is(.store-screen,.garage-screen)::after{
+      display:none !important;
+    }
+    #barrage-ui .showroom-stage{
+      padding:0 !important;
+    }
+    #barrage-ui .ship-showroom-ui{
+      position:absolute;
+      z-index:4;
+      left:12px;
+      right:12px;
+      top:12px;
+      height:252px;
+      pointer-events:none;
+    }
+    #barrage-ui .ship-showroom-ui::before{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:0;
+      height:252px;
+      border:1px solid rgba(238,247,255,.13);
+      border-left:4px solid var(--accent);
+      background-color:rgba(5,7,10,.22) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+      pointer-events:none;
+    }
+    #barrage-ui .showroom-copy{
+      position:absolute;
+      left:16px;
+      top:14px;
+      width:178px;
+      padding:12px 12px 11px;
+      border:1px solid rgba(238,247,255,.14);
+      border-left:3px solid var(--accent);
+      background-color:rgba(7,9,12,.82) !important;
+      box-shadow:0 10px 24px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.05);
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+    }
+    #barrage-ui .showroom-copy b,
+    #barrage-ui .showroom-copy strong,
+    #barrage-ui .showroom-copy span{
+      display:block;
+      min-width:0;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .showroom-copy b{
+      color:var(--accent);
+      font-size:11px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .showroom-copy strong{
+      margin-top:8px;
+      color:#f6f8fa;
+      font-size:20px;
+      line-height:1.05;
+      font-weight:900;
+    }
+    #barrage-ui .showroom-copy span{
+      margin-top:7px;
+      color:rgba(216,226,234,.76);
+      font-size:10px;
+      line-height:1.2;
+      font-weight:900;
+    }
+    #barrage-ui .showroom-tabs{
+      position:absolute;
+      left:16px;
+      right:16px;
+      bottom:14px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+      pointer-events:auto;
+    }
+    #barrage-ui .showroom-tabs button{
+      height:44px;
+      min-height:44px;
+      border:1px solid rgba(238,247,255,.16);
+      border-left:3px solid #b8a7ff;
+      color:#d8d2ff;
+      background-color:rgba(8,10,13,.88) !important;
+      font-size:13px;
+      font-weight:900;
+      box-shadow:0 8px 18px rgba(0,0,0,.24);
+    }
+    #barrage-ui .showroom-tabs button.active{
+      border-left-color:var(--accent);
+      color:#061014 !important;
+      background-color:var(--accent) !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-back{
+      z-index:40 !important;
+      right:12px !important;
+      bottom:12px !important;
+    }
+    #barrage-ui :is(.store-screen .commerce-panel,.garage-screen .garage-panel){
+      left:12px !important;
+      right:12px !important;
+      top:276px !important;
+      bottom:76px !important;
+      padding:0 !important;
+      overflow:hidden !important;
+      scrollbar-width:none;
+    }
+    #barrage-ui :is(.store-screen .commerce-panel,.garage-screen .garage-panel)::-webkit-scrollbar{
+      display:none;
+    }
+    #barrage-ui :is(.store-compact,.garage-compact){
+      height:100%;
+      display:grid;
+      gap:9px;
+      min-width:0;
+      overflow:hidden;
+    }
+    #barrage-ui .store-compact{
+      grid-template-rows:44px 136px minmax(0,1fr);
+    }
+    #barrage-ui .garage-compact{
+      grid-template-rows:92px 154px 48px;
+    }
+    #barrage-ui .compact-stats{
+      display:grid;
+      grid-template-columns:1.2fr 1fr 1fr;
+      gap:7px;
+      min-width:0;
+    }
+    #barrage-ui .compact-stats span{
+      min-width:0;
+      padding:8px 9px;
+      border:1px solid rgba(238,247,255,.14);
+      border-left:3px solid #1ed6ff;
+      background-color:rgba(8,10,13,.88) !important;
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .compact-stats b,
+    #barrage-ui .compact-stats small{
+      display:block;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .compact-stats b{
+      color:#f6f8fa;
+      font-size:15px;
+      line-height:1;
+    }
+    #barrage-ui .compact-stats small{
+      margin-top:5px;
+      color:rgba(216,226,234,.62);
+      font-size:8px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .compact-section{
+      min-width:0;
+      overflow:hidden;
+    }
+    #barrage-ui .compact-head{
+      height:24px;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:10px;
+      align-items:center;
+      padding:0 2px;
+    }
+    #barrage-ui .compact-head b{
+      color:#1ed6ff;
+      font-size:13px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .compact-head span{
+      color:rgba(216,226,234,.62);
+      font-size:10px;
+      line-height:1;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    #barrage-ui :is(.store-ship-rail,.store-part-rail,.garage-ship-rail,.garage-slot-rail){
+      display:grid;
+      grid-auto-flow:column;
+      gap:8px;
+      min-width:0;
+      overflow-x:auto;
+      overflow-y:hidden;
+      padding:4px 2px 6px;
+      scrollbar-width:thin;
+      scroll-snap-type:x proximity;
+    }
+    #barrage-ui .store-ship-rail{grid-auto-columns:176px}
+    #barrage-ui .store-part-rail{grid-auto-columns:150px}
+    #barrage-ui .garage-ship-rail{grid-auto-columns:146px}
+    #barrage-ui .garage-slot-rail{grid-auto-columns:158px}
+    #barrage-ui :is(.store-tile,.garage-slot-card){
+      position:relative;
+      min-width:0;
+      border:1px solid rgba(238,247,255,.14);
+      border-left:4px solid var(--accent);
+      background-color:rgba(8,10,13,.90) !important;
+      box-shadow:0 8px 18px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.045);
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+      scroll-snap-align:start;
+    }
+    #barrage-ui .store-tile{
+      height:106px;
+      padding:10px 10px 9px;
+      display:grid;
+      grid-template-rows:10px 20px 16px 1fr 32px;
+      gap:4px;
+    }
+    #barrage-ui .part-tile{
+      height:116px;
+    }
+    #barrage-ui .store-tile :is(b,span,small,em){
+      display:block;
+      min-width:0;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      font-style:normal;
+    }
+    #barrage-ui .store-tile b{
+      color:var(--accent);
+      font-size:9px;
+      line-height:1;
+    }
+    #barrage-ui .store-tile span{
+      color:#f6f8fa;
+      font-size:15px;
+      line-height:1.12;
+      font-weight:900;
+    }
+    #barrage-ui .store-tile small,
+    #barrage-ui .store-tile em{
+      color:rgba(216,226,234,.72);
+      font-size:9px;
+      line-height:1.1;
+      font-weight:900;
+    }
+    #barrage-ui .store-tile button{
+      height:32px;
+      min-height:32px;
+      align-self:end;
+      color:#061014;
+      border:1px solid rgba(238,247,255,.16);
+      background-color:var(--accent) !important;
+      font-size:11px;
+      font-weight:900;
+    }
+    #barrage-ui .store-tile button:disabled{
+      color:rgba(238,247,255,.72) !important;
+      background-color:rgba(238,247,255,.075) !important;
+    }
+    #barrage-ui .garage-ship{
+      height:56px !important;
+      min-height:56px !important;
+      padding:8px 10px !important;
+      border:1px solid rgba(238,247,255,.14) !important;
+      border-left:3px solid var(--accent) !important;
+      background-color:rgba(8,10,13,.88) !important;
+      box-shadow:0 8px 18px rgba(0,0,0,.20) !important;
+    }
+    #barrage-ui .garage-ship b{
+      color:#f6f8fa !important;
+      font-size:11px !important;
+    }
+    #barrage-ui .garage-ship span{
+      color:var(--accent) !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .garage-slot-card{
+      height:126px;
+      padding:10px;
+      display:grid;
+      grid-template-rows:10px 20px 14px 34px;
+      gap:6px;
+    }
+    #barrage-ui .garage-slot-card :is(b,span,small){
+      display:block;
+      min-width:0;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .garage-slot-card b{
+      color:var(--accent);
+      font-size:9px;
+      line-height:1;
+    }
+    #barrage-ui .garage-slot-card span{
+      color:#f6f8fa;
+      font-size:15px;
+      line-height:1.1;
+      font-weight:900;
+    }
+    #barrage-ui .garage-slot-card small{
+      color:rgba(216,226,234,.72);
+      font-size:9px;
+      line-height:1.1;
+      font-weight:900;
+    }
+    #barrage-ui .slot-chip-row{
+      display:grid;
+      grid-auto-flow:column;
+      grid-auto-columns:minmax(66px,auto);
+      gap:6px;
+      overflow-x:auto;
+      overflow-y:hidden;
+      min-width:0;
+      scrollbar-width:none;
+    }
+    #barrage-ui .slot-chip-row::-webkit-scrollbar{display:none}
+    #barrage-ui .slot-chip-row button{
+      height:32px;
+      min-height:32px;
+      padding:0 8px;
+      color:#d8e2ea;
+      border:1px solid rgba(238,247,255,.14);
+      background-color:rgba(238,247,255,.055) !important;
+      font-size:10px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .slot-chip-row button.selected,
+    #barrage-ui .slot-chip-row button:disabled{
+      color:#061014 !important;
+      background-color:var(--accent) !important;
+    }
+    #barrage-ui .garage-quick-actions{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+    }
+    #barrage-ui .garage-quick-actions button{
+      height:48px;
+      min-height:48px;
+      border:1px solid rgba(238,247,255,.16);
+      border-left:3px solid #b8a7ff;
+      color:#d8d2ff;
+      background-color:rgba(8,10,13,.90) !important;
+      font-size:13px;
+      font-weight:900;
+    }
+    #barrage-ui .store-compact{
+      grid-template-rows:44px 126px minmax(0,1fr);
+    }
+    #barrage-ui .garage-compact{
+      grid-template-rows:78px minmax(0,1fr) 48px;
+      gap:8px;
+    }
+    #barrage-ui :is(.store-compact,.garage-compact) > .compact-section{
+      display:grid;
+      grid-template-rows:24px minmax(0,1fr);
+      min-height:0;
+    }
+    #barrage-ui .store-tile{
+      height:96px;
+      grid-template-rows:9px 18px 14px 1fr 28px;
+      gap:3px;
+    }
+    #barrage-ui .store-tile button{
+      height:28px;
+      min-height:28px;
+    }
+    #barrage-ui .store-part-board,
+    #barrage-ui .garage-slot-board{
+      min-width:0;
+      min-height:0;
+      height:100%;
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:7px;
+      overflow:hidden;
+    }
+    #barrage-ui .store-part-column,
+    #barrage-ui .garage-slot-column{
+      min-width:0;
+      min-height:0;
+      display:grid;
+      gap:5px;
+      overflow:hidden;
+    }
+    #barrage-ui .store-part-column{
+      grid-template-rows:14px repeat(3,minmax(0,1fr));
+    }
+    #barrage-ui .garage-slot-column{
+      grid-template-rows:14px repeat(3,minmax(0,1fr));
+    }
+    #barrage-ui .store-part-column > b,
+    #barrage-ui .garage-slot-column > b{
+      min-width:0;
+      color:#1ed6ff;
+      font-size:10px;
+      line-height:14px;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #barrage-ui .part-buy-chip{
+      min-width:0;
+      min-height:0;
+      height:100%;
+      display:grid;
+      grid-template-rows:8px 13px 10px 14px;
+      gap:2px;
+      padding:5px 6px;
+      text-align:left;
+      border:1px solid rgba(238,247,255,.14);
+      border-left:3px solid var(--accent);
+      color:#f6f8fa;
+      background-color:rgba(8,10,13,.90) !important;
+      box-shadow:0 8px 16px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.04);
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    }
+    #barrage-ui .part-buy-chip :is(b,span,small,em){
+      display:block;
+      min-width:0;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      font-style:normal;
+    }
+    #barrage-ui .part-buy-chip b{
+      color:var(--accent);
+      font-size:8px;
+      line-height:1;
+    }
+    #barrage-ui .part-buy-chip span{
+      color:#f6f8fa;
+      font-size:11px;
+      line-height:1.05;
+      font-weight:900;
+    }
+    #barrage-ui .part-buy-chip small{
+      color:rgba(216,226,234,.70);
+      font-size:8px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .part-buy-chip em{
+      align-self:end;
+      justify-self:start;
+      color:#061014;
+      background-color:var(--accent);
+      padding:3px 7px;
+      max-width:100%;
+      font-size:9px;
+      line-height:1;
+      font-weight:900;
+    }
+    #barrage-ui .part-buy-chip:disabled{
+      color:rgba(238,247,255,.60) !important;
+      background-color:rgba(238,247,255,.055) !important;
+    }
+    #barrage-ui .part-buy-chip:disabled em{
+      color:rgba(238,247,255,.72);
+      background-color:rgba(238,247,255,.10);
+    }
+    #barrage-ui .garage-slot-card{
+      height:auto;
+      min-height:0;
+      padding:6px;
+      grid-template-rows:9px 14px 11px 26px;
+      gap:3px;
+    }
+    #barrage-ui .garage-slot-card span{
+      font-size:11px;
+    }
+    #barrage-ui .garage-slot-card small{
+      font-size:8px;
+    }
+    #barrage-ui .garage-slot-card select{
+      min-width:0;
+      width:100%;
+      height:26px;
+      padding:0 22px 0 8px;
+      color:#f6f8fa;
+      border:1px solid rgba(238,247,255,.16);
+      background-color:rgba(238,247,255,.075);
+      font:900 10px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      outline:none;
+    }
+    #barrage-ui .garage-empty-slot{
+      min-height:0;
+      display:grid;
+      place-items:center;
+      padding:6px;
+      color:rgba(216,226,234,.58);
+      border:1px solid rgba(238,247,255,.10);
+      background-color:rgba(238,247,255,.035);
+      font-size:10px;
+      font-weight:900;
+    }
+    @media (max-height: 660px){
+      #barrage-ui .ship-showroom-ui{
+        height:230px;
+      }
+      #barrage-ui .ship-showroom-ui::before{
+        height:230px;
+      }
+      #barrage-ui :is(.store-screen .commerce-panel,.garage-screen .garage-panel){
+        top:250px !important;
+      }
+      #barrage-ui .showroom-copy{
+        width:164px;
+      }
+      #barrage-ui .store-compact{
+        grid-template-rows:40px 116px minmax(0,1fr);
+      }
+      #barrage-ui .garage-compact{
+        grid-template-rows:70px minmax(0,1fr) 44px;
+      }
+      #barrage-ui .store-tile{
+        height:88px;
+      }
+      #barrage-ui .part-tile{
+        height:108px;
+      }
+      #barrage-ui .garage-slot-card{
+        height:118px;
+      }
+    }
     @keyframes zzzButtonPulse{
       0%,100%{box-shadow:5px 5px 0 rgba(184,167,255,.62),0 16px 32px rgba(0,0,0,.38),0 0 20px rgba(142,239,255,.14)}
       50%{box-shadow:5px 5px 0 rgba(184,167,255,.76),0 16px 32px rgba(0,0,0,.38),0 0 34px rgba(142,239,255,.24)}
@@ -4965,6 +8965,19 @@ function createUi(){
   document.head.appendChild(style);
   const root = document.createElement('div');
   root.id = 'barrage-ui';
+  root.addEventListener('click', e => {
+    const button = e.target?.closest?.('[data-action]');
+    if(!button || !root.contains(button) || button.disabled) return;
+    e.preventDefault();
+    handleAction(button.dataset.action);
+  });
+  root.addEventListener('change', e => {
+    const select = e.target?.closest?.('select[data-equip-part]');
+    if(!select || !root.contains(select)) return;
+    const type = select.dataset.partType;
+    const index = select.dataset.slotIndex;
+    equipPart(type, index, select.value);
+  });
   document.body.appendChild(root);
   return {root, refs:{}};
 }
@@ -5009,12 +9022,12 @@ function renderUi2(){
         </div>
         <button class="primary-start" data-action="start"><span>スタート</span><small>READY</small></button>
         <div class="home-actions">
-          <button class="action-tile" data-action="store" style="--accent:#d8e2ea"><b>ストア</b><span>機体を購入</span></button>
+          <button class="action-tile" data-action="store" style="--accent:#d8e2ea"><b>ストア</b><span>機体とパーツ</span></button>
           <button class="action-tile" data-action="garage" style="--accent:#8eefff"><b>ガレージ</b><span>機体と装備を変更</span></button>
           <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>アップグレード</b><span>ベース強化を開く</span></button>
           <button class="action-tile" data-action="gacha" style="--accent:#d8e2ea"><b>サプライ抽選</b><span>スキンとクロマコート</span></button>
           <button class="action-tile" data-action="ranking" style="--accent:#8eefff"><b>ランキング</b><span>ハイスコア記録</span></button>
-          <div class="action-tile is-quiet" style="--accent:#f6f8fa"><b>オプション</b><span>操作とサウンド</span></div>
+          <button class="action-tile" data-action="settings" style="--accent:#b8a7ff"><b>オプション</b><span>環境とステータス</span></button>
         </div>
       </div>
     </div>
@@ -5032,29 +9045,19 @@ function renderUi2(){
         </div>
       </div>
     </div>
-    <div class="screen ${state.mode==='store'?'on':''}">
-      <div class="ui-stage page-stage">
-        <div class="page-header">
-          <div class="page-title glass-panel">
-            <h1>ストア</h1>
-            <p>トークン ${formatNumber(state.tokens)} / 機体購入</p>
-          </div>
-          <button class="page-back" data-action="home">戻る</button>
-        </div>
-        <div class="catalog-grid ship-store-list">
-          ${state.mode === 'store' ? renderStoreShips() : ''}
+    <div class="screen store-screen ${state.mode==='store'?'on':''}">
+      <div class="ui-stage page-stage showroom-stage">
+        <button class="page-back showroom-back" data-action="home">戻る</button>
+        ${state.mode === 'store' ? renderShipShowroom('store') : ''}
+        <div class="catalog-grid commerce-panel">
+          ${state.mode === 'store' ? renderStoreMarket() : ''}
         </div>
       </div>
     </div>
-    <div class="screen ${state.mode==='garage'?'on':''}">
-      <div class="ui-stage page-stage">
-        <div class="page-header">
-          <div class="page-title glass-panel">
-            <h1>ガレージ</h1>
-            <p>${ship.name} / ${equippedPartCount()} PARTS</p>
-          </div>
-          <button class="page-back" data-action="home">戻る</button>
-        </div>
+    <div class="screen garage-screen ${state.mode==='garage'?'on':''}">
+      <div class="ui-stage page-stage showroom-stage">
+        <button class="page-back showroom-back" data-action="home">戻る</button>
+        ${state.mode === 'garage' ? renderShipShowroom('garage') : ''}
         <div class="garage-panel">
           ${garageActive ? renderGaragePanel(equippedSummary) : ''}
         </div>
@@ -5064,18 +9067,13 @@ function renderUi2(){
       <div class="ui-stage page-stage">
         <div class="page-header">
           <div class="page-title glass-panel">
-            <h1>サプライ抽選</h1>
+            <h1>サプライ</h1>
             <p>${GACHA_COST}T / 所持 ${gachaActive ? Object.keys(state.cosmetics.owned).length : 0}/${COSMETIC_ITEMS.length}</p>
           </div>
           <button class="page-back" data-action="home">戻る</button>
         </div>
         <div class="gacha-panel">
-          <button class="gacha-roll" ${state.tokens < GACHA_COST ? 'disabled' : ''} data-action="rollGacha">抽選する</button>
-          ${gachaResult}
-          <div class="equipped-grid">${equippedSummary}</div>
-          <div class="cosmetic-list">
-            ${gachaActive ? renderCosmeticInventory() : ''}
-          </div>
+          ${gachaActive ? renderSupplyPanel(equippedSummary, gachaResult) : ''}
         </div>
       </div>
     </div>
@@ -5093,46 +9091,64 @@ function renderUi2(){
         </div>
       </div>
     </div>
-    <div class="hud ${state.mode==='play'||state.mode==='levelup'||state.mode==='basicUpgrade'?'on':''} ${state.mode==='levelup'||state.mode==='basicUpgrade'?'leveling':''} ${state.hp / Math.max(1, state.maxHp) < .30 ? 'critical' : ''} ${state.basicPoints > 0 ? 'has-bp' : ''}" data-ref="hud">
-      <div class="hud-topbar">
-        <div class="hud-stat hud-wave">
-          <b>WAVE</b>
-          <span data-ref="wave">${state.wave}</span>
-          <div class="wave-timer"><i data-ref="waveProgress" style="width:${Math.min(100, state.waveTime / waveDuration() * 100)}%"></i></div>
-          <small>次WAVEまで <span data-ref="time">${waveSeconds()}秒</span></small>
+    <div class="screen ${state.mode==='settings'?'on':''}">
+      <div class="ui-stage page-stage">
+        <div class="page-header">
+          <div class="page-title glass-panel">
+            <h1>オプション</h1>
+            <p>環境ステータス / ローカル保存</p>
+          </div>
+          <button class="page-back" data-action="home">戻る</button>
         </div>
-        <div class="hud-counter">
-          <div class="counter-line"><b>スコア</b><span data-ref="score">${formatNumber(state.score)}</span></div>
-          <div class="counter-line"><b>トークン</b><span data-ref="tokenTop">+${formatNumber(tokenReward)}</span></div>
+        <div class="settings-panel">
+          ${state.mode === 'settings' ? renderSettingsPanel() : ''}
         </div>
       </div>
-      <div class="hud-dock">
-        <div class="hud-meters">
-          <div class="meter-row is-primary" style="--meter-a:#ff5d7e;--meter-b:#ffc3ce">
-            <span>HP</span>
-            <div class="meter-track"><i data-ref="hp" style="width:${Math.max(0, state.hp / state.maxHp * 100)}%"></i></div>
-            <strong data-ref="hpText">${Math.ceil(state.hp)}/${state.maxHp}</strong>
+    </div>
+    <div class="hud game-hud ${state.mode==='play'||state.mode==='levelup'||state.mode==='basicUpgrade'?'on':''} ${state.mode==='levelup'||state.mode==='basicUpgrade'?'leveling':''} ${state.hp / Math.max(1, state.maxHp) < .30 ? 'critical' : ''} ${state.basicPoints > 0 ? 'has-bp' : ''}" data-ref="hud">
+      <div class="game-top">
+        <div class="game-top-card game-wave">
+          <b>WAVE</b>
+          <span data-ref="wave">${state.wave}</span>
+          <small>残り <i data-ref="time">${waveSeconds()}秒</i></small>
+          <div class="game-wave-track"><i data-ref="waveProgress" style="width:${Math.min(100, state.waveTime / waveDuration() * 100)}%"></i></div>
+        </div>
+        <div class="game-top-card game-score">
+          <b>SCORE</b>
+          <span data-ref="score">${formatNumber(state.score)}</span>
+          <small>TOKEN <i data-ref="tokenTop">+${formatNumber(tokenReward)}</i></small>
+        </div>
+        <button class="game-pause" data-action="pause" aria-label="ポーズ"><span>ポーズ</span></button>
+      </div>
+      <div class="game-special-slots" data-ref="specialSlots">
+        ${renderSpecialSlotsHud()}
+      </div>
+      <div class="game-bottom">
+        <div class="game-bars">
+          <div class="game-meter is-hp" style="--meter-a:#ff3b62;--meter-b:#ffc3ce">
+            <b>HP</b>
+            <div class="game-meter-track"><i data-ref="hp" style="width:${Math.max(0, state.hp / state.maxHp * 100)}%"></i></div>
+            <span data-ref="hpText">${Math.ceil(state.hp)}/${state.maxHp}</span>
           </div>
-          <div class="meter-row" style="--meter-a:#8eefff;--meter-b:#d8fbff">
-            <span>ENERGY</span>
-            <div class="meter-track"><i data-ref="energy" style="width:${Math.max(0, state.energy)}%"></i></div>
-            <strong data-ref="energyText">${Math.floor(state.energy)}%</strong>
+          <div class="game-meter" style="--meter-a:#1ed6ff;--meter-b:#9cf5ff">
+            <b>EN</b>
+            <div class="game-meter-track"><i data-ref="energy" style="width:${Math.max(0, state.energy)}%"></i></div>
+            <span data-ref="energyText">${Math.floor(state.energy)}%</span>
           </div>
-          <div class="meter-row" style="--meter-a:#9dffd9;--meter-b:#d8e2ea">
-            <span data-ref="xpLabel">XP Lv.${state.level}</span>
-            <div class="meter-track"><i data-ref="xp" style="width:${Math.min(100, state.xp / xpThreshold() * 100)}%"></i></div>
-            <strong data-ref="xpText">${state.skillPoints}SP</strong>
+          <div class="game-meter" style="--meter-a:#36f39b;--meter-b:#d8e2ea">
+            <b data-ref="xpLabel">XP ${state.level}</b>
+            <div class="game-meter-track"><i data-ref="xp" style="width:${Math.min(100, state.xp / xpThreshold() * 100)}%"></i></div>
+            <span data-ref="xpText">${state.skillPoints}SP</span>
           </div>
         </div>
-        <div class="run-chips">
-          <div class="run-chip"><b>LV</b><span data-ref="levelChip">${state.level}</span></div>
-          <div class="run-chip"><b>SP</b><span data-ref="specialPointChip">${state.skillPoints}</span></div>
-          <div class="run-chip"><b>BP</b><span data-ref="bpChip">${state.basicPoints}</span></div>
-          <div class="run-chip"><b>TOKEN</b><span data-ref="tokenPreview">+${formatNumber(tokenReward)}</span></div>
-        </div>
-        <div class="hud-actions">
-          <button class="pause-control" data-action="pause"><span>ポーズ</span></button>
-          <button class="skill-control" data-ref="skillControl" data-action="openUpgrade">基礎強化 ${state.basicPoints}BP</button>
+        <div class="game-console">
+          <div class="game-chips">
+            <div class="game-chip"><b>LV</b><span data-ref="levelChip">${state.level}</span></div>
+            <div class="game-chip"><b>SP</b><span data-ref="specialPointChip">${state.skillPoints}</span></div>
+            <div class="game-chip"><b>BP</b><span data-ref="bpChip">${state.basicPoints}</span></div>
+            <div class="game-chip"><b>TK</b><span data-ref="tokenPreview">+${formatNumber(tokenReward)}</span></div>
+          </div>
+          <button class="game-upgrade" data-ref="skillControl" data-action="openUpgrade">基礎強化 ${state.basicPoints}</button>
         </div>
       </div>
     </div>
@@ -5141,24 +9157,12 @@ function renderUi2(){
         <div class="level-head">
           <div>
             <div class="level-title">特殊強化</div>
-            <div class="level-note">XPレベルアップで1つ取得。3択は特殊強化だけ</div>
+            <div class="level-note">武装・弾種・防御・領域から選択</div>
           </div>
           <div class="level-sp">SP ${state.skillPoints}</div>
         </div>
         <div class="upgrade-grid">
-          ${state.upgradeOptions.map(id => {
-            const d = runUpgradeDef(id);
-            const lv = runUpgradeLevel(id);
-            const max = specialUpgradeDef(id)?.max;
-            return `
-              <div class="upgrade-card" style="--accent:${colorCss(d.color)}">
-                <b>${d.icon} / Lv.${lv}${max ? `/${max}` : ''}</b>
-                <span>${d.name}</span>
-                <small>${d.text}</small>
-                <button data-action="pickUpgrade:${id}">取得</button>
-              </div>
-            `;
-          }).join('')}
+          ${state.upgradeOptions.map(id => renderSpecialUpgradeCard(id)).join('')}
         </div>
       </div>
     </div>
@@ -5167,7 +9171,7 @@ function renderUi2(){
         <div class="basic-head">
           <div>
             <div class="level-title">基礎強化</div>
-            <div class="level-note">BPを消費して好きな項目を強化。天井到達で右側の上位強化が解放</div>
+            <div class="level-note">BPでラン中のステータスを強化</div>
           </div>
         </div>
         <div class="basic-actions">
@@ -5209,12 +9213,6 @@ function renderUi2(){
   `;
   ui.refs = Object.fromEntries([...ui.root.querySelectorAll('[data-ref]')].map(el => [el.dataset.ref, el]));
   for(const key of Object.keys(hudCache)) delete hudCache[key];
-  for(const button of ui.root.querySelectorAll('[data-action]:not(:disabled)')){
-    button.addEventListener('click', e => {
-      e.preventDefault();
-      handleAction(button.dataset.action);
-    });
-  }
   syncUiBounds();
   uiDirty = false;
 }
@@ -5227,6 +9225,27 @@ function renderRankingRows(rows){
       <span>${escapeHtml(row.name || 'PLAYER')}</span>
       <strong>${formatNumber(row.score)}</strong>
       <small>WAVE ${Math.max(1, Math.floor(Number(row.wave) || 1))}</small>
+    </div>
+  `).join('');
+}
+
+function renderSettingsPanel(){
+  const ship = currentShip();
+  const motion = Math.round(CONTROL_TURN_SPEED / 1.78 * 100);
+  const parts = equippedPartCount();
+  const cosmeticCount = Object.keys(state.cosmetics.owned || {}).reduce((sum, id) => sum + (Number(state.cosmetics.owned[id]) || 0), 0);
+  const rows = [
+    {label:'ステージ', value:'WIDE PIPE', sub:`R ${PIPE_RADIUS.toFixed(1)} / ARC ${Math.round(PIPE_ARC / Math.PI * 180)}deg`, color:'#1ed6ff'},
+    {label:'機動設定', value:`SLOW ${motion}%`, sub:'ROLL CONTROL', color:'#b8a7ff'},
+    {label:'機体', value:ship.name, sub:`${parts}/${PART_TYPES.reduce((sum, type) => sum + shipSlotCount(type, ship), 0)} PARTS`, color:ship.color},
+    {label:'サプライ', value:`${cosmeticCount} ITEM`, sub:`${Object.keys(state.cosmetics.equipped || {}).length} EQUIPPED`, color:'#36f39b'},
+    {label:'保存', value:'LOCAL', sub:`BEST WAVE ${state.bestWave} / ${formatNumber(state.highScore)}`, color:'#d8e2ea'}
+  ];
+  return rows.map(row => `
+    <div class="settings-row" style="--accent:${row.color}">
+      <b>${row.label}</b>
+      <span>${escapeHtml(row.value)}</span>
+      <small>${escapeHtml(row.sub)}</small>
     </div>
   `).join('');
 }
@@ -5264,49 +9283,160 @@ function shipMultText(ship){
     .join(' / ') || '標準性能';
 }
 
-function renderStoreShips(){
-  return SHIP_DEFS.map(ship => {
-    const owned = shipOwned(ship.id);
-    const selected = currentShip().id === ship.id;
-    const canBuy = !owned && state.tokens >= ship.cost;
-    const buttonLabel = selected ? '使用中' : owned ? '選択' : `${formatNumber(ship.cost)}T`;
-    const action = owned ? `equipShip:${ship.id}` : `buyShip:${ship.id}`;
-    return `
-      <div class="ship-card ${owned ? 'owned' : 'locked'} ${selected ? 'selected' : ''}" style="--accent:${ship.color}">
-        <div class="ship-card-head">
-          <b>${owned ? 'OWNED' : 'STORE'}</b>
-          <strong>${ship.name}</strong>
-          <small>${ship.role}</small>
-        </div>
-        <div class="ship-card-body">
-          <span>${shipSlotsText(ship)}</span>
-          <em>${shipMultText(ship)}</em>
-          <i>パーツ効果 x${Number(ship.partPower || 1).toFixed(2)}</i>
-        </div>
-        <button ${selected || (!owned && !canBuy) ? 'disabled' : ''} data-action="${action}">${buttonLabel}</button>
+function renderShipShowroom(kind){
+  const ship = currentShip();
+  const ownedShips = SHIP_DEFS.filter(item => shipOwned(item.id)).length;
+  const ownedParts = PART_DEFS.filter(part => partOwned(part.id)).length;
+  const active = kind === 'store' ? 'ストア' : 'ガレージ';
+  const sub = kind === 'store'
+    ? `${formatNumber(state.tokens)}T / 機体 ${ownedShips}/${SHIP_DEFS.length} / パーツ ${ownedParts}/${PART_DEFS.length}`
+    : `${ship.name} / ${equippedPartCount()} 装備中`;
+  return `
+    <div class="ship-showroom-ui" style="--accent:${ship.color}">
+      <div class="showroom-copy">
+        <b>${active}</b>
+        <strong>${ship.name}</strong>
+        <span>${sub}</span>
       </div>
-    `;
-  }).join('');
+      <div class="showroom-tabs">
+        <button class="${kind === 'store' ? 'active' : ''}" ${kind === 'store' ? 'disabled' : ''} data-action="store">ストア</button>
+        <button class="${kind === 'garage' ? 'active' : ''}" ${kind === 'garage' ? 'disabled' : ''} data-action="garage">ガレージ</button>
+      </div>
+    </div>
+  `;
 }
 
-function renderGaragePanel(equippedSummary){
-  const ship = currentShip();
+function renderStoreMarket(){
+  const ownedShips = SHIP_DEFS.filter(ship => shipOwned(ship.id)).length;
+  const ownedParts = PART_DEFS.filter(part => partOwned(part.id)).length;
   return `
-    <div class="garage-summary" style="--accent:${ship.color}">
-      <b>ACTIVE FRAME</b>
-      <strong>${ship.name}</strong>
-      <span>${ship.role}</span>
-      <small>${shipSlotsText(ship)} / パーツ補正 x${Number(ship.partPower || 1).toFixed(2)}</small>
-      <em>${shipMultText(ship)}</em>
+    <div class="store-compact">
+      <div class="compact-stats">
+        <span><b>${formatNumber(state.tokens)}T</b><small>TOKEN</small></span>
+        <span><b>${ownedShips}/${SHIP_DEFS.length}</b><small>FRAME</small></span>
+        <span><b>${ownedParts}/${PART_DEFS.length}</b><small>PARTS</small></span>
+      </div>
+      <section class="compact-section">
+        <div class="compact-head"><b>機体</b><span>横にスワイプ</span></div>
+        <div class="store-ship-rail">
+          ${SHIP_DEFS.map(renderStoreShipCard).join('')}
+        </div>
+      </section>
+      <section class="compact-section">
+        <div class="compact-head"><b>パーツ</b><span>カテゴリ別に即購入</span></div>
+        <div class="store-part-board">
+          ${PART_TYPES.map(renderStorePartColumn).join('')}
+        </div>
+      </section>
     </div>
-    <div class="garage-ship-strip">
-      ${renderGarageShipPicker()}
+  `;
+}
+
+function renderStorePartColumn(type){
+  return `
+    <div class="store-part-column">
+      <b>${PART_TYPE_LABELS[type]}</b>
+      ${PART_DEFS.filter(part => part.type === type).map(renderStorePartChip).join('')}
     </div>
-    ${PART_TYPES.map(type => renderPartSection(type)).join('')}
-    <div class="garage-skin-section">
-      <div class="garage-section-head"><b>スキン</b><span>全機体共通</span></div>
-      <div class="equipped-grid">${equippedSummary}</div>
-      <div class="cosmetic-list garage-cosmetics">${renderCosmeticInventory()}</div>
+  `;
+}
+
+function renderStoreShipCard(ship){
+  const owned = shipOwned(ship.id);
+  const selected = currentShip().id === ship.id;
+  const canBuy = !owned && state.tokens >= ship.cost;
+  const buttonLabel = selected ? '使用中' : owned ? '選択' : `${formatNumber(ship.cost)}T`;
+  const action = owned ? `equipShip:${ship.id}` : `buyShip:${ship.id}`;
+  return `
+    <div class="store-tile frame-tile ${owned ? 'owned' : 'locked'} ${selected ? 'selected' : ''}" style="--accent:${ship.color}">
+      <b>${owned ? selected ? 'ACTIVE' : 'OWNED' : 'FRAME'}</b>
+      <span>${ship.name}</span>
+      <small>${ship.role}</small>
+      <em>${shipSlotsText(ship)}</em>
+      <button ${selected || (!owned && !canBuy) ? 'disabled' : ''} data-action="${action}">${buttonLabel}</button>
+    </div>
+  `;
+}
+
+function renderStorePartCard(part){
+  return renderStorePartChip(part);
+}
+
+function renderStorePartChip(part){
+  const owned = partOwned(part.id);
+  const cost = partCost(part);
+  const canBuy = !owned && state.tokens >= cost;
+  const action = owned ? 'garage' : `buyPart:${part.id}`;
+  const label = owned ? '装備へ' : `${formatNumber(cost)}T`;
+  return `
+    <button class="part-buy-chip ${owned ? 'owned' : 'locked'}" ${owned || canBuy ? '' : 'disabled'} data-action="${action}" style="--accent:${colorCss(part.color)}">
+      <b>${PART_TYPE_LABELS[part.type]} / ${part.rarity}</b>
+      <span>${part.name}</span>
+      <small>${partBuffText(part)}</small>
+      <em>${label}</em>
+    </button>
+  `;
+}
+
+function renderGaragePanel(){
+  const ship = currentShip();
+  const totalSlots = PART_TYPES.reduce((sum, type) => sum + shipSlotCount(type, ship), 0);
+  return `
+    <div class="garage-compact">
+      <section class="compact-section">
+        <div class="compact-head"><b>機体選択</b><span>${SHIP_DEFS.filter(s => shipOwned(s.id)).length}/${SHIP_DEFS.length}</span></div>
+        <div class="garage-ship-rail">
+          ${renderGarageShipPicker()}
+        </div>
+      </section>
+      <section class="compact-section loadout-compact">
+        <div class="compact-head"><b>ロードアウト</b><span>${equippedPartCount()}/${totalSlots} 装備中</span></div>
+        <div class="garage-slot-board">
+          ${renderGarageLoadoutBoard()}
+        </div>
+      </section>
+      <div class="garage-quick-actions">
+        <button data-action="store">パーツ購入</button>
+        <button data-action="gacha">サプライ</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderGarageLoadoutBoard(){
+  return PART_TYPES.map(renderGarageLoadoutColumn).join('');
+}
+
+function renderGarageLoadoutColumn(type){
+  const count = shipSlotCount(type);
+  const slots = count
+    ? Array.from({length:count}, (_, index) => renderGarageLoadoutSlot(type, index)).join('')
+    : '<div class="garage-empty-slot">搭載不可</div>';
+  return `
+    <div class="garage-slot-column">
+      <b>${PART_TYPE_LABELS[type]}</b>
+      ${slots}
+    </div>
+  `;
+}
+
+function renderGarageLoadoutSlots(){
+  return renderGarageLoadoutBoard();
+}
+
+function renderGarageLoadoutSlot(type, index){
+  const equipped = state.garage?.equippedParts?.[type]?.[index] || null;
+  const current = PART_BY_ID[equipped];
+  const options = PART_DEFS.filter(part => part.type === type && state.garage.ownedParts[part.id]);
+  return `
+    <div class="garage-slot-card" style="--accent:${colorCss(current?.color || COLORS.cyan)}">
+      <b>${PART_TYPE_LABELS[type]} ${index + 1}</b>
+      <span>${current?.name || '未装備'}</span>
+      <small>${current ? partBuffText(current) : '効果なし'}</small>
+      <select data-equip-part data-part-type="${type}" data-slot-index="${index}">
+        <option value="none" ${!current ? 'selected' : ''}>なし</option>
+        ${options.map(part => `<option value="${part.id}" ${part.id === equipped ? 'selected' : ''}>${escapeHtml(part.name)}</option>`).join('')}
+      </select>
     </div>
   `;
 }
@@ -5333,7 +9463,7 @@ function renderPartSection(type){
         <span>${slots ? `${slots} SLOT` : 'SLOTなし'}</span>
       </div>
       <div class="part-slot-grid ${slots ? '' : 'empty'}">
-        ${slots ? Array.from({length:slots}, (_, i) => renderPartSlot(type, i)).join('') : '<div class="part-empty">この機体には搭載できない</div>'}
+        ${slots ? Array.from({length:slots}, (_, i) => renderPartSlot(type, i)).join('') : '<div class="part-empty">この機体には搭載できません</div>'}
       </div>
     </div>
   `;
@@ -5390,39 +9520,76 @@ function renderHomeUpgradeCard(def){
   `;
 }
 
-function renderRunBasicUpgradePaths(){
-  return HOME_UPGRADE_PATHS.map(path => {
-    const open = runBasicLevel(path.base.id) >= HOME_UPGRADE_CAP;
+function renderSpecialSlotsHud(){
+  const selected = selectedSpecialSlotDefs();
+  return Array.from({length:SPECIAL_SLOT_LIMIT}, (_, index) => {
+    const def = selected[index];
+    if(!def){
+      return `
+        <div class="special-slot empty" style="--accent:#d8e2ea">
+          <b>${index + 1}</b>
+          <span>EMPTY</span>
+          <small>SLOT</small>
+        </div>
+      `;
+    }
+    const lv = specialUpgradeLevel(def.id);
     return `
-      <div class="upgrade-path run-basic-path ${open ? 'unlocked' : ''}">
-        ${renderRunBasicUpgradeCard(path.base)}
-        <div class="upgrade-link ${open ? 'open' : ''}">${open ? 'OPEN' : 'LOCK'}</div>
-        ${renderRunBasicUpgradeCard(path.advanced)}
+      <div class="special-slot filled" style="--accent:${colorCss(def.color)}" title="${escapeHtml(def.name)}">
+        <b>${def.icon}</b>
+        <span>${specialSlotLabel(def)}</span>
+        <small>Lv.${lv}/${def.max}</small>
       </div>
     `;
   }).join('');
 }
 
-function renderRunBasicUpgradeCard(def){
-  const fullDef = homeUpgradeDef(def.id);
-  const lv = runBasicLevel(def.id);
-  const unlocked = isRunBasicUnlocked(def.id);
-  const maxed = isRunBasicMaxed(def.id);
-  const cost = runBasicUpgradeCost(def.id);
-  const canBuy = unlocked && !maxed && Number.isFinite(cost) && state.basicPoints >= cost;
-  const tierLabel = fullDef.tier === 'base' ? `${lv}/${HOME_UPGRADE_CAP}` : `Lv.${lv}`;
-  const buttonLabel = !unlocked ? 'LOCK' : maxed ? '天井' : `${cost}BP`;
-  const note = fullDef.tier === 'base'
-    ? maxed ? '天井到達 / 上位解放' : '天井あり / まずここを強化'
-    : `${homeUpgradeDef(fullDef.parent).name}が天井で解放`;
+function renderSpecialUpgradeCard(id){
+  const d = specialUpgradeDef(id);
+  if(!d) return '';
+  const lv = specialUpgradeLevel(id);
+  const buttonLabel = lv > 0 ? '強化' : '取得';
   return `
-    <div class="upgrade-card run-basic-card ${!unlocked ? 'locked' : ''} ${maxed ? 'maxed cap-open' : ''}" style="--accent:${colorCss(fullDef.color)}">
-      <b>${fullDef.icon} / ${tierLabel}</b>
+    <button class="upgrade-card upgrade-choice special-upgrade-card" type="button" data-action="pickUpgrade:${id}" style="--accent:${colorCss(d.color)}">
+      <b>${d.tag || d.family.toUpperCase()} / ${d.icon} / Lv.${lv}/${d.max}</b>
+      <span>${d.name}</span>
+      <small>${d.text}</small>
+      <em>${d.family === 'barrel' ? '武装型は1系統だけ選択' : '基礎値とは別枠で発動'}</em>
+      <strong>${buttonLabel}</strong>
+    </button>
+  `;
+}
+
+function renderRunBasicUpgradePaths(){
+  return `
+    <div class="basic-tree">
+      ${BASIC_SKILL_TREE.map(node => renderRunBasicUpgradeCard(node)).join('')}
+    </div>
+  `;
+}
+
+function renderRunBasicUpgradeCard(node){
+  const fullDef = BASIC_SKILL_DEFS_BY_ID[node.id];
+  if(!fullDef) return '';
+  const lv = runBasicLevel(fullDef.id);
+  const unlocked = isRunBasicUnlocked(fullDef.id);
+  const maxed = isRunBasicMaxed(fullDef.id);
+  const cost = runBasicUpgradeCost(fullDef.id);
+  const canBuy = unlocked && !maxed && Number.isFinite(cost) && state.basicPoints >= cost;
+  const parent = fullDef.requires ? BASIC_SKILL_DEFS_BY_ID[fullDef.requires] : null;
+  const tierLabel = `${lv}/${RUN_BASIC_CAP}`;
+  const buttonLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : `${cost}BP`;
+  const note = parent
+    ? `${parent.name} Lv.1で解放`
+    : '起点ノード / 火器系統の入口';
+  return `
+    <button class="upgrade-card upgrade-choice run-basic-card ${!unlocked ? 'locked' : ''} ${maxed ? 'maxed cap-open' : ''} ${!canBuy ? 'disabled' : ''}" type="button" ${canBuy ? '' : 'disabled'} data-action="buyRunBasic:${fullDef.id}" style="--accent:${colorCss(fullDef.color)};--tree-row:${fullDef.row};--tree-col:${fullDef.col}">
+      <b>${fullDef.tag} / ${fullDef.icon} / ${tierLabel}</b>
       <span>${fullDef.name}</span>
       <small>${fullDef.text}</small>
       <em>${note}</em>
-      <button ${canBuy ? '' : 'disabled'} data-action="buyRunBasic:${fullDef.id}">${buttonLabel}</button>
-    </div>
+      <strong>${buttonLabel}</strong>
+    </button>
   `;
 }
 
@@ -5440,8 +9607,33 @@ function renderEquippedCosmetics(){
   }).join('');
 }
 
+function renderSupplyPanel(equippedSummary, gachaResult){
+  return `
+    <div class="supply-hero">
+      <div class="supply-copy">
+        <b>SUPPLY DROP</b>
+        <strong>${GACHA_COST}T</strong>
+        <span>${Object.keys(state.cosmetics.owned).length}/${COSMETIC_ITEMS.length} 所持</span>
+      </div>
+      <button class="gacha-roll" ${state.tokens < GACHA_COST ? 'disabled' : ''} data-action="rollGacha">抽選</button>
+    </div>
+    ${gachaResult}
+    <div class="supply-odds">
+      ${COSMETIC_RARITIES.map(rarity => `<span style="--accent:${rarity.color}"><b>${rarity.name}</b><em>${rarity.weight}</em></span>`).join('')}
+    </div>
+    <section class="supply-section">
+      <div class="garage-section-head"><b>装備中スキン</b><span>ACTIVE</span></div>
+      <div class="equipped-grid">${equippedSummary}</div>
+    </section>
+    <section class="supply-section">
+      <div class="garage-section-head"><b>所持スキン</b><span>INVENTORY</span></div>
+      <div class="cosmetic-list">${renderCosmeticInventory()}</div>
+    </section>
+  `;
+}
+
 function renderGachaResult(){
-  if(!state.lastGacha) return '<div class="gacha-result empty">未抽選</div>';
+  if(!state.lastGacha) return '<div class="gacha-result empty"><b>RESULT</b><span>未抽選</span><small>---</small></div>';
   const item = cosmeticItem(state.lastGacha.id);
   const rarity = COSMETIC_RARITY_BY_ID[item.rarity];
   const duplicateText = state.lastGacha.duplicate ? ` / 重複 +${rarity.refund}T` : '';
@@ -5498,7 +9690,7 @@ function updateHud(){
   state.nextHudAt = now + 100;
   const tokenReward = calculateTokenReward();
   const threshold = xpThreshold();
-  const hudClass = `hud on${state.hp / Math.max(1, state.maxHp) < .30 ? ' critical' : ''}${state.basicPoints > 0 ? ' has-bp' : ''}`;
+  const hudClass = `hud game-hud on${state.hp / Math.max(1, state.maxHp) < .30 ? ' critical' : ''}${state.basicPoints > 0 ? ' has-bp' : ''}`;
   if(ui.refs.hud && hudCache.hudClass !== hudClass){
     hudCache.hudClass = hudClass;
     ui.refs.hud.className = hudClass;
@@ -5513,13 +9705,13 @@ function updateHud(){
   setHudText('hpText', `${Math.max(0, Math.ceil(state.hp))}/${state.maxHp}`);
   setHudText('energyText', `${Math.max(0, Math.floor(state.energy))}%`);
   setHudWidth('xp', Math.min(100, state.xp / threshold * 100));
-  setHudText('xpLabel', `XP Lv.${state.level}`);
+  setHudText('xpLabel', `XP ${state.level}`);
   setHudText('xpText', `${state.skillPoints}SP`);
   setHudText('levelChip', state.level);
   setHudText('specialPointChip', state.skillPoints);
   setHudText('bpChip', state.basicPoints);
   setHudText('tokenPreview', `+${formatNumber(tokenReward)}`);
-  setHudText('skillControl', `基礎強化 ${state.basicPoints}BP`);
+  setHudText('skillControl', `基礎強化 ${state.basicPoints}`);
 }
 
 function setHudText(ref, value){
@@ -5545,8 +9737,10 @@ function handleAction(action){
   else if(action === 'homeUpgrade') setMode('homeUpgrade');
   else if(action === 'ranking') setMode('ranking');
   else if(action === 'gacha') setMode('gacha');
+  else if(action === 'settings') setMode('settings');
   else if(action === 'rollGacha') rollGacha();
   else if(action.startsWith('buyShip:')) buyShip(action.slice(8));
+  else if(action.startsWith('buyPart:')) buyPart(action.slice(8));
   else if(action.startsWith('equipShip:')) equipShip(action.slice(10));
   else if(action.startsWith('equipPart:')) {
     const [, type, index, id] = action.split(':');
@@ -5566,6 +9760,7 @@ function handleAction(action){
 }
 
 function setMode(mode){
+  if(state.mode === mode && !uiDirty) return;
   state.mode = mode;
   uiDirty = true;
   renderUi2();
@@ -5573,10 +9768,11 @@ function setMode(mode){
 }
 
 function startRun(){
+  homeShipDrag.pointer = null;
+  homeShipDrag.velocity = 0;
   clearRunObjects();
-  homeShip.root.visible = false;
-  player.root.visible = true;
   state.mode = 'play';
+  applySceneVisualMode('play');
   state.wave = 1;
   state.waveTime = 0;
   state.score = 0;
@@ -5587,6 +9783,7 @@ function startRun(){
   state.basicPointMeter = 0;
   state.statLevels = freshStatMap();
   state.specialUpgrades = freshSpecialUpgradeMap();
+  invalidateStatCache();
   state.upgradeOptions = [];
   state.runTokenGain = 0;
   state.runTime = 0;
@@ -5633,6 +9830,10 @@ function bindInput(){
     if(['ArrowLeft','a','A','ArrowRight','d','D'].includes(e.key)) state.keyboard = 0;
   });
   canvas.addEventListener('pointerdown', e => {
+    if(state.mode === 'home' || state.mode === 'store' || state.mode === 'garage'){
+      beginHomeShipDrag(e);
+      return;
+    }
     if(state.mode !== 'play') return;
     activePointer = e.pointerId;
     canvas.setPointerCapture?.(e.pointerId);
@@ -5640,11 +9841,19 @@ function bindInput(){
     e.preventDefault();
   });
   canvas.addEventListener('pointermove', e => {
+    if(homeShipDrag.pointer === e.pointerId){
+      updateHomeShipDrag(e);
+      return;
+    }
     if(activePointer !== e.pointerId) return;
     updatePointerControl(e);
     e.preventDefault();
   });
   const end = e => {
+    if(homeShipDrag.pointer === e.pointerId){
+      endHomeShipDrag(e);
+      return;
+    }
     if(activePointer === e.pointerId){
       activePointer = null;
       state.pointer = 0;
@@ -5654,6 +9863,36 @@ function bindInput(){
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('visibilitychange', () => {
+    state.last = performance.now();
+    lastVisualFrameAt = 0;
+  });
+}
+
+function beginHomeShipDrag(e){
+  homeShipDrag.pointer = e.pointerId;
+  homeShipDrag.lastX = e.clientX;
+  homeShipDrag.lastY = e.clientY;
+  homeShipDrag.velocity = 0;
+  canvas.setPointerCapture?.(e.pointerId);
+  e.preventDefault();
+}
+
+function updateHomeShipDrag(e){
+  const dx = e.clientX - homeShipDrag.lastX;
+  const dy = e.clientY - homeShipDrag.lastY;
+  homeShipDrag.lastX = e.clientX;
+  homeShipDrag.lastY = e.clientY;
+  homeShipDrag.yaw += dx * .0105;
+  homeShipDrag.pitch = clamp(homeShipDrag.pitch + dy * .0055, -.36, .28);
+  homeShipDrag.velocity = dx * .045;
+  e.preventDefault();
+}
+
+function endHomeShipDrag(e){
+  homeShipDrag.pointer = null;
+  canvas.releasePointerCapture?.(e.pointerId);
+  e.preventDefault();
 }
 
 function updatePointerControl(e){
@@ -5666,25 +9905,53 @@ function resize(){
   const rect = canvas.getBoundingClientRect();
   const w = Math.max(1, rect.width || W);
   const h = Math.max(1, rect.height || H);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+  const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+  if(renderSize.w !== w || renderSize.h !== h || renderSize.dpr !== dpr){
+    renderSize.w = w;
+    renderSize.h = h;
+    renderSize.dpr = dpr;
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
   syncUiBounds();
 }
 
 function syncUiBounds(){
   if(!ui?.root) return;
   const rect = canvas.getBoundingClientRect();
-  ui.root.style.left = `${rect.left}px`;
-  ui.root.style.top = `${rect.top}px`;
-  ui.root.style.width = `${rect.width}px`;
-  ui.root.style.height = `${rect.height}px`;
-  ui.root.style.setProperty('--ui-scale', `${Math.min(rect.width / W, rect.height / H)}`);
+  const left = `${rect.left}px`;
+  const top = `${rect.top}px`;
+  const width = `${rect.width}px`;
+  const height = `${rect.height}px`;
+  const scale = `${Math.min(rect.width / W, rect.height / H)}`;
+  if(uiBoundsCache.left !== left){
+    uiBoundsCache.left = left;
+    ui.root.style.left = left;
+  }
+  if(uiBoundsCache.top !== top){
+    uiBoundsCache.top = top;
+    ui.root.style.top = top;
+  }
+  if(uiBoundsCache.width !== width){
+    uiBoundsCache.width = width;
+    ui.root.style.width = width;
+  }
+  if(uiBoundsCache.height !== height){
+    uiBoundsCache.height = height;
+    ui.root.style.height = height;
+  }
+  if(uiBoundsCache.scale !== scale){
+    uiBoundsCache.scale = scale;
+    ui.root.style.setProperty('--ui-scale', scale);
+  }
 }
 
 function syncCanvasVisibility(){
-  const shouldShow = ['home', 'play', 'levelup', 'pause', 'dead'].includes(state.mode);
+  const shouldShow = ['home', 'store', 'garage', 'play', 'levelup', 'pause', 'dead'].includes(state.mode);
+  if(canvasVisibilityState === shouldShow) return;
+  canvasVisibilityState = shouldShow;
   canvas.style.visibility = shouldShow ? 'visible' : 'hidden';
   canvas.style.clipPath = '';
   canvas.style.webkitClipPath = '';
@@ -5697,8 +9964,21 @@ function syncCanvasVisibility(){
 }
 
 function loop(now){
-  if(state.mode === 'play' || state.mode === 'home') requestAnimationFrame(loop);
+  const active3dMode = state.mode === 'play' || state.mode === 'home' || state.mode === 'store' || state.mode === 'garage';
+  if(document.hidden){
+    setTimeout(() => requestAnimationFrame(loop), 500);
+    state.last = now;
+    return;
+  }
+  if(active3dMode) requestAnimationFrame(loop);
   else setTimeout(() => requestAnimationFrame(loop), 120);
+  if(state.mode === 'home' || state.mode === 'store' || state.mode === 'garage'){
+    const minFrameMs = homeShipDrag.pointer === null && Math.abs(homeShipDrag.velocity) < .06
+      ? (LOW_POWER_DEVICE ? 50 : 33)
+      : 16;
+    if(now - lastVisualFrameAt < minFrameMs) return;
+  }
+  lastVisualFrameAt = now;
   const dt = Math.min(.033, Math.max(.001, (now - (state.last || now)) / 1000));
   state.last = now;
   update(dt, now * .001);
@@ -5707,7 +9987,7 @@ function loop(now){
 
 function update(dt, t){
   state.input = clamp(state.keyboard + state.pointer, -1, 1);
-  if(state.mode === 'home'){
+  if(state.mode === 'home' || state.mode === 'store' || state.mode === 'garage'){
     updateHomePreview(dt, t);
   }else if(state.mode === 'play'){
     updatePlay(dt, t);
@@ -5762,7 +10042,38 @@ function updatePlay(dt, t){
   }
 }
 
+function applySceneVisualMode(mode){
+  if(sceneVisualMode === mode) return;
+  sceneVisualMode = mode;
+  if(mode === 'home'){
+    player.root.visible = false;
+    homeShip.root.visible = true;
+    homeShip.materials.edge.opacity = .92;
+    homeShip.materials.goldLine.opacity = .82;
+    homeShip.materials.roseLine.opacity = .78;
+    homeShip.materials.shadow.opacity = .07;
+    if(homeShip.materials.hull.emissive) homeShip.materials.hull.emissiveIntensity = 1.55;
+    if(homeShip.materials.wing.emissive) homeShip.materials.wing.emissiveIntensity = 1.05;
+    if(homeShip.materials.panel.emissive) homeShip.materials.panel.emissiveIntensity = .90;
+    if(homeShip.materials.glass.emissiveIntensity !== undefined) homeShip.materials.glass.emissiveIntensity = 1.85;
+  }else if(mode === 'play'){
+    homeShip.root.visible = false;
+    player.root.visible = true;
+    player.root.position.y = PLAYER_Y;
+    player.root.position.z = PLAYER_Z;
+    player.root.scale.setScalar(2.12);
+    player.root.rotation.x = -.13;
+    player.root.rotation.y = 0;
+    player.root.rotation.z = 0;
+    shared.materials.player.emissiveIntensity = .72;
+    shared.materials.playerPlate.emissiveIntensity = .42;
+    shared.materials.playerWing.emissiveIntensity = .52;
+  }
+}
+
 function updateHomePreview(dt, t){
+  applySceneVisualMode('home');
+  const showroomMode = state.mode === 'store' || state.mode === 'garage';
   ringPhase = (ringPhase + 6.5 * dt) % PIPE_RING_LOOP;
   for(let i=0;i<stage.starLayers.length;i++){
     const layer = stage.starLayers[i];
@@ -5779,56 +10090,41 @@ function updateHomePreview(dt, t){
   world.rotation.z = Math.sin(t * .18) * .025;
   pipeRoot.rotation.z = Math.sin(t * .28) * .018;
 
-  player.root.visible = false;
-  homeShip.root.visible = true;
+  if(homeShipDrag.pointer === null){
+    homeShipDrag.yaw += homeShipDrag.velocity * dt;
+    homeShipDrag.velocity *= Math.pow(.12, dt);
+    homeShipDrag.pitch += (-.02 - homeShipDrag.pitch) * Math.min(1, dt * .42);
+  }
   homeShip.root.position.set(
-    Math.sin(t * .65) * .10,
-    -1.06 + Math.sin(t * 1.15) * .10,
-    -8.35
+    (showroomMode ? 2.92 : 3.72) + Math.sin(t * .65) * .08,
+    (showroomMode ? 7.05 : 2.18) + Math.sin(t * 1.15) * .09,
+    showroomMode ? -8.30 : -8.05
   );
-  homeShip.root.rotation.x = -.11 + Math.sin(t * .55) * .018;
-  homeShip.root.rotation.y = .04 + Math.sin(t * .42) * .018;
-  homeShip.root.rotation.z = -.24 + Math.sin(t * .80) * .026;
-  homeShip.root.scale.setScalar(2.65 + Math.sin(t * 1.2) * .030);
+  homeShip.root.rotation.x = (showroomMode ? -.56 : -.40) + homeShipDrag.pitch + Math.sin(t * .55) * .020;
+  homeShip.root.rotation.y = (showroomMode ? -.25 : -.58) + homeShipDrag.yaw + Math.sin(t * .42) * .018;
+  homeShip.root.rotation.z = (showroomMode ? -.31 : -.36) + Math.sin(t * .80) * .028;
+  homeShip.root.scale.setScalar((showroomMode ? 2.58 : 3.05) + Math.sin(t * 1.2) * .034);
   homeShip.core.scale.setScalar(1.08 + Math.sin(t * 9) * .12);
-  homeShip.materials.edge.opacity = .92;
-  homeShip.materials.goldLine.opacity = .82;
-  homeShip.materials.roseLine.opacity = .78;
-  homeShip.materials.shadow.opacity = .07;
-  if(homeShip.materials.hull.emissive){
-    homeShip.materials.hull.emissiveIntensity = 1.55;
-  }
-  if(homeShip.materials.wing.emissive){
-    homeShip.materials.wing.emissiveIntensity = 1.05;
-  }
-  if(homeShip.materials.panel.emissive){
-    homeShip.materials.panel.emissiveIntensity = .90;
-  }
-  if(homeShip.materials.glass.emissiveIntensity !== undefined) homeShip.materials.glass.emissiveIntensity = 1.85;
 
   ambient.intensity += (1.7 - ambient.intensity) * Math.min(1, dt * 4.8);
   keyLight.intensity += (22 - keyLight.intensity) * Math.min(1, dt * 4.8);
   rimLight.intensity += (9.5 - rimLight.intensity) * Math.min(1, dt * 4.8);
-  keyLight.position.set(2.4, -3.6, 7.5);
-  rimLight.position.set(5.6, 1.2, -8);
-  camera.position.x += (0 - camera.position.x) * Math.min(1, dt * 5.2);
-  camera.position.y += (CAMERA_BASE_Y + .45 - camera.position.y) * Math.min(1, dt * 5.2);
-  camera.position.z += (10.8 - camera.position.z) * Math.min(1, dt * 5.2);
-  cameraHomeTarget.set(0, -1.22, -8.65);
+  keyLight.position.set(3.8, -2.4, 6.8);
+  rimLight.position.set(6.4, 2.8, -7.6);
+  camera.position.x += ((showroomMode ? -.52 : -.62) - camera.position.x) * Math.min(1, dt * 5.2);
+  camera.position.y += ((showroomMode ? CAMERA_BASE_Y + 1.95 : CAMERA_BASE_Y + 2.25) - camera.position.y) * Math.min(1, dt * 5.2);
+  camera.position.z += ((showroomMode ? 9.88 : 10.15) - camera.position.z) * Math.min(1, dt * 5.2);
+  cameraHomeTarget.set(showroomMode ? .42 : .58, showroomMode ? -1.10 : .55, -8.55);
   camera.lookAt(cameraHomeTarget);
 }
 
 function updateStage(dt, t){
-  homeShip.root.visible = false;
-  player.root.visible = true;
+  applySceneVisualMode('play');
   ambient.intensity += (1.25 - ambient.intensity) * Math.min(1, dt * 6);
   keyLight.intensity += (13 - keyLight.intensity) * Math.min(1, dt * 6);
   rimLight.intensity += (9 - rimLight.intensity) * Math.min(1, dt * 6);
   keyLight.position.set(0, -2, 6);
   rimLight.position.set(-6, 4, -18);
-  shared.materials.player.emissiveIntensity = .72;
-  shared.materials.playerPlate.emissiveIntensity = .42;
-  shared.materials.playerWing.emissiveIntensity = .52;
 
   const speed = state.mode === 'play' ? (14 + Math.min(18, state.wave * .35)) : 8;
   ringPhase = (ringPhase + speed * dt) % PIPE_RING_LOOP;
@@ -5845,12 +10141,6 @@ function updateStage(dt, t){
   }
   world.rotation.z = -state.roll;
   pipeRoot.rotation.z = Math.sin(t * .4) * .018;
-
-  player.root.position.y = PLAYER_Y;
-  player.root.position.z = PLAYER_Z;
-  player.root.scale.setScalar(2.12);
-  player.root.rotation.x = -.13;
-  player.root.rotation.y = 0;
 
   const bank = -state.input * PLAYER_BANK_SCALE - state.rollVel * .06;
   player.root.rotation.z += (bank - player.root.rotation.z) * Math.min(1, dt * 5.8);
@@ -5875,17 +10165,22 @@ function updateBullets(dt){
     b.z -= b.speed * dt;
     b.life -= dt;
     if(b.life <= 0 || b.z < PIPE_Z_FAR){
-      bullets.splice(i, 1);
+      removeBullet(i);
     }
   }
   bulletsDirty = true;
 }
 
 function updateEnemies(dt, t){
+  const stasisLevel = specialUpgradeLevel('stasisAura');
   for(let i=enemies.length-1;i>=0;i--){
     const e = enemies[i];
+    const approachDistance = angleDistance(e.angle, state.roll);
+    const stasisSlow = stasisLevel > 0 && e.z > -72 && approachDistance < (.30 + stasisLevel * .045)
+      ? Math.max(.52, 1 - stasisLevel * .10)
+      : 1;
     if(e.boss){
-      e.z += (e.targetZ - e.z) * Math.min(1, dt * .55);
+      e.z += (e.targetZ - e.z) * Math.min(1, dt * .55 * stasisSlow);
       e.angle += Math.sin(t * .7 + e.phase) * dt * .22;
       e.fire -= dt;
       if(e.fire <= 0){
@@ -5893,14 +10188,14 @@ function updateEnemies(dt, t){
         spawnBossShard(e);
       }
     }else{
-      e.z += e.speed * dt;
+      e.z += e.speed * dt * stasisSlow;
       e.angle += Math.sin(t * e.wobble + e.phase) * dt * e.drift;
     }
     const rollDistance = angleDistance(e.angle, state.roll);
     const visible = rollDistance < ENEMY_VISIBLE_ARC || (e.boss && e.z <= BOSS_SIGHT_Z);
     e.root.visible = visible;
     e.hitFlash = Math.max(0, (e.hitFlash || 0) - dt * 5.8);
-  if(visible){
+    if(visible){
       setPipePosition(e.root, e.angle, e.z, e.boss ? .68 : .88);
       const presence = enemyDepthPresence(e);
       e.root.scale.setScalar(enemyVisualScale(e, t, presence) * (1 + (e.hitFlash || 0) * .20));
@@ -5948,8 +10243,7 @@ function hitEnemyWithBullets(enemy, enemyIndex){
     enemy.hp -= b.damage;
     enemy.hitFlash = 1;
     burst(enemy.angle, enemy.z, b.crit ? 0xffd36a : enemy.type.color, enemy.boss ? 3 : 1);
-    bullets.splice(i, 1);
-    bulletsDirty = true;
+    removeBullet(i);
     if(enemy.hp <= 0){
       defeatEnemy(enemy, enemyIndex);
       return true;
@@ -5977,27 +10271,32 @@ function damagePlayer(amount){
     burst(state.roll, PLAYER_Z - .3, 0x1ed6ff, 2);
     return;
   }
-  const taken = Math.max(1, Math.ceil(amount * defenseMultiplier()));
+  const taken = Math.max(1, Math.ceil(amount * defenseMultiplier() * specialDefenseMultiplier()));
   state.hp -= taken;
   state.shake = 1;
   burst(state.roll, PLAYER_Z - .3, 0xff3b62, 2);
 }
 
 function fireShot(){
-  const baseDamage = (7 + state.wave * .45) * statMult('damage', .10) * bulletSpeedDamageMult() * (1 + cosmeticBuff('damage') + loadoutBuff('damage')) * shipMult('damage');
+  const baseDamage = (7 + state.wave * .45) * statMult('damage', .10) * bulletSpeedDamageMult() * (1 + cosmeticBuff('damage') + loadoutBuff('damage')) * shipMult('damage') * specialDamageMultiplier();
   const speed = 45 * (1 + statLevel('bulletSpeed') * .045 + cosmeticBuff('bulletSpeed') + loadoutBuff('bulletSpeed'));
   const life = (3 + statLevel('range') * .13 + statLevel('bulletSpeed') * .035) * (1 + loadoutBuff('range'));
+  const shotgun = specialUpgradeLevel('barrelShotgun');
+  const sniper = specialUpgradeLevel('barrelSniper');
+  const multishot = specialUpgradeLevel('barrelMultishot');
+  const doubleBarrel = specialUpgradeLevel('barrelDouble');
+  const gatling = specialUpgradeLevel('barrelGatling');
 
-  if(specialUpgradeLevel('barrelShotgun') > 0){
+  if(shotgun > 0){
     for(const offset of SHOTGUN_OFFSETS) pushBullet(offset, baseDamage, speed, life, .86, .82, .42);
-  }else if(specialUpgradeLevel('barrelSniper') > 0){
+  }else if(sniper > 0){
     pushBullet(0, baseDamage, speed, life, 3.25, 1.72, 1.55);
-  }else if(specialUpgradeLevel('barrelMultishot') > 0){
+  }else if(multishot > 0){
     for(const offset of MULTISHOT_OFFSETS) pushBullet(offset, baseDamage, speed, life, .74, 1, .96);
-  }else if(specialUpgradeLevel('barrelDouble') > 0){
-    const offsets = DOUBLE_BARREL_OFFSETS[Math.min(2, specialUpgradeLevel('barrelDouble') - 1)] || DOUBLE_BARREL_OFFSETS[0];
+  }else if(doubleBarrel > 0){
+    const offsets = DOUBLE_BARREL_OFFSETS[Math.min(2, doubleBarrel - 1)] || DOUBLE_BARREL_OFFSETS[0];
     for(const offset of offsets) pushBullet(offset, baseDamage, speed, life, .82, 1.03, 1);
-  }else if(specialUpgradeLevel('barrelGatling') > 0){
+  }else if(gatling > 0){
     pushBullet(0, baseDamage, speed, life, .66, 1.10, .92);
   }else{
     pushBullet(0, baseDamage, speed, life);
@@ -6273,7 +10572,14 @@ function removeEnemy(index, killed){
   if(!e) return;
   if(killed) burst(e.angle, e.z, e.type.color, e.boss ? 8 : 3);
   releaseEnemyObject(e);
-  enemies.splice(index, 1);
+  const last = enemies.pop();
+  if(index < enemies.length) enemies[index] = last;
+}
+
+function removeBullet(index){
+  const last = bullets.pop();
+  if(index < bullets.length) bullets[index] = last;
+  bulletsDirty = true;
 }
 
 function burst(angle, z, color, amount = 1){
@@ -6302,13 +10608,19 @@ function updateParticles(dt){
     p.angle += p.va * dt;
     p.z += p.vz * dt;
     if(p.life <= 0){
-      particles.splice(i, 1);
+      removeParticle(i);
     }
   }
   if(changed){
     particlesDirty = true;
     syncParticleInstances();
   }
+}
+
+function removeParticle(index){
+  const last = particles.pop();
+  if(index < particles.length) particles[index] = last;
+  particlesDirty = true;
 }
 
 function pickEnemyType(){
