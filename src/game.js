@@ -28,20 +28,24 @@ const CONTROL_POINTER_RANGE = .46;
 const PLAYER_BANK_SCALE = .20;
 const PLAYER_DRIFT_SCALE = .12;
 const LOW_POWER_DEVICE = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
-const MAX_DPR = LOW_POWER_DEVICE ? 1 : 1.12;
+const SMALL_SCREEN = Math.min(window.innerWidth || W, window.innerHeight || H) <= 520;
+const VISUAL_LOW_POWER = LOW_POWER_DEVICE || SMALL_SCREEN;
+const MAX_DPR = LOW_POWER_DEVICE ? 1 : SMALL_SCREEN ? 1.18 : 1.25;
 const MAX_ENEMIES = LOW_POWER_DEVICE ? 24 : 30;
-const MAX_BULLETS = LOW_POWER_DEVICE ? 34 : 44;
-const MAX_PARTICLES = LOW_POWER_DEVICE ? 18 : 30;
+const MAX_BULLETS = LOW_POWER_DEVICE ? 72 : 128;
+const MAX_PARTICLES = VISUAL_LOW_POWER ? 36 : 48;
 const ENEMY_POOL_LIMIT = LOW_POWER_DEVICE ? 24 : 34;
-const ENEMY_DETAIL_Z = -92;
-const STAGE_Z_SEGMENTS = LOW_POWER_DEVICE ? 28 : 34;
-const STAGE_ARC_SEGMENTS = LOW_POWER_DEVICE ? 32 : 38;
-const STAGE_RING_COUNT = LOW_POWER_DEVICE ? 22 : 28;
-const STAGE_RING_SEGMENTS = LOW_POWER_DEVICE ? 44 : 56;
-const STAR_COUNT = LOW_POWER_DEVICE ? 72 : 112;
-const SPACE_STAR_COUNT = LOW_POWER_DEVICE ? 170 : 280;
-const SPACE_DUST_COUNT = LOW_POWER_DEVICE ? 46 : 82;
-const VANISH_STAR_COUNT = LOW_POWER_DEVICE ? 44 : 72;
+const ENEMY_DETAIL_Z = VISUAL_LOW_POWER ? -74 : -92;
+const ENEMY_SIZE_MULT = 1.62;
+const ENEMY_HITBOX_MULT = 1.20;
+const STAGE_Z_SEGMENTS = VISUAL_LOW_POWER ? 28 : 34;
+const STAGE_ARC_SEGMENTS = VISUAL_LOW_POWER ? 32 : 38;
+const STAGE_RING_COUNT = VISUAL_LOW_POWER ? 22 : 28;
+const STAGE_RING_SEGMENTS = VISUAL_LOW_POWER ? 44 : 56;
+const STAR_COUNT = VISUAL_LOW_POWER ? 72 : 112;
+const SPACE_STAR_COUNT = VISUAL_LOW_POWER ? 200 : 300;
+const SPACE_DUST_COUNT = VISUAL_LOW_POWER ? 56 : 90;
+const VANISH_STAR_COUNT = VISUAL_LOW_POWER ? 54 : 84;
 const SAVE_KEY = 'barrage-3d-save-v1';
 const XP_BASE = 80;
 const BASIC_POINT_UNIT = 60;
@@ -153,6 +157,18 @@ const SPECIAL_UPGRADE_DEFS = [
 ];
 const SPECIAL_UPGRADE_DEFS_BY_ID = Object.fromEntries(SPECIAL_UPGRADE_DEFS.map(def => [def.id, def]));
 const SPECIAL_SLOT_LIMIT = 5;
+const SPECIAL_ICON_SVG = {
+  barrelMultishot: '<svg viewBox="0 0 24 24"><path d="M12 20V8"/><path d="M12 8 6 14"/><path d="M12 8l6 6"/><circle cx="12" cy="5" r="2.2" fill="currentColor" stroke="none"/></svg>',
+  barrelDouble: '<svg viewBox="0 0 24 24"><path d="M8 4v12"/><path d="M16 4v12"/><path d="M6.4 16h3.2"/><path d="M14.4 16h3.2"/><path d="M8 20h8"/></svg>',
+  barrelGatling: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="6.5" r="1.25" fill="currentColor" stroke="none"/><circle cx="16.8" cy="9.2" r="1.25" fill="currentColor" stroke="none"/><circle cx="16.8" cy="14.8" r="1.25" fill="currentColor" stroke="none"/><circle cx="12" cy="17.5" r="1.25" fill="currentColor" stroke="none"/><circle cx="7.2" cy="14.8" r="1.25" fill="currentColor" stroke="none"/><circle cx="7.2" cy="9.2" r="1.25" fill="currentColor" stroke="none"/></svg>',
+  barrelShotgun: '<svg viewBox="0 0 24 24"><path d="M12 20V10"/><path d="M6 9l6 2 6-2"/><circle cx="5" cy="5.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="10" cy="4" r="1.4" fill="currentColor" stroke="none"/><circle cx="14" cy="4" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="5.5" r="1.4" fill="currentColor" stroke="none"/></svg>',
+  barrelSniper: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.2"/><path d="M12 3v5"/><path d="M12 16v5"/><path d="M3 12h5"/><path d="M16 12h5"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>',
+  powerShot: '<svg viewBox="0 0 24 24"><path d="M13.2 2.6 5.2 13h5.8l-1 8.4 8.8-12.1h-6.1l.5-6.7Z" fill="currentColor" stroke="none"/></svg>',
+  adrenaline: '<svg viewBox="0 0 24 24"><path d="M3 13h4l2-6 4 12 2-6h6"/><path d="M8 5.7c1.8-2 5.2-2 7 0"/></svg>',
+  energyShield: '<svg viewBox="0 0 24 24"><path d="M12 3.2 19 6v5.2c0 4.8-2.8 7.8-7 9.6-4.2-1.8-7-4.8-7-9.6V6l7-2.8Z"/><path d="M12 7v10.6"/></svg>',
+  stasisAura: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><path d="M7.8 8.2h8.4L13.2 12l3 3.8H7.8l3-3.8-3-3.8Z"/><path d="M3.5 12h2.3"/><path d="M18.2 12h2.3"/></svg>',
+  default: '<svg viewBox="0 0 24 24"><path d="M12 3.5 20.5 12 12 20.5 3.5 12 12 3.5Z"/></svg>'
+};
 const SPECIAL_SLOT_LABELS = {
   barrelMultishot: 'マルチ',
   barrelDouble: 'ダブル',
@@ -260,7 +276,8 @@ const DOUBLE_BARREL_OFFSETS = [
   [-.095, -.032, .032, .095]
 ];
 const SHOTGUN_OFFSETS = [-.18, -.09, 0, .09, .18];
-const MULTISHOT_OFFSETS = [-.12, 0, .12];
+const MULTISHOT_SPREADS = [-.24, 0, .24];
+const MULTISHOT_SPREAD_LIMIT = .20;
 let unlockedEnemyWave = 0;
 let unlockedEnemyTypes = ENEMY_TYPES.slice(0, 1);
 
@@ -313,7 +330,7 @@ state.cosmetics = save.cosmetics;
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: false,
+  antialias: !LOW_POWER_DEVICE,
   alpha: false,
   powerPreference: 'high-performance'
 });
@@ -388,6 +405,7 @@ const homeShipDrag = {
   pitch: -.02,
   velocity: .10
 };
+var previewPartVisualKey = '';
 const renderSize = {w:0, h:0, dpr:0};
 const hudCache = {};
 
@@ -595,6 +613,11 @@ function selectedSpecialSlotDefs(){
 
 function specialSlotLabel(def){
   return SPECIAL_SLOT_LABELS[def?.id] || def?.name || '---';
+}
+
+function specialUpgradeIcon(def, className = 'special-icon'){
+  const svg = SPECIAL_ICON_SVG[def?.id] || SPECIAL_ICON_SVG.default;
+  return `<span class="${className}" aria-hidden="true">${svg}</span>`;
 }
 
 function canOfferSpecialUpgrade(id){
@@ -1036,6 +1059,36 @@ function applyCosmetics(){
     applyColor(homeShip.materials.glass, bullet.colors.shot);
     applyLineColor(homeShip.materials.edge, coat.colors.line);
   }
+  previewPartVisualKey = '';
+  syncHomeShipParts(true);
+}
+
+function syncHomeShipParts(force = false){
+  if(!homeShip?.partVisuals) return;
+  const ship = currentShip();
+  const equippedKey = PART_TYPES
+    .map(type => `${type}:${(state.garage?.equippedParts?.[type] || []).join(',')}:${shipSlotCount(type, ship)}`)
+    .join('|');
+  const key = `${ship.id}|${equippedKey}`;
+  if(!force && key === previewPartVisualKey) return;
+  previewPartVisualKey = key;
+  for(const type of PART_TYPES){
+    const equipped = state.garage?.equippedParts?.[type] || [];
+    const slots = shipSlotCount(type, ship);
+    for(let index=0; index<3; index++){
+      const group = homeShip.partVisuals[`${type}:${index}`];
+      if(!group) continue;
+      const part = index < slots ? PART_BY_ID[equipped[index]] : null;
+      group.visible = !!part;
+      if(!part) continue;
+      const material = group.userData.material;
+      if(material?.color) material.color.set(part.color);
+      if(material?.emissive) material.emissive.set(part.color);
+      if(material) material.emissiveIntensity = type === 'drone' ? 1.35 : .95;
+      const power = type === 'barrel' ? 1 + index * .06 : type === 'drone' ? .95 + index * .05 : 1;
+      group.scale.setScalar(power);
+    }
+  }
 }
 
 function makeSharedAssets(){
@@ -1055,11 +1108,11 @@ function makeSharedAssets(){
     playerGlass: new THREE.MeshStandardMaterial({ color:0x9cf5ff, metalness:.18, roughness:.08, emissive:0x1ed6ff, emissiveIntensity:1.38, transparent:true, opacity:.82 }),
     playerCore: new THREE.MeshBasicMaterial({ color:0x1ed6ff }),
     playerWing: new THREE.MeshStandardMaterial({ color:0x132033, metalness:.64, roughness:.24, emissive:0x0a4960, emissiveIntensity:.52 }),
-    playerGold: new THREE.MeshBasicMaterial({ color:0xffd36a, transparent:true, opacity:.92 }),
-    playerRose: new THREE.MeshBasicMaterial({ color:0xff3b62, transparent:true, opacity:.82 }),
+    playerGold: new THREE.MeshBasicMaterial({ color:0xd8e2ea, transparent:true, opacity:.90 }),
+    playerRose: new THREE.MeshBasicMaterial({ color:0x8eefff, transparent:true, opacity:.82 }),
     playerEdge: new THREE.LineBasicMaterial({ color:0x82d7ff, transparent:true, opacity:.72 }),
-    playerGoldLine: new THREE.LineBasicMaterial({ color:0xffd36a, transparent:true, opacity:.70 }),
-    playerRoseLine: new THREE.LineBasicMaterial({ color:0xff3b62, transparent:true, opacity:.62 }),
+    playerGoldLine: new THREE.LineBasicMaterial({ color:0xd8e2ea, transparent:true, opacity:.68 }),
+    playerRoseLine: new THREE.LineBasicMaterial({ color:0x8eefff, transparent:true, opacity:.58 }),
     enemyArmor: new THREE.MeshStandardMaterial({ color:0x08111d, metalness:.76, roughness:.24, emissive:0x071421, emissiveIntensity:.55, fog:false }),
     enemyArmorLight: new THREE.MeshStandardMaterial({ color:0xf4fbff, metalness:.42, roughness:.20, emissive:0x28465c, emissiveIntensity:.36, fog:false }),
     bossSight: new THREE.LineBasicMaterial({ color:0xffd36a, transparent:true, opacity:.72, fog:false, depthTest:false })
@@ -1119,7 +1172,7 @@ function makeSharedAssets(){
     enemyGlow: new THREE.SphereGeometry(.52, 9, 6),
     enemyBlade: new THREE.BoxGeometry(.13, .58, .14),
     enemySpike: new THREE.ConeGeometry(.13, .48, 3, 1),
-    enemyRing: makeRingCircleGeometry(1, LOW_POWER_DEVICE ? 28 : 36),
+    enemyRing: makeRingCircleGeometry(1, VISUAL_LOW_POWER ? 28 : 36),
     bossBlade: new THREE.BoxGeometry(.26, 1.18, .18),
     bossCore: new THREE.OctahedronGeometry(.58, 0),
     orb: new THREE.IcosahedronGeometry(.55, 1),
@@ -1155,14 +1208,14 @@ function makeParticleMesh(){
 }
 
 function makeStage(){
-  const vanishingDust = makeVanishingStarLayer(Math.floor(VANISH_STAR_COUNT * .62), 0x9fdcff, .052, .36, 5.2, .045, .8);
-  const vanishingPins = makeVanishingStarLayer(Math.floor(VANISH_STAR_COUNT * .38), 0xf4fbff, .086, .58, 7.4, .090, 2.7, true);
-  const farDust = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .58), 34, 76, -330, 26, 0x7da8c6, .030, .24, 4.2, .018, .3);
-  const farPins = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .45), 24, 66, -315, 20, 0xd8f2ff, .052, .48, 5.8, .028, 1.7);
-  const midBlue = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .28), 16, 50, -286, 14, 0x8fefff, .078, .52, 8.4, .045, 3.2);
-  const nearWhite = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .18), 9, 36, -230, 8, 0xf4fbff, .138, .64, 12.6, .070, 5.0);
-  const glints = makeStarLayer(Math.max(14, Math.floor(SPACE_STAR_COUNT * .065)), 8, 28, -205, 4, 0xffffff, .215, .78, 15.8, .15, 7.4, true);
-  const amberDust = makeStarLayer(SPACE_DUST_COUNT, 18, 60, -305, 4, 0xffd36a, .085, .22, 6.9, .05, 9.0);
+  const vanishingDust = makeVanishingStarLayer(Math.floor(VANISH_STAR_COUNT * .62), 0xb7e6ff, .066, .46, 5.2, .052, .8);
+  const vanishingPins = makeVanishingStarLayer(Math.floor(VANISH_STAR_COUNT * .38), 0xf4fbff, .108, .68, 7.4, .10, 2.7, true);
+  const farDust = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .58), 34, 76, -330, 26, 0xa1c4dd, .044, .32, 4.2, .020, .3);
+  const farPins = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .45), 24, 66, -315, 20, 0xe4f7ff, .072, .56, 5.8, .032, 1.7);
+  const midBlue = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .28), 16, 50, -286, 14, 0x9cf5ff, .106, .62, 8.4, .052, 3.2);
+  const nearWhite = makeStarLayer(Math.floor(SPACE_STAR_COUNT * .18), 9, 36, -230, 8, 0xf7fdff, .168, .72, 12.6, .078, 5.0);
+  const glints = makeStarLayer(Math.max(18, Math.floor(SPACE_STAR_COUNT * .070)), 8, 28, -205, 4, 0xffffff, .255, .88, 15.8, .16, 7.4, true);
+  const amberDust = makeStarLayer(SPACE_DUST_COUNT, 18, 60, -305, 4, 0xffd36a, .112, .30, 6.9, .052, 9.0);
   const starLayers = [vanishingDust, vanishingPins, farDust, farPins, midBlue, nearWhite, glints, amberDust];
   for(const layer of starLayers) pipeRoot.add(layer);
   return {starLayers};
@@ -1224,9 +1277,17 @@ function makeSpacePoints(count, radiusMin, radiusMax, zMin, zMax, color, size, o
     fog:false,
     blending: options.additive ? THREE.AdditiveBlending : THREE.NormalBlending
   });
-  const points = new THREE.Points(g, m);
-  points.userData.loop = span;
-  return points;
+  const front = new THREE.Points(g, m);
+  const back = new THREE.Points(g, m);
+  back.position.z = -span;
+  front.frustumCulled = false;
+  back.frustumCulled = false;
+  const layer = new THREE.Group();
+  layer.frustumCulled = false;
+  layer.material = m;
+  layer.add(front, back);
+  layer.userData.loop = span;
+  return layer;
 }
 
 function makePlateGeometry(points, thickness = .08){
@@ -1251,9 +1312,9 @@ function makePlateGeometry(points, thickness = .08){
 
 function addShipPlate(root, points, material, thickness = .08, edgeMaterial = shared.materials.playerEdge){
   const mesh = new THREE.Mesh(makePlateGeometry(points, thickness), material);
-  root.add(mesh);
   const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 16), edgeMaterial);
-  root.add(edges);
+  mesh.add(edges);
+  root.add(mesh);
   return mesh;
 }
 
@@ -1266,126 +1327,100 @@ function makePlayer(){
   const root = new THREE.Group();
   root.position.set(0, PLAYER_Y, PLAYER_Z);
   root.rotation.x = -.13;
-  root.scale.setScalar(2.06);
+  root.scale.setScalar(1.78);
 
   const mirrorPoints = points => points.map(([x, z]) => [-x, z]).reverse();
 
   const mainBody = addShipPlate(root, [
-    [0, -1.34], [.18, -1.06], [.31, -.48], [.28, .34],
-    [.15, .82], [0, 1.02], [-.15, .82], [-.28, .34],
-    [-.31, -.48], [-.18, -1.06]
-  ], shared.materials.player, .14);
-
-  const nose = addShipPlate(root, [
-    [0, -1.58], [.105, -1.20], [.075, -.72], [0, -.56], [-.075, -.72], [-.105, -1.20]
-  ], shared.materials.playerPlate, .075, shared.materials.playerGoldLine);
-  nose.position.y = .06;
-
-  const topArmor = addShipPlate(root, [
-    [0, -.94], [.135, -.55], [.18, .28], [.08, .68],
-    [0, .78], [-.08, .68], [-.18, .28], [-.135, -.55]
-  ], shared.materials.playerPlate, .06, shared.materials.playerEdge);
-  topArmor.position.y = .085;
-
-  const canopy = addShipPlate(root, [
-    [0, -.50], [.118, -.24], [.088, .06], [0, .20], [-.088, .06], [-.118, -.24]
-  ], shared.materials.playerGlass, .045, shared.materials.playerEdge);
-  canopy.position.y = .145;
-
-  const canopyGlow = addShipPlate(root, [
-    [0, -.44], [.070, -.20], [.052, -.02], [0, .09], [-.052, -.02], [-.070, -.20]
-  ], shared.materials.playerCore, .026, shared.materials.playerEdge);
-  canopyGlow.position.y = .184;
+    [0, -1.52], [.16, -1.22], [.25, -.52], [.23, .34],
+    [.13, .88], [0, 1.12], [-.13, .88], [-.23, .34],
+    [-.25, -.52], [-.16, -1.22]
+  ], shared.materials.player, .16);
 
   const wingPoints = [
-    [.19, -.42], [.98, -.05], [.90, .16], [.44, .36], [.25, .74], [.08, .56]
+    [.16, -.38], [1.03, -.02], [.84, .21], [.45, .34], [.24, .76], [.07, .56]
   ];
-  const leftWing = addShipPlate(root, wingPoints, shared.materials.playerWing, .10);
-  const rightWing = addShipPlate(root, mirrorPoints(wingPoints), shared.materials.playerWing, .10);
+  const leftWing = addShipPlate(root, wingPoints, shared.materials.playerWing, .11);
+  const rightWing = addShipPlate(root, mirrorPoints(wingPoints), shared.materials.playerWing, .11);
 
-  const wingArmor = [
-    [.34, -.07], [.78, .08], [.58, .22], [.34, .23]
-  ];
-  const leftWingArmor = addShipPlate(root, wingArmor, shared.materials.playerPlate, .045, shared.materials.playerGoldLine);
-  const rightWingArmor = addShipPlate(root, mirrorPoints(wingArmor), shared.materials.playerPlate, .045, shared.materials.playerGoldLine);
-  leftWingArmor.position.y = .08;
-  rightWingArmor.position.y = .08;
+  const wingCap = [[.36,-.08],[.78,.07],[.61,.22],[.37,.25]];
+  const leftWingCap = addShipPlate(root, wingCap, shared.materials.playerPlate, .040, shared.materials.playerGoldLine);
+  const rightWingCap = addShipPlate(root, mirrorPoints(wingCap), shared.materials.playerPlate, .040, shared.materials.playerGoldLine);
+  leftWingCap.position.y = .082;
+  rightWingCap.position.y = .082;
 
-  const intakePoints = [[.22,-.36],[.42,-.23],[.36,.02],[.18,-.04]];
-  const leftIntake = addShipPlate(root, intakePoints, shared.materials.playerPanel, .038, shared.materials.playerEdge);
-  const rightIntake = addShipPlate(root, mirrorPoints(intakePoints), shared.materials.playerPanel, .038, shared.materials.playerEdge);
-  leftIntake.position.y = .135;
-  rightIntake.position.y = .135;
+  const nose = addShipPlate(root, [
+    [0, -1.70], [.086, -1.27], [.060, -.82], [0, -.66], [-.060, -.82], [-.086, -1.27]
+  ], shared.materials.playerPlate, .080, shared.materials.playerGoldLine);
+  nose.position.y = .070;
 
-  const shoulderPoints = [[.12,.26],[.31,.35],[.25,.68],[.07,.58]];
-  const leftShoulder = addShipPlate(root, shoulderPoints, shared.materials.playerPanel, .050, shared.materials.playerRoseLine);
-  const rightShoulder = addShipPlate(root, mirrorPoints(shoulderPoints), shared.materials.playerPanel, .050, shared.materials.playerRoseLine);
+  const topArmor = addShipPlate(root, [
+    [0, -1.02], [.128, -.64], [.162, .22], [.075, .72],
+    [0, .86], [-.075, .72], [-.162, .22], [-.128, -.64]
+  ], shared.materials.playerPlate, .065, shared.materials.playerEdge);
+  topArmor.position.y = .090;
+
+  const canopy = addShipPlate(root, [
+    [0, -.61], [.096, -.35], [.080, .05], [0, .29], [-.080, .05], [-.096, -.35]
+  ], shared.materials.playerGlass, .050, shared.materials.playerEdge);
+  canopy.position.y = .150;
+
+  const canopyGlow = addShipPlate(root, [
+    [0, -.52], [.055, -.28], [.045, -.04], [0, .12], [-.045, -.04], [-.055, -.28]
+  ], shared.materials.playerCore, .026, shared.materials.playerEdge);
+  canopyGlow.position.y = .190;
+
+  const shoulderPoints = [[.15,.30],[.36,.42],[.28,.78],[.08,.66]];
+  const leftShoulder = addShipPlate(root, shoulderPoints, shared.materials.playerPanel, .048, shared.materials.playerRoseLine);
+  const rightShoulder = addShipPlate(root, mirrorPoints(shoulderPoints), shared.materials.playerPanel, .048, shared.materials.playerRoseLine);
   leftShoulder.position.y = .125;
   rightShoulder.position.y = .125;
 
-  const sidePodPoints = [[.30,.20],[.58,.30],[.56,.78],[.36,.90],[.23,.54]];
-  addShipPlate(root, sidePodPoints, shared.materials.playerPlate, .08, shared.materials.playerGoldLine);
-  addShipPlate(root, mirrorPoints(sidePodPoints), shared.materials.playerPlate, .08, shared.materials.playerGoldLine);
+  root.add(makeShipLine([[0,-1.55],[0,-.66],[0,.86]], shared.materials.playerRoseLine, .18));
+  root.add(makeShipLine([[.11,-.86],[.19,-.36],[.16,.56]], shared.materials.playerGoldLine, .16));
+  root.add(makeShipLine([[-.11,-.86],[-.19,-.36],[-.16,.56]], shared.materials.playerGoldLine, .16));
+  root.add(makeShipLine([[.30,-.11],[.72,.07],[.43,.31]], shared.materials.playerEdge, .145));
+  root.add(makeShipLine([[-.30,-.11],[-.72,.07],[-.43,.31]], shared.materials.playerEdge, .145));
 
-  const finPoints = [[.18,.70],[.34,1.04],[.16,.96],[.05,.76]];
-  const leftFin = addShipPlate(root, finPoints, shared.materials.playerWing, .055, shared.materials.playerEdge);
-  const rightFin = addShipPlate(root, mirrorPoints(finPoints), shared.materials.playerWing, .055, shared.materials.playerEdge);
-  leftFin.position.y = .10;
-  rightFin.position.y = .10;
-
-  root.add(makeShipLine([[0,-1.44],[0,-.54],[0,.74]], shared.materials.playerRoseLine, .17));
-  root.add(makeShipLine([[.13,-.74],[.24,-.30],[.20,.54]], shared.materials.playerGoldLine, .15));
-  root.add(makeShipLine([[-.13,-.74],[-.24,-.30],[-.20,.54]], shared.materials.playerGoldLine, .15));
-  root.add(makeShipLine([[.28,-.20],[.72,.06],[.48,.32],[.32,.66]], shared.materials.playerEdge, .13));
-  root.add(makeShipLine([[-.28,-.20],[-.72,.06],[-.48,.32],[-.32,.66]], shared.materials.playerEdge, .13));
-  root.add(makeShipLine([[.36,.40],[.52,.82]], shared.materials.playerGoldLine, .13));
-  root.add(makeShipLine([[-.36,.40],[-.52,.82]], shared.materials.playerGoldLine, .13));
-  root.add(makeShipLine([[.08,-1.18],[.17,-.88],[.13,-.58]], shared.materials.playerEdge, .19));
-  root.add(makeShipLine([[-.08,-1.18],[-.17,-.88],[-.13,-.58]], shared.materials.playerEdge, .19));
-  root.add(makeShipLine([[.48,-.02],[.82,.12]], shared.materials.playerRoseLine, .16));
-  root.add(makeShipLine([[-.48,-.02],[-.82,.12]], shared.materials.playerRoseLine, .16));
-
-  const core = new THREE.Mesh(new THREE.SphereGeometry(.155, 16, 10), shared.materials.playerCore);
-  core.position.set(0, .22, -.16);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.145, 16, 10), shared.materials.playerCore);
+  core.position.set(0, .225, -.18);
   root.add(core);
 
-  const reactorHalo = new THREE.Line(makeRingCircleGeometry(.33, LOW_POWER_DEVICE ? 32 : 46), shared.materials.playerGoldLine);
+  const reactorHalo = new THREE.Line(makeRingCircleGeometry(.30, VISUAL_LOW_POWER ? 32 : 46), shared.materials.playerGoldLine);
   reactorHalo.rotation.x = Math.PI / 2;
-  reactorHalo.position.set(0, .225, -.16);
+  reactorHalo.position.set(0, .230, -.18);
   root.add(reactorHalo);
 
-  const coreRing = new THREE.Line(makeRingCircleGeometry(.245, 40), shared.materials.playerEdge);
+  const coreRing = new THREE.Line(makeRingCircleGeometry(.220, 40), shared.materials.playerEdge);
   coreRing.rotation.x = Math.PI / 2;
-  coreRing.position.set(0, .235, -.16);
+  coreRing.position.set(0, .238, -.18);
   root.add(coreRing);
 
-  const spine = new THREE.Mesh(new THREE.BoxGeometry(.075, .045, 1.58), shared.materials.playerGold);
-  spine.position.set(0, .17, -.10);
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(.055, .040, 1.42), shared.materials.playerGold);
+  spine.position.set(0, .172, -.12);
   root.add(spine);
 
-  const engineGeo = new THREE.CylinderGeometry(.105, .165, .46, 12, 1);
-  const engineNozzleGeo = new THREE.CylinderGeometry(.135, .095, .18, 12, 1);
-  for(const x of [-.30,.30]){
+  const engineGeo = new THREE.CylinderGeometry(.105, .158, .42, 14, 1);
+  const engineNozzleGeo = new THREE.CylinderGeometry(.130, .088, .16, 14, 1);
+  const cowlPoints = [[.18,.45],[.40,.58],[.36,1.02],[.18,1.12],[.07,.83]];
+  addShipPlate(root, cowlPoints, shared.materials.player, .070, shared.materials.playerEdge);
+  addShipPlate(root, mirrorPoints(cowlPoints), shared.materials.player, .070, shared.materials.playerEdge);
+  for(const x of [-.29,.29]){
     const engine = new THREE.Mesh(engineGeo, shared.materials.playerCore);
     engine.rotation.x = Math.PI / 2;
-    engine.position.set(x, -.035, .80);
+    engine.position.set(x, -.035, .86);
     root.add(engine);
     const nozzle = new THREE.Mesh(engineNozzleGeo, shared.materials.player);
     nozzle.rotation.x = Math.PI / 2;
-    nozzle.position.set(x, -.035, 1.04);
+    nozzle.position.set(x, -.035, 1.08);
     root.add(nozzle);
-    const engineCowl = addShipPlate(root, [
-      [x - Math.sign(x)*.12, .48], [x + Math.sign(x)*.14, .54],
-      [x + Math.sign(x)*.16, .92], [x, 1.08], [x - Math.sign(x)*.13, .88]
-    ], shared.materials.player, .07, shared.materials.playerEdge);
-    engineCowl.position.y = -.01;
     const flare = new THREE.Mesh(shared.geometries.engineFlare, shared.materials.shotGlow);
-    flare.position.set(x, -.035, 1.20);
-    flare.scale.set(.78, .78, 1.18);
+    flare.position.set(x, -.035, 1.23);
+    flare.scale.set(.74, .74, 1.12);
     root.add(flare);
   }
 
-  const aura = new THREE.Line(makeRingCircleGeometry(.78, 56), shared.materials.railCyan);
+  const aura = new THREE.Line(makeRingCircleGeometry(.72, 56), shared.materials.railCyan);
   aura.rotation.x = Math.PI / 2;
   aura.position.z = .18;
   root.add(aura);
@@ -1399,22 +1434,25 @@ function makeHomePreviewShip(){
   const mirrorPoints = points => points.map(([x, z]) => [-x, z]).reverse();
 
   const materials = {
-    hull: new THREE.MeshStandardMaterial({ color:0x0b1016, metalness:.72, roughness:.24, emissive:0x123040, emissiveIntensity:.86, side:THREE.DoubleSide, fog:false }),
-    plate: new THREE.MeshBasicMaterial({ color:0xf2f6f7, side:THREE.DoubleSide, fog:false }),
-    wing: new THREE.MeshStandardMaterial({ color:0x132033, metalness:.64, roughness:.22, emissive:0x0a4960, emissiveIntensity:.52, side:THREE.DoubleSide, fog:false }),
-    panel: new THREE.MeshStandardMaterial({ color:0x18283a, metalness:.68, roughness:.22, emissive:0x0a4155, emissiveIntensity:.42, side:THREE.DoubleSide, fog:false }),
+    hull: new THREE.MeshStandardMaterial({ color:0x081019, metalness:.76, roughness:.22, emissive:0x103446, emissiveIntensity:.92, side:THREE.DoubleSide, fog:false }),
+    plate: new THREE.MeshStandardMaterial({ color:0xf2f6f7, metalness:.50, roughness:.16, emissive:0x203742, emissiveIntensity:.22, side:THREE.DoubleSide, fog:false }),
+    wing: new THREE.MeshStandardMaterial({ color:0x111d2c, metalness:.66, roughness:.20, emissive:0x0a4f66, emissiveIntensity:.54, side:THREE.DoubleSide, fog:false }),
+    panel: new THREE.MeshStandardMaterial({ color:0x172636, metalness:.70, roughness:.20, emissive:0x0a4357, emissiveIntensity:.46, side:THREE.DoubleSide, fog:false }),
     core: new THREE.MeshBasicMaterial({ color:0x8eefff, fog:false }),
-    glass: new THREE.MeshStandardMaterial({ color:0x9cf5ff, metalness:.18, roughness:.08, emissive:0x1ed6ff, emissiveIntensity:1.5, transparent:true, opacity:.82, fog:false }),
-    edge: new THREE.LineBasicMaterial({ color:0x9ef5ff, transparent:true, opacity:.72, fog:false }),
-    goldLine: new THREE.LineBasicMaterial({ color:0xd8e2ea, transparent:true, opacity:.70, fog:false }),
-    roseLine: new THREE.LineBasicMaterial({ color:0x8eefff, transparent:true, opacity:.58, fog:false }),
+    glass: new THREE.MeshStandardMaterial({ color:0x9cf5ff, metalness:.18, roughness:.06, emissive:0x1ed6ff, emissiveIntensity:1.65, transparent:true, opacity:.84, fog:false }),
+    edge: new THREE.LineBasicMaterial({ color:0x9ef5ff, transparent:true, opacity:.68, fog:false }),
+    goldLine: new THREE.LineBasicMaterial({ color:0xd8e2ea, transparent:true, opacity:.62, fog:false }),
+    roseLine: new THREE.LineBasicMaterial({ color:0x8eefff, transparent:true, opacity:.56, fog:false }),
     shadow: new THREE.MeshBasicMaterial({ color:0x071017, transparent:true, opacity:.28, depthWrite:false, fog:false })
   };
 
+  const addEdges = (mesh, material = materials.edge) => {
+    mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 16), material));
+    return mesh;
+  };
   const addPreviewPlate = (points, material, thickness = .10) => {
     const mesh = new THREE.Mesh(makePlateGeometry(points, thickness), material);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 16), materials.edge);
-    root.add(mesh, edges);
+    root.add(addEdges(mesh));
     return mesh;
   };
   const addPreviewLine = (points, material = materials.edge, y = .16) => {
@@ -1424,61 +1462,174 @@ function makeHomePreviewShip(){
   };
 
   addPreviewPlate([
-    [0, -1.34], [.18, -1.06], [.31, -.48], [.28, .34],
-    [.15, .82], [0, 1.02], [-.15, .82], [-.28, .34],
-    [-.31, -.48], [-.18, -1.06]
-  ], materials.hull, .17);
-  addPreviewPlate([
-    [0, -1.58], [.105, -1.20], [.075, -.72], [0, -.56], [-.075, -.72], [-.105, -1.20]
-  ], materials.plate, .085);
-  addPreviewPlate([
-    [0, -.94], [.135, -.55], [.18, .28], [.08, .68],
-    [0, .78], [-.08, .68], [-.18, .28], [-.135, -.55]
-  ], materials.plate, .07);
+    [0, -1.52], [.16, -1.22], [.25, -.52], [.23, .34],
+    [.13, .88], [0, 1.12], [-.13, .88], [-.23, .34],
+    [-.25, -.52], [-.16, -1.22]
+  ], materials.hull, .18);
 
   const wingPoints = [
-    [.19, -.42], [.98, -.05], [.90, .16], [.44, .36], [.25, .74], [.08, .56]
+    [.16, -.38], [1.03, -.02], [.84, .21], [.45, .34], [.24, .76], [.07, .56]
   ];
-  addPreviewPlate(wingPoints, materials.wing, .11);
-  addPreviewPlate(mirrorPoints(wingPoints), materials.wing, .11);
-  addPreviewPlate([[.22,-.36],[.42,-.23],[.36,.02],[.18,-.04]], materials.panel, .044).position.y = .13;
-  addPreviewPlate(mirrorPoints([[.22,-.36],[.42,-.23],[.36,.02],[.18,-.04]]), materials.panel, .044).position.y = .13;
-  addPreviewPlate([[.12,.26],[.31,.35],[.25,.68],[.07,.58]], materials.panel, .052).position.y = .12;
-  addPreviewPlate(mirrorPoints([[.12,.26],[.31,.35],[.25,.68],[.07,.58]]), materials.panel, .052).position.y = .12;
+  addPreviewPlate(wingPoints, materials.wing, .12);
+  addPreviewPlate(mirrorPoints(wingPoints), materials.wing, .12);
+
+  const wingCap = [[.36,-.08],[.78,.07],[.61,.22],[.37,.25]];
+  addPreviewPlate(wingCap, materials.plate, .046).position.y = .09;
+  addPreviewPlate(mirrorPoints(wingCap), materials.plate, .046).position.y = .09;
+
+  const nose = addPreviewPlate([
+    [0, -1.70], [.086, -1.27], [.060, -.82], [0, -.66], [-.060, -.82], [-.086, -1.27]
+  ], materials.plate, .090);
+  nose.position.y = .07;
+
+  const topArmor = addPreviewPlate([
+    [0, -1.02], [.128, -.64], [.162, .22], [.075, .72],
+    [0, .86], [-.075, .72], [-.162, .22], [-.128, -.64]
+  ], materials.plate, .074);
+  topArmor.position.y = .10;
 
   const canopy = addPreviewPlate([
-    [0, -.50], [.118, -.24], [.088, .06], [0, .20], [-.088, .06], [-.118, -.24]
-  ], materials.glass, .052);
-  canopy.position.y = .15;
+    [0, -.61], [.096, -.35], [.080, .05], [0, .29], [-.080, .05], [-.096, -.35]
+  ], materials.glass, .058);
+  canopy.position.y = .16;
   addPreviewPlate([
-    [0, -.44], [.070, -.20], [.052, -.02], [0, .09], [-.052, -.02], [-.070, -.20]
-  ], materials.core, .030).position.y = .19;
+    [0, -.52], [.055, -.28], [.045, -.04], [0, .12], [-.045, -.04], [-.055, -.28]
+  ], materials.core, .032).position.y = .205;
 
-  addPreviewLine([[0,-1.44],[0,-.54],[0,.74]], materials.roseLine, .18);
-  addPreviewLine([[.13,-.74],[.24,-.30],[.20,.54]], materials.goldLine, .16);
-  addPreviewLine([[-.13,-.74],[-.24,-.30],[-.20,.54]], materials.goldLine, .16);
-  addPreviewLine([[.28,-.20],[.72,.06],[.48,.32],[.32,.66]], materials.edge, .14);
-  addPreviewLine([[-.28,-.20],[-.72,.06],[-.48,.32],[-.32,.66]], materials.edge, .14);
+  addPreviewPlate([[.15,.30],[.36,.42],[.28,.78],[.08,.66]], materials.panel, .054).position.y = .13;
+  addPreviewPlate(mirrorPoints([[.15,.30],[.36,.42],[.28,.78],[.08,.66]]), materials.panel, .054).position.y = .13;
 
-  const core = new THREE.Mesh(new THREE.SphereGeometry(.17, 18, 10), materials.core);
-  core.position.set(0, .24, -.16);
+  addPreviewLine([[0,-1.55],[0,-.66],[0,.86]], materials.roseLine, .20);
+  addPreviewLine([[.11,-.86],[.19,-.36],[.16,.56]], materials.goldLine, .18);
+  addPreviewLine([[-.11,-.86],[-.19,-.36],[-.16,.56]], materials.goldLine, .18);
+  addPreviewLine([[.30,-.11],[.72,.07],[.43,.31]], materials.edge, .16);
+  addPreviewLine([[-.30,-.11],[-.72,.07],[-.43,.31]], materials.edge, .16);
+
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.155, 18, 10), materials.core);
+  core.position.set(0, .255, -.18);
   root.add(core);
-  const coreRing = new THREE.Line(makeRingCircleGeometry(.32, LOW_POWER_DEVICE ? 32 : 46), materials.goldLine);
+  const coreRing = new THREE.Line(makeRingCircleGeometry(.30, VISUAL_LOW_POWER ? 32 : 46), materials.goldLine);
   coreRing.rotation.x = Math.PI / 2;
-  coreRing.position.set(0, .24, -.16);
+  coreRing.position.set(0, .260, -.18);
   root.add(coreRing);
 
-  const engineGeo = new THREE.CylinderGeometry(.12, .18, .44, 14, 1);
-  for(const x of [-.32, .32]){
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(.060, .040, 1.44), materials.core);
+  spine.position.set(0, .185, -.12);
+  spine.scale.y = .60;
+  root.add(spine);
+
+  const cowlPoints = [[.18,.45],[.40,.58],[.36,1.02],[.18,1.12],[.07,.83]];
+  addPreviewPlate(cowlPoints, materials.hull, .078).position.y = -.01;
+  addPreviewPlate(mirrorPoints(cowlPoints), materials.hull, .078).position.y = -.01;
+
+  const engineGeo = new THREE.CylinderGeometry(.108, .168, .42, 16, 1);
+  const nozzleGeo = new THREE.CylinderGeometry(.132, .088, .16, 16, 1);
+  for(const x of [-.29, .29]){
     const engine = new THREE.Mesh(engineGeo, materials.hull);
     engine.rotation.x = Math.PI / 2;
-    engine.position.set(x, -.04, .92);
+    engine.position.set(x, -.045, .88);
     root.add(engine);
+    const nozzle = new THREE.Mesh(nozzleGeo, materials.panel);
+    nozzle.rotation.x = Math.PI / 2;
+    nozzle.position.set(x, -.045, 1.10);
+    root.add(nozzle);
     const glow = new THREE.Mesh(new THREE.SphereGeometry(.13, 12, 8), materials.core);
-    glow.position.set(x, -.04, 1.15);
-    glow.scale.set(.9, .7, 1.1);
+    glow.position.set(x, -.045, 1.23);
+    glow.scale.set(.82, .64, 1.08);
     root.add(glow);
   }
+
+  const partVisuals = {};
+  const makePartMaterial = () => new THREE.MeshStandardMaterial({
+    color:0x8eefff,
+    metalness:.62,
+    roughness:.20,
+    emissive:0x0a4050,
+    emissiveIntensity:1.05,
+    fog:false
+  });
+  const addPartEdges = mesh => addEdges(mesh, materials.edge);
+  const addPartVisual = (type, index, group) => {
+    group.visible = false;
+    group.userData.type = type;
+    group.userData.index = index;
+    root.add(group);
+    partVisuals[`${type}:${index}`] = group;
+    return group;
+  };
+  const addBarrelVisual = (index, x) => {
+    const mat = makePartMaterial();
+    const group = new THREE.Group();
+    group.userData.material = mat;
+    group.position.set(x, .280, -1.34);
+    const saddle = new THREE.Mesh(new THREE.BoxGeometry(.105, .038, .36), mat);
+    saddle.position.set(0, -.050, .13);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(.032, .040, .58, 14, 1), mat);
+    body.rotation.x = Math.PI / 2;
+    body.position.set(0, 0, -.16);
+    const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(.050, .034, .095, 14, 1), mat);
+    muzzle.rotation.x = Math.PI / 2;
+    muzzle.position.set(0, 0, -.51);
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(.024, 8, 6), mat);
+    glow.position.set(0, .006, -.57);
+    const rail = new THREE.Line(makeRingCircleGeometry(.075, 18), materials.edge);
+    rail.rotation.x = Math.PI / 2;
+    rail.position.set(0, .002, .11);
+    group.add(addPartEdges(saddle), addPartEdges(body), addPartEdges(muzzle), glow, rail);
+    addPartVisual('barrel', index, group);
+  };
+  [-.14, 0, .14].forEach((x, index) => addBarrelVisual(index, x));
+
+  const framePositions = [
+    {x:0, z:-.08, sx:.20, sz:.78, rz:0},
+    {x:-.38, z:.28, sx:.18, sz:.48, rz:.18},
+    {x:.38, z:.28, sx:.18, sz:.48, rz:-.18}
+  ];
+  framePositions.forEach((pos, index) => {
+    const mat = makePartMaterial();
+    const group = new THREE.Group();
+    group.userData.material = mat;
+    group.position.set(pos.x, .282, pos.z);
+    group.rotation.z = pos.rz || 0;
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(pos.sx, .052, pos.sz), mat);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(pos.sx * .58, .060, .125), mat);
+    cap.position.set(0, .020, -pos.sz * .30);
+    const node = new THREE.Mesh(new THREE.SphereGeometry(.052, 12, 7), mat);
+    node.position.set(0, .048, -pos.sz * .18);
+    const mark = new THREE.Line(makeRingCircleGeometry(pos.sx * .44, 22), materials.edge);
+    mark.rotation.x = Math.PI / 2;
+    mark.position.set(0, .054, -pos.sz * .18);
+    group.add(addPartEdges(plate), addPartEdges(cap), node, mark);
+    addPartVisual('innerFrame', index, group);
+  });
+
+  const dronePositions = [
+    {x:-1.02, z:.38, ry:.22, rz:-.18},
+    {x:1.02, z:.38, ry:-.22, rz:.18},
+    {x:0, z:.90, ry:0, rz:0}
+  ];
+  dronePositions.forEach((pos, index) => {
+    const mat = makePartMaterial();
+    const group = new THREE.Group();
+    group.userData.material = mat;
+    group.position.set(pos.x, .205, pos.z);
+    group.rotation.y = pos.ry;
+    const pod = new THREE.Mesh(new THREE.SphereGeometry(.088, 12, 7), mat);
+    pod.scale.set(1.15, .68, 1.45);
+    const nose = new THREE.Mesh(new THREE.CylinderGeometry(.044, .070, .16, 12, 1), mat);
+    nose.rotation.x = Math.PI / 2;
+    nose.position.set(0, .002, -.15);
+    const winglet = new THREE.Mesh(new THREE.BoxGeometry(.27, .024, .052), mat);
+    winglet.position.set(0, -.006, .08);
+    winglet.rotation.z = pos.rz || 0;
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(.026, 8, 6), mat);
+    dot.position.set(0, .052, -.02);
+    const halo = new THREE.Line(makeRingCircleGeometry(.145, 24), materials.edge);
+    halo.rotation.x = Math.PI / 2;
+    halo.position.set(0, .050, .02);
+    group.add(pod, addPartEdges(nose), addPartEdges(winglet), dot, halo);
+    addPartVisual('drone', index, group);
+  });
 
   const underGlow = new THREE.Mesh(new THREE.CircleGeometry(1.12, 36), materials.shadow);
   underGlow.rotation.x = -Math.PI / 2;
@@ -1486,7 +1637,7 @@ function makeHomePreviewShip(){
   underGlow.scale.set(1.25, .58, 1);
   root.add(underGlow);
 
-  return {root, core, materials};
+  return {root, core, materials, partVisuals};
 }
 
 function makeRingCircleGeometry(radius, steps){
@@ -3720,6 +3871,434 @@ function createUi(){
       from{background-position:0 0}
       to{background-position:40px 0}
     }
+    /* Home refinement: monochrome surfaces with focused cyan neon controls. */
+    #barrage-ui .home-screen{
+      --home-bg:#030506;
+      --home-panel:rgba(8,11,13,.84);
+      --home-panel-strong:rgba(13,17,19,.94);
+      --home-line:rgba(238,247,255,.16);
+      --home-line-strong:rgba(238,247,255,.30);
+      --home-cyan:#8eefff;
+      --home-cyan-strong:#1ed6ff;
+      --home-text:#f6f8fa;
+      --home-muted:rgba(216,226,234,.68);
+      background-color:var(--home-bg) !important;
+      color:var(--home-text) !important;
+    }
+    #barrage-ui .home-screen::before{
+      display:block !important;
+      opacity:.20 !important;
+      background-image:
+        linear-gradient(rgba(142,239,255,.075) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(238,247,255,.045) 1px,transparent 1px) !important;
+      background-size:34px 34px !important;
+      transform:none !important;
+    }
+    #barrage-ui .home-screen::after{
+      display:block !important;
+      top:auto !important;
+      left:0 !important;
+      right:0 !important;
+      bottom:0 !important;
+      height:152px !important;
+      background-color:rgba(3,5,6,.64) !important;
+      box-shadow:0 -1px 0 rgba(142,239,255,.18),0 -18px 44px rgba(0,0,0,.38) !important;
+    }
+    #barrage-ui .home-hub{
+      position:relative !important;
+      isolation:isolate !important;
+    }
+    #barrage-ui .home-hub::before{
+      border:1px solid rgba(238,247,255,.13) !important;
+      background-color:rgba(5,8,10,.42) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 22px 60px rgba(0,0,0,.32) !important;
+    }
+    #barrage-ui .home-hub::after{
+      background-color:rgba(142,239,255,.22) !important;
+      box-shadow:0 0 18px rgba(142,239,255,.22) !important;
+    }
+    #barrage-ui .home-header{
+      position:absolute !important;
+      z-index:5 !important;
+      left:14px !important;
+      right:14px !important;
+      top:12px !important;
+      height:54px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 96px !important;
+      gap:10px !important;
+      align-items:stretch !important;
+    }
+    #barrage-ui .brand-lockup,
+    #barrage-ui .wallet-chip,
+    #barrage-ui .record-pill,
+    #barrage-ui .loadout-panel{
+      border-radius:8px !important;
+      border:1px solid var(--home-line) !important;
+      background-color:var(--home-panel) !important;
+      box-shadow:0 12px 28px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.055) !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .brand-lockup{
+      min-width:0 !important;
+      padding:10px 12px 9px !important;
+      border-left:3px solid var(--home-cyan) !important;
+    }
+    #barrage-ui .brand-lockup span{
+      display:block !important;
+      color:var(--home-text) !important;
+      font-size:24px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      letter-spacing:0 !important;
+      text-shadow:0 0 18px rgba(142,239,255,.24) !important;
+    }
+    #barrage-ui .brand-lockup small{
+      display:block !important;
+      margin-top:4px !important;
+      color:var(--home-cyan) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .wallet-chip{
+      min-width:0 !important;
+      padding:9px 10px !important;
+      text-align:right !important;
+      border-right:3px solid var(--home-cyan) !important;
+    }
+    #barrage-ui .wallet-chip b{
+      display:block !important;
+      color:var(--home-muted) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .wallet-chip span{
+      display:block !important;
+      margin-top:6px !important;
+      color:var(--home-text) !important;
+      font-size:16px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .hangar-visual{
+      border-radius:10px !important;
+      border:1px solid rgba(238,247,255,.10) !important;
+      background-color:rgba(4,7,9,.22) !important;
+      box-shadow:inset 0 0 0 1px rgba(142,239,255,.04),inset 0 -22px 42px rgba(0,0,0,.24) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .hangar-visual::before{
+      opacity:.28 !important;
+      background-color:rgba(142,239,255,.10) !important;
+    }
+    #barrage-ui .hangar-visual::after{
+      opacity:.62 !important;
+      background-color:transparent !important;
+      border-color:rgba(142,239,255,.24) !important;
+      box-shadow:0 0 24px rgba(142,239,255,.13) !important;
+    }
+    #barrage-ui .home-dots,
+    #barrage-ui .hollow-tape{
+      opacity:.28 !important;
+      filter:saturate(.75) !important;
+    }
+    #barrage-ui .hangar-rails{
+      opacity:.58 !important;
+      border-color:rgba(142,239,255,.22) !important;
+    }
+    #barrage-ui .hangar-status,
+    #barrage-ui .mission-tag{
+      border-radius:7px !important;
+      border:1px solid rgba(142,239,255,.22) !important;
+      background-color:rgba(5,8,10,.82) !important;
+      box-shadow:0 10px 22px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      color:var(--home-cyan) !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .hangar-status b,
+    #barrage-ui .mission-tag{
+      color:var(--home-cyan) !important;
+    }
+    #barrage-ui .hangar-status span{
+      color:var(--home-text) !important;
+    }
+    #barrage-ui .record-stack{
+      position:absolute !important;
+      z-index:5 !important;
+      left:14px !important;
+      right:14px !important;
+      top:74px !important;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .record-pill{
+      min-height:52px !important;
+      padding:9px 12px !important;
+      display:grid !important;
+      grid-template-columns:auto 1fr auto !important;
+      gap:10px !important;
+      align-items:center !important;
+      border-left:3px solid rgba(238,247,255,.46) !important;
+    }
+    #barrage-ui .record-pill b{
+      color:var(--home-muted) !important;
+      font-size:9px !important;
+    }
+    #barrage-ui .record-pill span{
+      color:var(--home-cyan) !important;
+      font-size:14px !important;
+      text-align:center !important;
+    }
+    #barrage-ui .record-pill small{
+      color:var(--home-text) !important;
+      font-size:18px !important;
+      text-align:right !important;
+    }
+    #barrage-ui .loadout-panel{
+      left:14px !important;
+      right:14px !important;
+      bottom:174px !important;
+      height:76px !important;
+      min-height:76px !important;
+      padding:11px 12px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 116px !important;
+      gap:12px !important;
+      border-left:3px solid var(--home-cyan) !important;
+    }
+    #barrage-ui .loadout-copy b{
+      color:var(--home-cyan) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .loadout-copy h1{
+      margin-top:5px !important;
+      color:var(--home-text) !important;
+      font-size:19px !important;
+      line-height:1.05 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .loadout-copy p{
+      margin-top:5px !important;
+      color:var(--home-muted) !important;
+      font-size:10px !important;
+      line-height:1.15 !important;
+    }
+    #barrage-ui .base-sync{
+      min-width:0 !important;
+      display:grid !important;
+      grid-template-rows:13px 1fr 14px !important;
+      align-content:center !important;
+      gap:5px !important;
+    }
+    #barrage-ui .base-sync span,
+    #barrage-ui .base-sync strong{
+      color:var(--home-muted) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .base-sync strong{
+      color:var(--home-text) !important;
+      justify-self:end !important;
+    }
+    #barrage-ui .sync-track{
+      height:6px !important;
+      border-radius:999px !important;
+      border:0 !important;
+      background-color:rgba(238,247,255,.10) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .sync-track i{
+      display:block !important;
+      height:100% !important;
+      border-radius:999px !important;
+      background-color:var(--home-cyan) !important;
+      box-shadow:0 0 14px rgba(142,239,255,.28) !important;
+    }
+    #barrage-ui .primary-start{
+      left:14px !important;
+      right:14px !important;
+      top:auto !important;
+      bottom:100px !important;
+      width:auto !important;
+      height:62px !important;
+      min-height:62px !important;
+      border-radius:10px !important;
+      border:1px solid rgba(142,239,255,.52) !important;
+      border-bottom:3px solid var(--home-cyan) !important;
+      color:#020506 !important;
+      background-color:var(--home-cyan) !important;
+      box-shadow:0 16px 34px rgba(0,0,0,.36),0 0 26px rgba(142,239,255,.22),inset 0 1px 0 rgba(255,255,255,.48) !important;
+      clip-path:none !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .primary-start::before{
+      content:"" !important;
+      position:absolute !important;
+      left:12px !important;
+      right:12px !important;
+      top:8px !important;
+      height:1px !important;
+      background-color:rgba(2,5,6,.30) !important;
+    }
+    #barrage-ui .primary-start::after{
+      content:"" !important;
+      position:absolute !important;
+      right:14px !important;
+      width:20px !important;
+      height:20px !important;
+      border-top:3px solid #020506 !important;
+      border-right:3px solid #020506 !important;
+      transform:rotate(45deg) !important;
+      opacity:.78 !important;
+    }
+    #barrage-ui .primary-start span{
+      color:#020506 !important;
+      font-size:21px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .primary-start small{
+      margin-top:5px !important;
+      color:rgba(2,5,6,.68) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .home-actions{
+      left:14px !important;
+      right:14px !important;
+      bottom:18px !important;
+      top:auto !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .action-tile{
+      height:58px !important;
+      min-height:58px !important;
+      padding:8px 8px 7px !important;
+      border-radius:8px !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      border-top:2px solid var(--accent,var(--home-cyan)) !important;
+      color:var(--home-text) !important;
+      background-color:rgba(8,11,13,.88) !important;
+      box-shadow:0 10px 22px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.045) !important;
+      clip-path:none !important;
+      text-align:left !important;
+    }
+    #barrage-ui .action-tile::before{
+      content:"" !important;
+      position:absolute !important;
+      left:8px !important;
+      top:9px !important;
+      width:8px !important;
+      height:8px !important;
+      border:2px solid var(--accent,var(--home-cyan)) !important;
+      border-radius:2px !important;
+      opacity:.78 !important;
+    }
+    #barrage-ui .action-tile::after{
+      content:"" !important;
+      position:absolute !important;
+      right:8px !important;
+      bottom:8px !important;
+      width:18px !important;
+      height:2px !important;
+      background-color:var(--accent,var(--home-cyan)) !important;
+      opacity:.70 !important;
+      box-shadow:0 0 10px color-mix(in srgb,var(--accent,var(--home-cyan)) 48%,transparent) !important;
+    }
+    #barrage-ui .action-tile b{
+      display:block !important;
+      margin-left:16px !important;
+      color:var(--home-text) !important;
+      font-size:12px !important;
+      line-height:1.05 !important;
+    }
+    #barrage-ui .action-tile span{
+      display:block !important;
+      margin:6px 0 0 0 !important;
+      color:var(--home-muted) !important;
+      font-size:9px !important;
+      line-height:1.15 !important;
+      white-space:normal !important;
+      overflow:hidden !important;
+      text-overflow:clip !important;
+    }
+    #barrage-ui .action-tile:active,
+    #barrage-ui .primary-start:active{
+      transform:translateY(1px) !important;
+      filter:brightness(.96) !important;
+    }
+    #barrage-ui button.action-tile:hover,
+    #barrage-ui .primary-start:hover{
+      border-color:rgba(142,239,255,.72) !important;
+      box-shadow:0 14px 28px rgba(0,0,0,.32),0 0 22px rgba(142,239,255,.18),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .primary-start:hover{
+      box-shadow:0 16px 34px rgba(0,0,0,.36),0 0 34px rgba(142,239,255,.32),inset 0 1px 0 rgba(255,255,255,.48) !important;
+    }
+    @media (max-height: 660px){
+      #barrage-ui .home-header{
+        height:48px !important;
+      }
+      #barrage-ui .brand-lockup span{
+        font-size:21px !important;
+      }
+      #barrage-ui .record-stack{
+        top:66px !important;
+      }
+      #barrage-ui .record-pill{
+        min-height:46px !important;
+      }
+      #barrage-ui .loadout-panel{
+        bottom:158px !important;
+        height:66px !important;
+        min-height:66px !important;
+      }
+      #barrage-ui .loadout-copy h1{
+        font-size:17px !important;
+      }
+      #barrage-ui .primary-start{
+        bottom:88px !important;
+        height:56px !important;
+        min-height:56px !important;
+      }
+      #barrage-ui .home-actions{
+        bottom:14px !important;
+      }
+      #barrage-ui .action-tile{
+        height:52px !important;
+        min-height:52px !important;
+      }
+      #barrage-ui .action-tile span{
+        display:none !important;
+      }
+    }
+    @media (max-width: 370px){
+      #barrage-ui .home-header{
+        grid-template-columns:minmax(0,1fr) 84px !important;
+      }
+      #barrage-ui .wallet-chip span{
+        font-size:14px !important;
+      }
+      #barrage-ui .home-actions{
+        gap:6px !important;
+      }
+      #barrage-ui .action-tile{
+        padding-left:7px !important;
+        padding-right:7px !important;
+      }
+      #barrage-ui .action-tile b{
+        font-size:11px !important;
+      }
+    }
+
     @keyframes zzzButtonPulse{
       0%,100%{box-shadow:7px 7px 0 #08090a,0 18px 34px rgba(0,0,0,.38),0 0 18px rgba(142,239,255,.14)}
       50%{box-shadow:7px 7px 0 #08090a,0 18px 34px rgba(0,0,0,.38),0 0 34px rgba(142,239,255,.26)}
@@ -8094,6 +8673,840 @@ function createUi(){
       }
     }
 
+    /* Requested gameplay HUD layout: corner controls, simple score, compact bars. */
+    #barrage-ui .game-hud::before{
+      height:82px !important;
+      background-color:rgba(4,6,10,.30) !important;
+      border-bottom:0 !important;
+    }
+    #barrage-ui .game-hud::after{
+      height:180px !important;
+      background:linear-gradient(180deg,rgba(4,6,10,0),rgba(4,6,10,.42) 38%,rgba(4,6,10,.76)) !important;
+      border-top:0 !important;
+    }
+    #barrage-ui .game-top{
+      position:absolute !important;
+      z-index:6 !important;
+      inset:0 0 auto 0 !important;
+      height:0 !important;
+      display:block !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-top::after,
+    #barrage-ui .game-top-card::before{
+      display:none !important;
+    }
+    #barrage-ui .game-top-card,
+    #barrage-ui .game-pause,
+    #barrage-ui .game-bottom,
+    #barrage-ui .special-slot{
+      clip-path:none !important;
+    }
+    #barrage-ui .game-top-card,
+    #barrage-ui .game-pause{
+      border-radius:8px !important;
+      border:1px solid rgba(238,247,255,.14) !important;
+      background-color:rgba(7,10,13,.74) !important;
+      box-shadow:0 8px 20px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.06) !important;
+    }
+    #barrage-ui .game-pause{
+      position:absolute !important;
+      left:calc(10px + env(safe-area-inset-left)) !important;
+      top:calc(10px + env(safe-area-inset-top)) !important;
+      width:44px !important;
+      height:44px !important;
+      min-height:44px !important;
+      padding:0 !important;
+      border-left:0 !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui .game-pause span{
+      width:14px !important;
+      height:18px !important;
+      border-left:4px solid #eef7ff !important;
+      border-right:4px solid #eef7ff !important;
+      filter:none !important;
+    }
+    #barrage-ui .game-wave{
+      position:fixed !important;
+      z-index:8 !important;
+      left:50% !important;
+      top:auto !important;
+      bottom:calc(60px + env(safe-area-inset-bottom)) !important;
+      width:124px !important;
+      height:38px !important;
+      padding:6px 10px 8px !important;
+      display:grid !important;
+      grid-template-columns:auto 1fr !important;
+      column-gap:10px !important;
+      align-items:center !important;
+      transform:translateX(-50%) !important;
+      text-align:left !important;
+      border-top:1px solid rgba(238,247,255,.12) !important;
+      border-bottom:2px solid #ff3b62 !important;
+      border-left:1px solid rgba(238,247,255,.14) !important;
+      border-right:1px solid rgba(238,247,255,.14) !important;
+      background:
+        linear-gradient(90deg,rgba(255,59,98,.16),rgba(7,10,13,.86) 42%,rgba(30,214,255,.10)),
+        rgba(7,10,13,.86) !important;
+      box-shadow:0 10px 22px rgba(0,0,0,.30),0 0 18px rgba(255,59,98,.12),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-wave b,
+    #barrage-ui .game-wave span{
+      display:block !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .game-wave b{
+      font-size:9px !important;
+      color:rgba(255,195,206,.86) !important;
+      text-align:left !important;
+    }
+    #barrage-ui .game-wave span{
+      margin-top:0 !important;
+      font-size:22px !important;
+      line-height:1 !important;
+      color:#f8fdff !important;
+      text-shadow:none !important;
+      text-align:right !important;
+    }
+    #barrage-ui .game-wave small{
+      display:none !important;
+    }
+    #barrage-ui .game-wave-track{
+      left:12px !important;
+      right:12px !important;
+      bottom:4px !important;
+      height:3px !important;
+      border:0 !important;
+      border-radius:99px !important;
+      background-color:rgba(238,247,255,.12) !important;
+    }
+    #barrage-ui .game-wave-track i{
+      border-radius:99px !important;
+      background-color:#ff3b62 !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .game-score{
+      position:absolute !important;
+      right:calc(10px + env(safe-area-inset-right)) !important;
+      top:calc(10px + env(safe-area-inset-top)) !important;
+      width:min(30vw,124px) !important;
+      min-width:92px !important;
+      height:42px !important;
+      padding:7px 9px !important;
+      border-left:1px solid rgba(238,247,255,.14) !important;
+      border-right:2px solid #1ed6ff !important;
+      text-align:right !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-score b,
+    #barrage-ui .game-score span{
+      text-align:right !important;
+    }
+    #barrage-ui .game-score b{
+      font-size:8px !important;
+      color:rgba(156,245,255,.76) !important;
+    }
+    #barrage-ui .game-score span{
+      margin-top:4px !important;
+      font-size:16px !important;
+      line-height:1 !important;
+      color:#f8fdff !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .game-score small{
+      display:none !important;
+    }
+    #barrage-ui .game-bottom{
+      position:absolute !important;
+      z-index:5 !important;
+      left:0 !important;
+      right:0 !important;
+      bottom:0 !important;
+      height:178px !important;
+      padding:0 !important;
+      display:block !important;
+      border:0 !important;
+      background-color:transparent !important;
+      box-shadow:none !important;
+      backdrop-filter:none !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-bottom::before,
+    #barrage-ui .game-bottom::after{
+      display:none !important;
+    }
+    #barrage-ui .game-bars{
+      position:absolute !important;
+      left:calc(10px + env(safe-area-inset-left)) !important;
+      bottom:calc(104px + env(safe-area-inset-bottom)) !important;
+      width:clamp(220px,52vw,286px) !important;
+      height:70px !important;
+      padding:10px 12px !important;
+      display:grid !important;
+      gap:7px !important;
+      box-sizing:border-box !important;
+      overflow:hidden !important;
+      border:1px solid rgba(238,247,255,.17) !important;
+      border-left:3px solid #ff3b62 !important;
+      border-right:2px solid rgba(54,243,155,.48) !important;
+      border-radius:8px !important;
+      background:
+        linear-gradient(135deg,rgba(255,59,98,.12),transparent 42%),
+        linear-gradient(315deg,rgba(54,243,155,.10),transparent 42%),
+        rgba(7,10,13,.82) !important;
+      box-shadow:0 12px 28px rgba(0,0,0,.32),0 0 20px rgba(30,214,255,.08),inset 0 1px 0 rgba(255,255,255,.07) !important;
+    }
+    #barrage-ui .game-bars::before{
+      content:"" !important;
+      position:absolute !important;
+      left:0 !important;
+      top:0 !important;
+      bottom:0 !important;
+      width:3px !important;
+      background:linear-gradient(180deg,#ff3b62,#36f39b) !important;
+      box-shadow:0 0 14px rgba(142,239,255,.32) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-meter,
+    #barrage-ui .game-meter.is-hp{
+      position:relative !important;
+      height:20px !important;
+      display:grid !important;
+      grid-template-columns:32px minmax(0,1fr) 62px !important;
+      gap:8px !important;
+      align-items:center !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .game-meter.is-energy{
+      display:none !important;
+    }
+    #barrage-ui .game-meter b{
+      color:var(--meter-a) !important;
+      font-size:11px !important;
+      line-height:1 !important;
+      text-shadow:none !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-meter-track,
+    #barrage-ui .game-meter.is-hp .game-meter-track{
+      height:12px !important;
+      border:1px solid rgba(238,247,255,.08) !important;
+      border-radius:99px !important;
+      background-color:rgba(238,247,255,.10) !important;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.20) !important;
+    }
+    #barrage-ui .game-meter-track i{
+      border-radius:99px !important;
+      background:linear-gradient(90deg,var(--meter-a),var(--meter-b)) !important;
+      box-shadow:0 0 12px color-mix(in srgb,var(--meter-a) 40%,transparent) !important;
+    }
+    #barrage-ui .game-meter span,
+    #barrage-ui .game-meter.is-hp span{
+      font-size:11px !important;
+      line-height:1 !important;
+      color:#f8fdff !important;
+      opacity:.96 !important;
+      min-width:0 !important;
+      text-align:right !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .game-console{
+      position:absolute !important;
+      left:50% !important;
+      right:auto !important;
+      bottom:calc(10px + env(safe-area-inset-bottom)) !important;
+      width:min(38vw,168px) !important;
+      min-width:140px !important;
+      transform:translateX(-50%) !important;
+      display:block !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui .game-chips{
+      display:none !important;
+    }
+    #barrage-ui .game-upgrade{
+      position:relative !important;
+      width:100% !important;
+      height:46px !important;
+      min-height:46px !important;
+      padding:0 10px !important;
+      border-radius:8px !important;
+      border:1px solid rgba(184,167,255,.36) !important;
+      border-left:0 !important;
+      color:#f2f0ff !important;
+      background-color:rgba(14,12,20,.88) !important;
+      box-shadow:0 8px 20px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .game-upgrade::after{
+      display:none !important;
+    }
+    #barrage-ui .game-hud.has-bp .game-upgrade{
+      color:#061014 !important;
+      border-color:rgba(30,214,255,.48) !important;
+      background-color:#1ed6ff !important;
+      box-shadow:0 8px 20px rgba(0,0,0,.26),0 0 18px rgba(30,214,255,.20) !important;
+    }
+    #barrage-ui .game-special-slots{
+      z-index:6 !important;
+      left:auto !important;
+      right:calc(10px + env(safe-area-inset-right)) !important;
+      top:auto !important;
+      bottom:calc(104px + env(safe-area-inset-bottom)) !important;
+      width:clamp(174px,47vw,214px) !important;
+      min-width:0 !important;
+      height:54px !important;
+      transform:none !important;
+      grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+      gap:5px !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .special-slot{
+      position:relative !important;
+      width:auto !important;
+      height:54px !important;
+      min-height:54px !important;
+      padding:0 !important;
+      display:grid !important;
+      grid-template-rows:1fr !important;
+      place-items:center !important;
+      border:1px solid rgba(238,247,255,.14) !important;
+      border-top:3px solid var(--accent,rgba(238,247,255,.38)) !important;
+      border-left:1px solid rgba(238,247,255,.12) !important;
+      border-radius:8px !important;
+      background:
+        linear-gradient(180deg,color-mix(in srgb,var(--accent,#8eefff) 14%,transparent),transparent 58%),
+        rgba(7,10,13,.78) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.28),0 0 14px color-mix(in srgb,var(--accent,#8eefff) 13%,transparent),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      opacity:1 !important;
+    }
+    #barrage-ui .special-icon{
+      display:grid !important;
+      place-items:center !important;
+      width:24px !important;
+      height:24px !important;
+      color:var(--accent,#8eefff) !important;
+    }
+    #barrage-ui .special-icon svg{
+      display:block !important;
+      width:100% !important;
+      height:100% !important;
+      overflow:visible !important;
+    }
+    #barrage-ui .special-icon svg :is(path,line,circle,rect,polygon,polyline){
+      fill:none;
+      stroke:currentColor;
+      stroke-width:1.9;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+      vector-effect:non-scaling-stroke;
+    }
+    #barrage-ui .special-icon svg [fill="currentColor"]{
+      fill:currentColor;
+      stroke:none;
+    }
+    #barrage-ui .special-slot b{
+      display:grid !important;
+      place-items:center !important;
+      width:100% !important;
+      height:100% !important;
+      color:var(--accent,#d8e2ea) !important;
+      font-size:14px !important;
+      line-height:1 !important;
+      text-align:center !important;
+    }
+    #barrage-ui .special-slot b .special-icon{
+      width:27px !important;
+      height:27px !important;
+      filter:drop-shadow(0 0 8px color-mix(in srgb,var(--accent,#8eefff) 54%,transparent));
+    }
+    #barrage-ui .special-slot span{
+      display:none !important;
+    }
+    #barrage-ui .special-slot small{
+      position:absolute !important;
+      right:3px !important;
+      bottom:2px !important;
+      width:auto !important;
+      color:rgba(248,253,255,.82) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .special-slot.empty{
+      border-top-color:rgba(238,247,255,.20) !important;
+      background-color:rgba(7,10,13,.46) !important;
+      opacity:.72 !important;
+    }
+    #barrage-ui .special-slot.empty b{
+      color:rgba(216,226,234,.38) !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .special-slot.empty small{
+      display:none !important;
+    }
+    #barrage-ui .game-hud.leveling .game-top,
+    #barrage-ui .game-hud.leveling .game-bottom,
+    #barrage-ui .game-hud.leveling .game-special-slots{
+      opacity:.30 !important;
+      filter:saturate(.72) !important;
+      pointer-events:none !important;
+    }
+    @media (max-width: 520px){
+      #barrage-ui .game-bars{
+        bottom:calc(166px + env(safe-area-inset-bottom)) !important;
+        width:clamp(214px,58vw,232px) !important;
+      }
+      #barrage-ui .game-meter,
+      #barrage-ui .game-meter.is-hp{
+        grid-template-columns:30px minmax(0,1fr) 56px !important;
+        gap:6px !important;
+      }
+    }
+    @media (max-width: 370px){
+      #barrage-ui .game-wave{
+        width:106px !important;
+        column-gap:7px !important;
+      }
+      #barrage-ui .game-wave span{
+        font-size:20px !important;
+      }
+      #barrage-ui .game-score{
+        width:88px !important;
+        min-width:88px !important;
+      }
+      #barrage-ui .game-score span{
+        font-size:14px !important;
+      }
+      #barrage-ui .game-bars{
+        width:clamp(202px,58vw,214px) !important;
+        padding-left:8px !important;
+        padding-right:8px !important;
+      }
+      #barrage-ui .game-console{
+        width:36vw !important;
+        min-width:132px !important;
+      }
+      #barrage-ui .game-special-slots{
+        width:clamp(168px,47vw,178px) !important;
+        min-width:0 !important;
+      }
+      #barrage-ui .game-meter,
+      #barrage-ui .game-meter.is-hp{
+        grid-template-columns:28px minmax(0,1fr) 50px !important;
+      }
+      #barrage-ui .game-meter span,
+      #barrage-ui .game-meter.is-hp span{
+        font-size:9px !important;
+      }
+    }
+    @media (max-height: 660px){
+      #barrage-ui .game-hud::before{
+        height:72px !important;
+      }
+      #barrage-ui .game-wave{
+        bottom:calc(56px + env(safe-area-inset-bottom)) !important;
+        height:34px !important;
+        padding-top:5px !important;
+        padding-bottom:7px !important;
+      }
+      #barrage-ui .game-pause,
+      #barrage-ui .game-score{
+        height:40px !important;
+      }
+      #barrage-ui .game-bars{
+        bottom:calc(154px + env(safe-area-inset-bottom)) !important;
+        height:60px !important;
+        padding:6px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .game-upgrade{
+        height:42px !important;
+        min-height:42px !important;
+      }
+      #barrage-ui .game-special-slots{
+        bottom:calc(94px + env(safe-area-inset-bottom)) !important;
+        height:48px !important;
+      }
+      #barrage-ui .special-slot{
+        height:48px !important;
+        min-height:48px !important;
+      }
+    }
+
+    /* Tactical HUD rebuild: sharp panels, low clutter, high-readability combat accents. */
+    #barrage-ui .game-hud{
+      --hud-bg:rgba(7,10,13,.72);
+      --hud-bg-strong:rgba(8,11,15,.88);
+      --hud-line:rgba(238,247,255,.18);
+      --hud-line-soft:rgba(238,247,255,.10);
+      --hud-red:#ff4655;
+      --hud-cyan:#8eefff;
+      --hud-green:#36f39b;
+      --hud-text:#f4f7f8;
+    }
+    #barrage-ui .game-hud::before{
+      height:76px !important;
+      background:
+        linear-gradient(180deg,rgba(3,5,8,.62),rgba(3,5,8,0)) !important;
+      border-bottom:1px solid rgba(238,247,255,.055) !important;
+    }
+    #barrage-ui .game-hud::after{
+      height:208px !important;
+      background:
+        linear-gradient(180deg,rgba(3,5,8,0),rgba(3,5,8,.44) 46%,rgba(3,5,8,.82)) !important;
+      border-top:1px solid rgba(238,247,255,.045) !important;
+    }
+    #barrage-ui .game-top{
+      z-index:12 !important;
+    }
+    #barrage-ui .game-top-card,
+    #barrage-ui .game-pause,
+    #barrage-ui .game-bars,
+    #barrage-ui .game-upgrade,
+    #barrage-ui .special-slot{
+      border-radius:2px !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+    }
+    #barrage-ui .game-top-card,
+    #barrage-ui .game-pause{
+      border:1px solid var(--hud-line) !important;
+      background:
+        linear-gradient(135deg,rgba(244,247,248,.075),rgba(244,247,248,0) 36%),
+        var(--hud-bg) !important;
+      box-shadow:0 8px 18px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      contain:layout paint style !important;
+    }
+    #barrage-ui .game-pause{
+      left:calc(14px + env(safe-area-inset-left)) !important;
+      top:calc(14px + env(safe-area-inset-top)) !important;
+      width:52px !important;
+      height:46px !important;
+      min-height:46px !important;
+      border-left:3px solid var(--hud-red) !important;
+      background:
+        linear-gradient(90deg,rgba(255,70,85,.18),rgba(8,11,15,.84) 54%),
+        var(--hud-bg) !important;
+    }
+    #barrage-ui .game-pause span{
+      width:16px !important;
+      height:18px !important;
+      border-left:4px solid var(--hud-text) !important;
+      border-right:4px solid var(--hud-text) !important;
+      color:transparent !important;
+      filter:none !important;
+    }
+    #barrage-ui .game-score{
+      right:calc(14px + env(safe-area-inset-right)) !important;
+      top:calc(14px + env(safe-area-inset-top)) !important;
+      width:clamp(118px,18vw,166px) !important;
+      height:46px !important;
+      padding:7px 11px 8px !important;
+      border-left:1px solid var(--hud-line) !important;
+      border-right:3px solid var(--hud-cyan) !important;
+      background:
+        linear-gradient(270deg,rgba(142,239,255,.16),rgba(8,11,15,.86) 52%),
+        var(--hud-bg) !important;
+    }
+    #barrage-ui .game-score b{
+      font-size:8px !important;
+      color:rgba(142,239,255,.78) !important;
+    }
+    #barrage-ui .game-score span{
+      margin-top:4px !important;
+      font-size:17px !important;
+      color:var(--hud-text) !important;
+    }
+    #barrage-ui .game-wave{
+      z-index:10 !important;
+      bottom:calc(70px + env(safe-area-inset-bottom)) !important;
+      width:clamp(154px,20vw,210px) !important;
+      height:44px !important;
+      padding:7px 14px 10px !important;
+      grid-template-columns:1fr auto !important;
+      column-gap:12px !important;
+      border:1px solid var(--hud-line) !important;
+      border-top:3px solid var(--hud-red) !important;
+      border-bottom:1px solid rgba(255,70,85,.46) !important;
+      background:
+        linear-gradient(90deg,rgba(255,70,85,.18),rgba(8,11,15,.88) 45%,rgba(142,239,255,.10)),
+        var(--hud-bg-strong) !important;
+      box-shadow:0 10px 22px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      contain:layout paint style !important;
+    }
+    #barrage-ui .game-wave b{
+      align-self:center !important;
+      font-size:9px !important;
+      color:rgba(255,181,188,.86) !important;
+    }
+    #barrage-ui .game-wave span{
+      font-size:26px !important;
+      color:var(--hud-text) !important;
+    }
+    #barrage-ui .game-wave-track{
+      left:14px !important;
+      right:14px !important;
+      bottom:5px !important;
+      height:3px !important;
+      background:
+        repeating-linear-gradient(90deg,rgba(238,247,255,.16) 0 8px,transparent 8px 12px),
+        rgba(238,247,255,.08) !important;
+      border-radius:0 !important;
+    }
+    #barrage-ui .game-wave-track i{
+      border-radius:0 !important;
+      background:linear-gradient(90deg,var(--hud-red),#ff8f98) !important;
+      box-shadow:none !important;
+      will-change:width !important;
+    }
+    #barrage-ui .game-bottom{
+      height:212px !important;
+      z-index:8 !important;
+    }
+    #barrage-ui .game-bars{
+      left:calc(14px + env(safe-area-inset-left)) !important;
+      bottom:calc(114px + env(safe-area-inset-bottom)) !important;
+      width:clamp(238px,58%,250px) !important;
+      height:78px !important;
+      padding:12px 14px !important;
+      gap:9px !important;
+      border:1px solid var(--hud-line) !important;
+      border-left:4px solid var(--hud-red) !important;
+      border-right:1px solid rgba(142,239,255,.34) !important;
+      background:
+        linear-gradient(135deg,rgba(255,70,85,.14),transparent 32%),
+        linear-gradient(315deg,rgba(142,239,255,.10),transparent 38%),
+        var(--hud-bg-strong) !important;
+      box-shadow:0 10px 24px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      contain:layout paint style !important;
+    }
+    #barrage-ui .game-bars::before{
+      width:4px !important;
+      background:linear-gradient(180deg,var(--hud-red),var(--hud-green)) !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .game-meter,
+    #barrage-ui .game-meter.is-hp{
+      height:23px !important;
+      grid-template-columns:30px minmax(0,1fr) 54px !important;
+      gap:8px !important;
+    }
+    #barrage-ui .game-meter b{
+      font-size:11px !important;
+      color:var(--meter-a) !important;
+    }
+    #barrage-ui .game-meter-track,
+    #barrage-ui .game-meter.is-hp .game-meter-track{
+      height:13px !important;
+      border-radius:0 !important;
+      border:1px solid rgba(244,247,248,.12) !important;
+      background:
+        repeating-linear-gradient(90deg,rgba(244,247,248,.12) 0 10px,transparent 10px 15px),
+        rgba(244,247,248,.08) !important;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.26) !important;
+    }
+    #barrage-ui .game-meter-track i{
+      border-radius:0 !important;
+      box-shadow:none !important;
+      will-change:width !important;
+    }
+    #barrage-ui .game-meter span,
+    #barrage-ui .game-meter.is-hp span{
+      font-size:11px !important;
+      color:rgba(244,247,248,.92) !important;
+    }
+    #barrage-ui .game-console{
+      bottom:calc(12px + env(safe-area-inset-bottom)) !important;
+      width:clamp(172px,20vw,226px) !important;
+      min-width:172px !important;
+    }
+    #barrage-ui .game-upgrade{
+      height:52px !important;
+      min-height:52px !important;
+      border:1px solid rgba(142,239,255,.24) !important;
+      border-top:3px solid rgba(142,239,255,.62) !important;
+      color:var(--hud-text) !important;
+      background:
+        linear-gradient(90deg,rgba(142,239,255,.13),rgba(8,11,15,.90) 48%,rgba(255,70,85,.08)),
+        var(--hud-bg-strong) !important;
+      box-shadow:0 10px 22px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      font-size:12px !important;
+      contain:layout paint style !important;
+    }
+    #barrage-ui .game-hud.has-bp .game-upgrade{
+      color:#071013 !important;
+      border-color:rgba(142,239,255,.80) !important;
+      border-top-color:#f4f7f8 !important;
+      background:
+        linear-gradient(90deg,var(--hud-cyan),#d8fbff) !important;
+      box-shadow:0 10px 22px rgba(0,0,0,.32),0 0 14px rgba(142,239,255,.18) !important;
+    }
+    #barrage-ui .game-special-slots{
+      right:calc(14px + env(safe-area-inset-right)) !important;
+      bottom:calc(126px + env(safe-area-inset-bottom)) !important;
+      width:138px !important;
+      height:88px !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      grid-auto-rows:1fr !important;
+      gap:6px !important;
+    }
+    #barrage-ui .special-slot{
+      height:64px !important;
+      min-height:64px !important;
+      border:1px solid rgba(244,247,248,.14) !important;
+      border-top:3px solid var(--accent,rgba(142,239,255,.62)) !important;
+      background:
+        linear-gradient(180deg,rgba(142,239,255,.08),transparent 58%),
+        var(--hud-bg-strong) !important;
+      box-shadow:0 9px 18px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      contain:layout paint style !important;
+    }
+    #barrage-ui .game-special-slots .special-slot{
+      height:auto !important;
+      min-height:0 !important;
+    }
+    #barrage-ui .special-slot::after{
+      content:"" !important;
+      position:absolute !important;
+      left:7px !important;
+      right:7px !important;
+      bottom:6px !important;
+      height:2px !important;
+      background:var(--accent,#8eefff) !important;
+      opacity:.62 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .special-slot b .special-icon{
+      width:28px !important;
+      height:28px !important;
+      filter:none !important;
+    }
+    #barrage-ui .game-special-slots .special-slot b .special-icon{
+      width:24px !important;
+      height:24px !important;
+    }
+    #barrage-ui .special-slot small{
+      right:6px !important;
+      top:5px !important;
+      bottom:auto !important;
+      color:rgba(244,247,248,.88) !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .special-slot.empty{
+      border-top-color:rgba(244,247,248,.18) !important;
+      background:
+        linear-gradient(180deg,rgba(244,247,248,.04),transparent 58%),
+        rgba(8,11,15,.56) !important;
+      opacity:.78 !important;
+    }
+    #barrage-ui .special-slot.empty::after{
+      background:rgba(244,247,248,.16) !important;
+    }
+    #barrage-ui .game-hud.critical .game-bars{
+      border-left-color:#ff2438 !important;
+      box-shadow:0 10px 24px rgba(0,0,0,.38),0 0 16px rgba(255,70,85,.14),inset 0 1px 0 rgba(255,255,255,.05) !important;
+    }
+    @media (max-width: 720px){
+      #barrage-ui .game-bars{
+        width:clamp(230px,58vw,288px) !important;
+        bottom:calc(184px + env(safe-area-inset-bottom)) !important;
+      }
+      #barrage-ui .game-special-slots{
+        width:136px !important;
+        bottom:calc(138px + env(safe-area-inset-bottom)) !important;
+      }
+      #barrage-ui .game-meter,
+      #barrage-ui .game-meter.is-hp{
+        grid-template-columns:32px minmax(0,1fr) 58px !important;
+        gap:7px !important;
+      }
+    }
+    @media (max-width: 390px){
+      #barrage-ui .game-pause{
+        left:calc(10px + env(safe-area-inset-left)) !important;
+        top:calc(10px + env(safe-area-inset-top)) !important;
+        width:46px !important;
+        height:42px !important;
+        min-height:42px !important;
+      }
+      #barrage-ui .game-score{
+        right:calc(10px + env(safe-area-inset-right)) !important;
+        top:calc(10px + env(safe-area-inset-top)) !important;
+        width:106px !important;
+        min-width:106px !important;
+      }
+      #barrage-ui .game-bars{
+        left:calc(10px + env(safe-area-inset-left)) !important;
+        bottom:calc(166px + env(safe-area-inset-bottom)) !important;
+        width:clamp(206px,57vw,224px) !important;
+        height:72px !important;
+        padding:9px 9px !important;
+      }
+      #barrage-ui .game-special-slots{
+        right:calc(10px + env(safe-area-inset-right)) !important;
+        bottom:calc(146px + env(safe-area-inset-bottom)) !important;
+        width:136px !important;
+        height:88px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .special-slot{
+        height:auto !important;
+        min-height:0 !important;
+      }
+      #barrage-ui .special-slot b .special-icon{
+        width:27px !important;
+        height:27px !important;
+      }
+      #barrage-ui .game-console{
+        width:156px !important;
+        min-width:156px !important;
+      }
+      #barrage-ui .game-wave{
+        width:138px !important;
+        height:42px !important;
+        bottom:calc(144px + env(safe-area-inset-bottom)) !important;
+      }
+      #barrage-ui .game-wave span{
+        font-size:23px !important;
+      }
+      #barrage-ui .game-meter,
+      #barrage-ui .game-meter.is-hp{
+        grid-template-columns:28px minmax(0,1fr) 48px !important;
+      }
+      #barrage-ui .game-meter span,
+      #barrage-ui .game-meter.is-hp span{
+        font-size:9px !important;
+      }
+    }
+    @media (max-height: 660px){
+      #barrage-ui .game-wave{
+        bottom:calc(62px + env(safe-area-inset-bottom)) !important;
+        height:40px !important;
+      }
+      #barrage-ui .game-bars{
+        bottom:calc(146px + env(safe-area-inset-bottom)) !important;
+        height:68px !important;
+      }
+      #barrage-ui .game-special-slots{
+        bottom:calc(88px + env(safe-area-inset-bottom)) !important;
+        height:58px !important;
+      }
+      #barrage-ui .special-slot{
+        height:58px !important;
+        min-height:58px !important;
+      }
+      #barrage-ui .game-upgrade{
+        height:48px !important;
+        min-height:48px !important;
+      }
+    }
+
     /* In-run upgrade picker: large whole-card buttons, positioned slightly below center. */
     #barrage-ui .upgrade-overlay.on{
       display:block !important;
@@ -8354,6 +9767,274 @@ function createUi(){
       }
     }
 
+    /* Special upgrade picker: show owned slots on top, then three choices across. */
+    #barrage-ui .level-dialog{
+      top:50% !important;
+      transform:translateY(-50%) !important;
+      max-height:min(76vh,520px) !important;
+      padding:14px !important;
+    }
+    #barrage-ui .level-dialog .level-head{
+      grid-template-columns:minmax(0,1fr) 58px !important;
+      gap:10px !important;
+      align-items:center !important;
+    }
+    #barrage-ui .level-dialog .level-title{
+      font-size:23px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .level-dialog .level-note{
+      margin-top:5px !important;
+      font-size:10px !important;
+      line-height:1.2 !important;
+    }
+    #barrage-ui .level-dialog .level-sp{
+      min-width:58px !important;
+      width:58px !important;
+      height:34px !important;
+      font-size:12px !important;
+      border-radius:7px !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .level-special-slots{
+      position:relative !important;
+      width:100% !important;
+      height:40px !important;
+      margin-top:10px !important;
+      display:grid !important;
+      grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+      gap:6px !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .level-special-slots .special-slot{
+      width:auto !important;
+      min-width:0 !important;
+      height:40px !important;
+      min-height:40px !important;
+      padding:0 !important;
+      border-radius:8px !important;
+      border:1px solid rgba(238,247,255,.14) !important;
+      border-top:2px solid var(--accent,rgba(238,247,255,.34)) !important;
+      background-color:rgba(10,13,17,.86) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06) !important;
+      display:grid !important;
+      place-items:center !important;
+    }
+    #barrage-ui .level-special-slots .special-slot b{
+      display:grid !important;
+      place-items:center !important;
+      width:100% !important;
+      height:100% !important;
+      color:var(--accent,#d8e2ea) !important;
+      font-size:11px !important;
+      line-height:1 !important;
+      text-align:center !important;
+    }
+    #barrage-ui .level-special-slots .special-slot b .special-icon{
+      width:22px !important;
+      height:22px !important;
+    }
+    #barrage-ui .level-special-slots .special-slot span{
+      display:none !important;
+    }
+    #barrage-ui .level-special-slots .special-slot small{
+      display:block !important;
+      right:4px !important;
+      bottom:3px !important;
+      color:rgba(248,253,255,.76) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .level-special-slots .special-slot.empty b{
+      color:rgba(216,226,234,.36) !important;
+    }
+    #barrage-ui .level-special-slots .special-slot.empty small{
+      display:none !important;
+    }
+    #barrage-ui .level-dialog .upgrade-grid{
+      margin-top:12px !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:8px !important;
+      max-height:none !important;
+      overflow:visible !important;
+      padding:0 !important;
+    }
+    #barrage-ui .level-dialog .special-upgrade-card{
+      min-height:198px !important;
+      padding:10px 8px !important;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      grid-template-areas:
+        "icon"
+        "meta"
+        "title"
+        "body"
+        "note"
+        "action" !important;
+      grid-template-rows:44px auto auto minmax(40px,1fr) auto 34px !important;
+      row-gap:6px !important;
+      align-items:stretch !important;
+      text-align:center !important;
+      border-left:0 !important;
+      border-top:3px solid var(--accent) !important;
+      border-radius:9px !important;
+      clip-path:none !important;
+      box-shadow:0 10px 22px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.055) !important;
+    }
+    #barrage-ui .level-dialog .special-upgrade-card .special-card-icon{
+      grid-area:icon !important;
+      width:44px !important;
+      height:44px !important;
+      margin:0 auto !important;
+      display:grid !important;
+      place-items:center !important;
+      border-radius:9px !important;
+      border:1px solid color-mix(in srgb,var(--accent,#8eefff) 48%,rgba(244,251,255,.16)) !important;
+      background:
+        radial-gradient(circle at 50% 42%,color-mix(in srgb,var(--accent,#8eefff) 22%,transparent),transparent 62%),
+        rgba(244,251,255,.055) !important;
+      box-shadow:0 0 18px color-mix(in srgb,var(--accent,#8eefff) 18%,transparent),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      color:var(--accent,#8eefff) !important;
+      font-style:normal !important;
+    }
+    #barrage-ui .level-dialog .special-upgrade-card .special-card-icon .special-icon{
+      width:30px !important;
+      height:30px !important;
+      filter:drop-shadow(0 0 10px color-mix(in srgb,var(--accent,#8eefff) 58%,transparent));
+    }
+    #barrage-ui .level-dialog .special-upgrade-card b{
+      grid-area:meta !important;
+      color:var(--accent) !important;
+      font-size:9px !important;
+      line-height:1.05 !important;
+      text-align:center !important;
+      white-space:normal !important;
+      overflow:hidden !important;
+      text-overflow:clip !important;
+      overflow-wrap:anywhere !important;
+    }
+    #barrage-ui .level-dialog .special-upgrade-card span{
+      grid-area:title !important;
+      font-size:14px !important;
+      line-height:1.12 !important;
+      text-align:center !important;
+      display:-webkit-box !important;
+      overflow:hidden !important;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+    }
+    #barrage-ui .level-dialog .special-upgrade-card small{
+      grid-area:body !important;
+      font-size:10px !important;
+      line-height:1.25 !important;
+      text-align:left !important;
+      display:-webkit-box !important;
+      overflow:hidden !important;
+      -webkit-line-clamp:3;
+      -webkit-box-orient:vertical;
+    }
+    #barrage-ui .level-dialog .special-upgrade-card em{
+      grid-area:note !important;
+      font-size:8px !important;
+      line-height:1.1 !important;
+      text-align:center !important;
+      white-space:normal !important;
+      overflow:hidden !important;
+      text-overflow:clip !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+    }
+    #barrage-ui .level-dialog .special-upgrade-card strong{
+      grid-area:action !important;
+      min-height:34px !important;
+      height:34px !important;
+      border-radius:7px !important;
+      clip-path:none !important;
+      font-size:11px !important;
+      color:#061014 !important;
+      background-color:var(--accent) !important;
+      border:0 !important;
+    }
+    @media (max-width: 370px){
+      #barrage-ui .level-dialog{
+        left:10px !important;
+        right:10px !important;
+        padding:12px !important;
+      }
+      #barrage-ui .level-special-slots{
+        gap:5px !important;
+        height:36px !important;
+      }
+      #barrage-ui .level-special-slots .special-slot{
+        height:36px !important;
+        min-height:36px !important;
+      }
+      #barrage-ui .level-dialog .upgrade-grid{
+        gap:6px !important;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card{
+        min-height:186px !important;
+        padding:9px 6px !important;
+        grid-template-rows:40px auto auto minmax(32px,1fr) auto 32px !important;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card .special-card-icon{
+        width:40px !important;
+        height:40px !important;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card .special-card-icon .special-icon{
+        width:27px !important;
+        height:27px !important;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card span{
+        font-size:13px !important;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card small{
+        font-size:9px !important;
+        -webkit-line-clamp:2;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card strong{
+        height:32px !important;
+        min-height:32px !important;
+      }
+    }
+    @media (max-height: 660px){
+      #barrage-ui .level-dialog{
+        max-height:82vh !important;
+      }
+      #barrage-ui .level-special-slots{
+        height:34px !important;
+        margin-top:8px !important;
+      }
+      #barrage-ui .level-special-slots .special-slot{
+        height:34px !important;
+        min-height:34px !important;
+      }
+      #barrage-ui .level-dialog .upgrade-grid{
+        margin-top:9px !important;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card{
+        min-height:166px !important;
+        grid-template-rows:36px auto auto minmax(26px,1fr) 0 30px !important;
+        row-gap:5px !important;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card .special-card-icon{
+        width:36px !important;
+        height:36px !important;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card .special-card-icon .special-icon{
+        width:24px !important;
+        height:24px !important;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card em{
+        display:none !important;
+      }
+      #barrage-ui .level-dialog .special-upgrade-card small{
+        -webkit-line-clamp:2;
+      }
+    }
+
     /* Readability sweep: prevent horizontal spill and keep disabled labels legible. */
     #barrage-ui :is(.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.upgrade-path-list,.basic-upgrade-list){
       overflow-x:hidden !important;
@@ -8541,7 +10222,7 @@ function createUi(){
       gap:7px;
       min-width:0;
     }
-    #barrage-ui .compact-stats span{
+    #barrage-ui .compact-stats > span{
       min-width:0;
       padding:8px 9px;
       border:1px solid rgba(238,247,255,.14);
@@ -8939,6 +10620,1008 @@ function createUi(){
         height:118px;
       }
     }
+    /* Final home pass: enforce monochrome/cyan polish after legacy mobile rules. */
+    #barrage-ui .home-screen{
+      --home-cyan:#8eefff;
+      --home-blue:#1ed6ff;
+      --home-bg:#030506;
+      --home-panel:rgba(8,11,13,.88);
+      --home-text:#f6f8fa;
+      --home-muted:rgba(216,226,234,.68);
+      background-color:var(--home-bg) !important;
+      background-image:none !important;
+    }
+    #barrage-ui .home-screen::before{
+      display:block !important;
+      opacity:.18 !important;
+      background-image:linear-gradient(rgba(142,239,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(238,247,255,.045) 1px,transparent 1px) !important;
+      background-size:34px 34px !important;
+      transform:none !important;
+    }
+    #barrage-ui .home-screen::after{
+      display:block !important;
+      top:auto !important;
+      bottom:0 !important;
+      height:152px !important;
+      background-color:rgba(3,5,6,.72) !important;
+      box-shadow:0 -1px 0 rgba(142,239,255,.18),0 -20px 48px rgba(0,0,0,.42) !important;
+    }
+    #barrage-ui :is(.brand-lockup,.wallet-chip,.record-pill,.loadout-panel,.action-tile,.hangar-status,.mission-tag){
+      clip-path:none !important;
+      border-radius:8px !important;
+      background-color:var(--home-panel) !important;
+      background-image:none !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      box-shadow:0 12px 28px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.055) !important;
+    }
+    #barrage-ui .home-header{left:14px !important;right:14px !important;top:12px !important;height:54px !important;grid-template-columns:minmax(0,1fr) 96px !important;gap:10px !important}
+    #barrage-ui .brand-lockup{padding:10px 12px 9px !important;border-left:3px solid var(--home-cyan) !important}
+    #barrage-ui .brand-lockup span{color:var(--home-text) !important;font-size:24px !important;line-height:1 !important;text-shadow:0 0 18px rgba(142,239,255,.24) !important}
+    #barrage-ui .brand-lockup small{color:var(--home-cyan) !important;font-size:9px !important}
+    #barrage-ui .wallet-chip{padding:9px 10px !important;text-align:right !important;border-right:3px solid var(--home-cyan) !important}
+    #barrage-ui .wallet-chip b{color:var(--home-muted) !important;font-size:8px !important}
+    #barrage-ui .wallet-chip span{margin-top:6px !important;color:var(--home-text) !important;font-size:16px !important}
+    #barrage-ui .hangar-visual{border-radius:10px !important;border:1px solid rgba(238,247,255,.10) !important;background-color:rgba(4,7,9,.20) !important;box-shadow:inset 0 0 0 1px rgba(142,239,255,.04),inset 0 -22px 42px rgba(0,0,0,.24) !important}
+    #barrage-ui .hangar-status,#barrage-ui .mission-tag{border-color:rgba(142,239,255,.22) !important;color:var(--home-cyan) !important}
+    #barrage-ui .hangar-status b,#barrage-ui .mission-tag{color:var(--home-cyan) !important}
+    #barrage-ui .hangar-status span{color:var(--home-text) !important}
+    #barrage-ui .record-stack{left:14px !important;right:14px !important;top:74px !important}
+    #barrage-ui .record-pill{min-height:52px !important;padding:9px 12px !important;display:grid !important;grid-template-columns:auto 1fr auto !important;gap:10px !important;align-items:center !important;border-left:3px solid rgba(238,247,255,.46) !important}
+    #barrage-ui .record-pill b{color:var(--home-muted) !important;font-size:9px !important}
+    #barrage-ui .record-pill span{color:var(--home-cyan) !important;font-size:14px !important;text-align:center !important}
+    #barrage-ui .record-pill small{color:var(--home-text) !important;font-size:18px !important;text-align:right !important}
+    #barrage-ui .loadout-panel{left:14px !important;right:14px !important;bottom:174px !important;height:76px !important;min-height:76px !important;padding:11px 12px !important;grid-template-columns:minmax(0,1fr) 116px !important;gap:12px !important;border-left:3px solid var(--home-cyan) !important}
+    #barrage-ui .loadout-copy b{color:var(--home-cyan) !important;font-size:9px !important}
+    #barrage-ui .loadout-copy h1{color:var(--home-text) !important;font-size:19px !important;line-height:1.05 !important;text-shadow:none !important}
+    #barrage-ui .loadout-copy p{color:var(--home-muted) !important;font-size:10px !important}
+    #barrage-ui .sync-track{height:6px !important;border-radius:999px !important;background-color:rgba(238,247,255,.10) !important}
+    #barrage-ui .sync-track i{background-color:var(--home-cyan) !important;box-shadow:0 0 14px rgba(142,239,255,.28) !important}
+    #barrage-ui .primary-start{left:14px !important;right:14px !important;top:auto !important;bottom:100px !important;width:auto !important;height:62px !important;min-height:62px !important;clip-path:none !important;border-radius:10px !important;border:1px solid rgba(142,239,255,.52) !important;border-bottom:3px solid var(--home-cyan) !important;color:#020506 !important;background-color:var(--home-cyan) !important;background-image:none !important;box-shadow:0 16px 34px rgba(0,0,0,.36),0 0 26px rgba(142,239,255,.22),inset 0 1px 0 rgba(255,255,255,.48) !important;text-shadow:none !important}
+    #barrage-ui .primary-start span{color:#020506 !important;font-size:21px !important;text-shadow:none !important}
+    #barrage-ui .primary-start small{color:rgba(2,5,6,.68) !important;font-size:10px !important}
+    #barrage-ui .primary-start::after{content:"" !important;position:absolute !important;right:14px !important;width:20px !important;height:20px !important;border-top:3px solid #020506 !important;border-right:3px solid #020506 !important;transform:rotate(45deg) !important;opacity:.78 !important}
+    #barrage-ui .home-actions{left:14px !important;right:14px !important;top:auto !important;bottom:18px !important;grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:8px !important}
+    #barrage-ui .action-tile{height:58px !important;min-height:58px !important;padding:8px !important;text-align:left !important;border-top:2px solid var(--accent,var(--home-cyan)) !important;color:var(--home-text) !important}
+    #barrage-ui .action-tile::before{content:"" !important;position:absolute !important;left:8px !important;top:9px !important;width:8px !important;height:8px !important;border:2px solid var(--accent,var(--home-cyan)) !important;border-radius:2px !important;opacity:.78 !important}
+    #barrage-ui .action-tile::after{content:"" !important;position:absolute !important;right:8px !important;bottom:8px !important;width:18px !important;height:2px !important;background-color:var(--accent,var(--home-cyan)) !important;box-shadow:0 0 10px color-mix(in srgb,var(--accent,var(--home-cyan)) 48%,transparent) !important}
+    #barrage-ui .action-tile b{margin-left:16px !important;color:var(--home-text) !important;font-size:12px !important}
+    #barrage-ui .action-tile span{display:block !important;margin-top:6px !important;color:var(--home-muted) !important;font-size:9px !important;line-height:1.15 !important;white-space:normal !important;overflow:hidden !important}
+    #barrage-ui button.action-tile:hover,#barrage-ui .primary-start:hover{border-color:rgba(142,239,255,.72) !important;box-shadow:0 14px 28px rgba(0,0,0,.32),0 0 22px rgba(142,239,255,.18),inset 0 1px 0 rgba(255,255,255,.08) !important}
+    @media (max-height:660px){
+      #barrage-ui .record-stack{top:66px !important}
+      #barrage-ui .loadout-panel{bottom:158px !important;height:66px !important;min-height:66px !important}
+      #barrage-ui .primary-start{bottom:88px !important;height:56px !important;min-height:56px !important}
+      #barrage-ui .home-actions{bottom:14px !important}
+      #barrage-ui .action-tile{height:52px !important;min-height:52px !important}
+      #barrage-ui .action-tile span{display:none !important}
+    }
+    /* Final UI rebuild: reset legacy positioning and keep actions in the lower half. */
+    #barrage-ui{
+      overflow:hidden !important;
+      --final-bg:#030506;
+      --final-panel:rgba(7,10,12,.90);
+      --final-panel-strong:rgba(10,14,17,.96);
+      --final-line:rgba(238,247,255,.16);
+      --final-line-strong:rgba(142,239,255,.42);
+      --final-cyan:#8eefff;
+      --final-cyan-2:#1ed6ff;
+      --final-text:#f6f8fa;
+      --final-muted:rgba(216,226,234,.68);
+    }
+    #barrage-ui .ui-stage{
+      overflow:hidden !important;
+    }
+    #barrage-ui .screen{
+      background-color:var(--final-bg) !important;
+      background-image:
+        linear-gradient(rgba(142,239,255,.045) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(238,247,255,.030) 1px,transparent 1px) !important;
+      background-size:34px 34px !important;
+    }
+    #barrage-ui .screen::after{
+      display:none !important;
+    }
+    #barrage-ui :is(.home-screen,.store-screen,.garage-screen){
+      background-color:transparent !important;
+      background-image:none !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen)::before,
+    #barrage-ui :is(.store-screen,.garage-screen)::after{
+      display:none !important;
+    }
+    #barrage-ui :is(.brand-lockup,.wallet-chip,.record-pill,.loadout-panel,.action-tile,.page-title,.page-back,.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.upgrade-path-list,.dialog-card,.level-dialog,.basic-dialog){
+      clip-path:none !important;
+      border-radius:8px !important;
+      background-image:none !important;
+    }
+    #barrage-ui .home-hub{
+      padding:0 !important;
+      background-color:transparent !important;
+    }
+    #barrage-ui .home-hub::before{
+      left:12px !important;
+      right:12px !important;
+      top:82px !important;
+      height:316px !important;
+      border:1px solid rgba(142,239,255,.16) !important;
+      border-radius:8px !important;
+      background:
+        radial-gradient(circle at 72% 40%,rgba(142,239,255,.16),transparent 34%),
+        linear-gradient(180deg,rgba(238,247,255,.028),rgba(4,7,9,.26)) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 18px 42px rgba(0,0,0,.26) !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .home-hub::after{
+      content:"" !important;
+      position:absolute !important;
+      z-index:1 !important;
+      left:0 !important;
+      right:0 !important;
+      top:auto !important;
+      bottom:0 !important;
+      height:188px !important;
+      background:linear-gradient(180deg,rgba(3,5,6,.18),rgba(3,5,6,.96) 34%,#030506) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .home-header{
+      position:absolute !important;
+      z-index:6 !important;
+      left:12px !important;
+      right:12px !important;
+      top:12px !important;
+      height:58px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 100px !important;
+      align-items:stretch !important;
+      gap:8px !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .brand-lockup,
+    #barrage-ui .wallet-chip{
+      position:relative !important;
+      inset:auto !important;
+      width:auto !important;
+      min-width:0 !important;
+      height:58px !important;
+      display:block !important;
+      padding:10px 12px !important;
+      border:1px solid var(--final-line) !important;
+      background-color:var(--final-panel-strong) !important;
+      box-shadow:0 12px 26px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      overflow:hidden !important;
+      transform:none !important;
+    }
+    #barrage-ui .brand-lockup{
+      border-left:3px solid var(--final-cyan) !important;
+    }
+    #barrage-ui .brand-lockup::before,
+    #barrage-ui .brand-lockup::after,
+    #barrage-ui .wallet-chip::after{
+      display:none !important;
+    }
+    #barrage-ui .brand-lockup span{
+      display:block !important;
+      color:var(--final-text) !important;
+      font-size:25px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      transform:none !important;
+      text-shadow:0 0 18px rgba(142,239,255,.24) !important;
+    }
+    #barrage-ui .brand-lockup small{
+      position:static !important;
+      display:block !important;
+      margin-top:5px !important;
+      color:var(--final-cyan) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .wallet-chip{
+      text-align:right !important;
+      border-right:3px solid var(--final-cyan) !important;
+    }
+    #barrage-ui .wallet-chip b{
+      display:block !important;
+      color:var(--final-muted) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .wallet-chip span{
+      display:block !important;
+      margin-top:7px !important;
+      color:var(--final-text) !important;
+      font-size:16px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .token-value{
+      display:inline-flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      flex-direction:row !important;
+      flex-wrap:nowrap !important;
+      gap:6px !important;
+      min-width:0 !important;
+      color:var(--final-text) !important;
+      font-weight:900 !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      font-variant-numeric:tabular-nums !important;
+    }
+    #barrage-ui .token-diamond{
+      display:block !important;
+      width:11px !important;
+      height:11px !important;
+      flex:0 0 auto !important;
+      border:2px solid var(--final-cyan) !important;
+      border-radius:2px !important;
+      background:linear-gradient(135deg,rgba(142,239,255,.42),rgba(30,214,255,.10)) !important;
+      box-shadow:0 0 12px rgba(142,239,255,.34),inset 0 0 6px rgba(255,255,255,.18) !important;
+      transform:rotate(45deg) !important;
+    }
+    #barrage-ui .token-number{
+      display:block !important;
+      margin:0 !important;
+      min-width:0 !important;
+      color:inherit !important;
+      font-size:inherit !important;
+      line-height:1 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .wallet-chip{
+      display:flex !important;
+      align-items:center !important;
+      justify-content:flex-end !important;
+      flex-direction:row !important;
+      flex-wrap:nowrap !important;
+      padding:0 12px !important;
+    }
+    #barrage-ui .wallet-chip .token-value{
+      display:inline-flex !important;
+      flex-direction:row !important;
+      flex-wrap:nowrap !important;
+      gap:8px !important;
+      margin:0 !important;
+      color:var(--final-text) !important;
+      font-size:18px !important;
+    }
+    #barrage-ui .wallet-chip .token-diamond{
+      width:14px !important;
+      height:14px !important;
+    }
+    #barrage-ui :is(button,.part-buy-chip,.store-tile,.garage-ship,.upgrade-card,.supply-hero,.result-stat,.game-score,.game-chip) .token-value{
+      color:inherit !important;
+    }
+    #barrage-ui button .token-value{
+      gap:5px !important;
+    }
+    #barrage-ui button .token-diamond,
+    #barrage-ui .game-score .token-diamond,
+    #barrage-ui .game-chip .token-diamond{
+      width:9px !important;
+      height:9px !important;
+      border-width:2px !important;
+    }
+    #barrage-ui .compact-stats .token-value,
+    #barrage-ui .showroom-copy .token-value,
+    #barrage-ui .page-title .token-value{
+      color:var(--final-text) !important;
+    }
+    #barrage-ui .token-gain{
+      color:var(--final-cyan) !important;
+    }
+    #barrage-ui .hangar-visual{
+      left:12px !important;
+      right:12px !important;
+      top:82px !important;
+      height:316px !important;
+      border:0 !important;
+      background:transparent !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .hangar-visual::before{
+      left:30px !important;
+      right:30px !important;
+      bottom:72px !important;
+      height:54px !important;
+      opacity:.24 !important;
+      background:repeating-linear-gradient(90deg,rgba(142,239,255,.22) 0 2px,transparent 2px 18px) !important;
+    }
+    #barrage-ui .hangar-visual::after{
+      display:none !important;
+    }
+    #barrage-ui :is(.home-dots,.hollow-tape){
+      display:none !important;
+    }
+    #barrage-ui .hangar-rails{
+      left:28px !important;
+      right:28px !important;
+      top:56px !important;
+      bottom:98px !important;
+      opacity:.42 !important;
+      border-color:rgba(142,239,255,.18) !important;
+    }
+    #barrage-ui .hangar-status{
+      position:absolute !important;
+      left:26px !important;
+      right:26px !important;
+      top:auto !important;
+      bottom:28px !important;
+      width:auto !important;
+      height:26px !important;
+      display:flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      gap:8px !important;
+      padding:0 12px !important;
+      border:1px solid rgba(142,239,255,.18) !important;
+      border-radius:8px !important;
+      background-color:rgba(4,7,9,.84) !important;
+      box-shadow:none !important;
+      color:var(--final-muted) !important;
+    }
+    #barrage-ui .hangar-status :is(b,span){
+      margin:0 !important;
+      color:var(--final-muted) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .mission-tag{
+      position:absolute !important;
+      z-index:5 !important;
+      left:22px !important;
+      top:100px !important;
+      width:auto !important;
+      min-width:0 !important;
+      height:28px !important;
+      padding:0 12px !important;
+      display:grid !important;
+      place-items:center !important;
+      border:1px solid rgba(142,239,255,.28) !important;
+      border-radius:8px !important;
+      color:var(--final-cyan) !important;
+      background-color:rgba(4,7,9,.88) !important;
+      box-shadow:none !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      transform:none !important;
+    }
+    #barrage-ui .record-stack{
+      position:absolute !important;
+      z-index:5 !important;
+      left:22px !important;
+      right:22px !important;
+      top:136px !important;
+      width:auto !important;
+      display:grid !important;
+      gap:8px !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .record-pill{
+      min-width:0 !important;
+      width:auto !important;
+      min-height:48px !important;
+      display:grid !important;
+      grid-template-columns:auto minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:10px !important;
+      padding:8px 10px !important;
+      border:1px solid rgba(238,247,255,.14) !important;
+      border-left:3px solid rgba(216,226,234,.55) !important;
+      background-color:rgba(4,7,9,.82) !important;
+      box-shadow:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .record-pill :is(b,span,small){
+      margin:0 !important;
+      min-width:0 !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .record-pill b{
+      color:var(--final-muted) !important;
+      font-size:9px !important;
+    }
+    #barrage-ui .record-pill span{
+      color:var(--final-cyan) !important;
+      font-size:13px !important;
+      text-align:center !important;
+    }
+    #barrage-ui .record-pill small{
+      color:var(--final-text) !important;
+      font-size:16px !important;
+      text-align:right !important;
+    }
+    #barrage-ui .loadout-panel{
+      position:absolute !important;
+      z-index:6 !important;
+      left:12px !important;
+      right:12px !important;
+      top:auto !important;
+      bottom:202px !important;
+      width:auto !important;
+      height:74px !important;
+      min-height:74px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 104px !important;
+      align-items:center !important;
+      gap:10px !important;
+      padding:10px 12px !important;
+      border:1px solid var(--final-line) !important;
+      border-left:3px solid var(--final-cyan) !important;
+      background-color:rgba(6,10,12,.92) !important;
+      box-shadow:0 12px 26px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .loadout-copy{
+      min-width:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .loadout-copy b,
+    #barrage-ui .loadout-copy h1,
+    #barrage-ui .loadout-copy p{
+      margin:0 !important;
+      min-width:0 !important;
+      max-width:none !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      transform:none !important;
+    }
+    #barrage-ui .loadout-copy b{
+      display:block !important;
+      color:var(--final-cyan) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .loadout-copy h1{
+      margin-top:6px !important;
+      color:var(--final-text) !important;
+      font-size:19px !important;
+      line-height:1.05 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .loadout-copy p{
+      margin-top:5px !important;
+      color:var(--final-muted) !important;
+      font-size:10px !important;
+      line-height:1.1 !important;
+    }
+    #barrage-ui .base-sync{
+      min-width:0 !important;
+      display:grid !important;
+      grid-template-rows:auto 7px auto !important;
+      gap:6px !important;
+      align-self:center !important;
+      color:var(--final-muted) !important;
+      text-align:right !important;
+      font-size:9px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .base-sync :is(span,strong){
+      color:var(--final-muted) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .base-sync strong{
+      color:var(--final-text) !important;
+    }
+    #barrage-ui .sync-track{
+      height:7px !important;
+      border:0 !important;
+      border-radius:999px !important;
+      background-color:rgba(238,247,255,.10) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .sync-track i{
+      display:block !important;
+      height:100% !important;
+      border-radius:999px !important;
+      background-color:var(--final-cyan) !important;
+      box-shadow:0 0 12px rgba(142,239,255,.26) !important;
+    }
+    #barrage-ui .primary-start{
+      position:absolute !important;
+      z-index:7 !important;
+      left:12px !important;
+      right:12px !important;
+      top:auto !important;
+      bottom:132px !important;
+      width:auto !important;
+      height:58px !important;
+      min-height:58px !important;
+      display:grid !important;
+      place-items:center !important;
+      padding:0 !important;
+      border:1px solid rgba(142,239,255,.56) !important;
+      border-bottom:3px solid var(--final-cyan) !important;
+      border-radius:8px !important;
+      color:#020506 !important;
+      background:var(--final-cyan) !important;
+      background-color:var(--final-cyan) !important;
+      background-image:none !important;
+      box-shadow:0 16px 34px rgba(0,0,0,.36),0 0 26px rgba(142,239,255,.20),inset 0 1px 0 rgba(255,255,255,.42) !important;
+      clip-path:none !important;
+      animation:none !important;
+      transform:none !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .primary-start::before{
+      display:none !important;
+    }
+    #barrage-ui .primary-start::after{
+      content:"" !important;
+      position:absolute !important;
+      right:16px !important;
+      top:50% !important;
+      width:17px !important;
+      height:17px !important;
+      border-top:3px solid #020506 !important;
+      border-right:3px solid #020506 !important;
+      transform:translateY(-50%) rotate(45deg) !important;
+      opacity:.76 !important;
+    }
+    #barrage-ui .primary-start span{
+      color:#020506 !important;
+      font-size:22px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      text-shadow:none !important;
+      transform:none !important;
+    }
+    #barrage-ui .primary-start small{
+      display:block !important;
+      margin-top:5px !important;
+      color:rgba(2,5,6,.66) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .home-screen .primary-start{
+      background:var(--final-cyan) !important;
+      background-color:var(--final-cyan) !important;
+      background-image:none !important;
+      border-left-color:rgba(142,239,255,.56) !important;
+      color:#020506 !important;
+    }
+    #barrage-ui .home-actions{
+      position:absolute !important;
+      z-index:7 !important;
+      left:12px !important;
+      right:12px !important;
+      top:auto !important;
+      bottom:14px !important;
+      width:auto !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .action-tile{
+      position:relative !important;
+      width:auto !important;
+      height:50px !important;
+      min-height:50px !important;
+      display:block !important;
+      padding:8px 8px 7px !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      border-top:2px solid var(--accent,var(--final-cyan)) !important;
+      border-radius:8px !important;
+      color:var(--final-text) !important;
+      background-color:rgba(7,10,12,.92) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.045) !important;
+      clip-path:none !important;
+      overflow:hidden !important;
+      text-align:left !important;
+    }
+    #barrage-ui .action-tile::before{
+      content:"" !important;
+      position:absolute !important;
+      left:8px !important;
+      top:9px !important;
+      width:7px !important;
+      height:7px !important;
+      border:2px solid var(--accent,var(--final-cyan)) !important;
+      border-radius:2px !important;
+      opacity:.75 !important;
+    }
+    #barrage-ui .action-tile::after{
+      content:"" !important;
+      position:absolute !important;
+      right:8px !important;
+      bottom:8px !important;
+      width:16px !important;
+      height:2px !important;
+      background-color:var(--accent,var(--final-cyan)) !important;
+      opacity:.76 !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .action-tile b{
+      display:block !important;
+      min-width:0 !important;
+      margin:0 0 0 14px !important;
+      color:var(--final-text) !important;
+      font-size:11px !important;
+      line-height:1.05 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .action-tile span{
+      display:block !important;
+      min-width:0 !important;
+      margin:6px 0 0 0 !important;
+      color:var(--final-muted) !important;
+      font-size:8px !important;
+      line-height:1.1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .page-stage{
+      padding:0 !important;
+    }
+    #barrage-ui .page-header{
+      height:94px !important;
+      display:block !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .page-title{
+      position:absolute !important;
+      left:72px !important;
+      right:12px !important;
+      top:12px !important;
+      width:auto !important;
+      height:68px !important;
+      padding:12px 14px !important;
+      border:1px solid var(--final-line) !important;
+      border-left:3px solid var(--final-cyan) !important;
+      background-color:var(--final-panel) !important;
+      box-shadow:0 12px 26px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .page-title h1{
+      margin:0 !important;
+      color:var(--final-text) !important;
+      font-size:23px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .page-title p{
+      margin:7px 0 0 !important;
+      color:var(--final-muted) !important;
+      font-size:10px !important;
+      line-height:1.1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .page-back,
+    #barrage-ui .showroom-back{
+      position:absolute !important;
+      z-index:40 !important;
+      left:12px !important;
+      top:12px !important;
+      right:auto !important;
+      bottom:auto !important;
+      width:48px !important;
+      height:44px !important;
+      min-height:44px !important;
+      display:grid !important;
+      place-items:center !important;
+      padding:0 !important;
+      border:1px solid rgba(142,239,255,.32) !important;
+      border-left:3px solid var(--final-cyan) !important;
+      border-radius:8px !important;
+      color:transparent !important;
+      background-color:rgba(5,8,10,.94) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      font-size:0 !important;
+      line-height:1 !important;
+      clip-path:none !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui .page-back::before,
+    #barrage-ui .showroom-back::before{
+      content:"<" !important;
+      display:block !important;
+      color:var(--final-cyan) !important;
+      font-size:23px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      text-shadow:0 0 12px rgba(142,239,255,.26) !important;
+    }
+    #barrage-ui :is(.ranking-list,.settings-panel,.gacha-panel,.upgrade-path-list,.commerce-panel,.garage-panel){
+      position:absolute !important;
+      left:12px !important;
+      right:12px !important;
+      top:50% !important;
+      bottom:14px !important;
+      width:auto !important;
+      padding:0 4px 18px 0 !important;
+      overflow-x:hidden !important;
+      overflow-y:auto !important;
+      scrollbar-width:thin !important;
+    }
+    #barrage-ui :is(.store-screen .commerce-panel,.garage-screen .garage-panel){
+      top:50% !important;
+      bottom:14px !important;
+    }
+    #barrage-ui .ship-showroom-ui{
+      left:12px !important;
+      right:12px !important;
+      top:66px !important;
+      height:264px !important;
+      width:auto !important;
+    }
+    #barrage-ui .showroom-copy{
+      left:12px !important;
+      right:12px !important;
+      bottom:12px !important;
+      width:auto !important;
+    }
+    #barrage-ui .showroom-tabs{
+      left:12px !important;
+      right:12px !important;
+      bottom:14px !important;
+      width:auto !important;
+    }
+    #barrage-ui :is(.commerce-hero,.supply-hero,.garage-summary,.market-card,.garage-module,.part-slot,.gacha-result,.equipped-card,.cosmetic-row,.settings-row,.ranking-row,.upgrade-card,.run-basic-card,.store-tile,.garage-slot-card,.part-buy-chip){
+      border-radius:8px !important;
+      clip-path:none !important;
+      background-image:none !important;
+      border-color:rgba(238,247,255,.14) !important;
+      background-color:rgba(7,10,12,.88) !important;
+      box-shadow:0 8px 20px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.045) !important;
+    }
+    #barrage-ui :is(.market-card button,.commerce-hero button,.supply-hero button,.store-tile button,.part-buy-chip,.garage-quick-actions button,.basic-actions button,.dialog-actions button,.level-sp){
+      border-radius:8px !important;
+      clip-path:none !important;
+      border-color:rgba(142,239,255,.30) !important;
+      background-color:rgba(8,14,17,.92) !important;
+      background-image:none !important;
+      color:var(--final-text) !important;
+    }
+    #barrage-ui .dialog-card{
+      left:18px !important;
+      right:18px !important;
+      top:50% !important;
+      width:auto !important;
+      transform:translateY(-38%) !important;
+      padding:18px !important;
+      border:1px solid rgba(142,239,255,.22) !important;
+      background-color:rgba(7,10,12,.94) !important;
+    }
+    #barrage-ui .dialog-actions{
+      margin-top:18px !important;
+      display:grid !important;
+      grid-template-columns:1fr 1fr !important;
+      gap:10px !important;
+    }
+    #barrage-ui .level-dialog,
+    #barrage-ui .basic-dialog{
+      left:12px !important;
+      right:12px !important;
+      top:52% !important;
+      width:auto !important;
+      max-height:calc(100% - 40px) !important;
+      transform:translateY(-46%) !important;
+      border:1px solid rgba(142,239,255,.22) !important;
+      background-color:rgba(7,10,12,.94) !important;
+    }
+    #barrage-ui :is(.store-screen .commerce-panel,.garage-screen .garage-panel){
+      top:53% !important;
+      bottom:12px !important;
+      padding:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .ship-showroom-ui.showroom-v2{
+      left:12px !important;
+      right:12px !important;
+      top:58px !important;
+      height:308px !important;
+      width:auto !important;
+      border:0 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .ship-showroom-ui.showroom-v2::before{
+      left:0 !important;
+      right:0 !important;
+      top:0 !important;
+      height:100% !important;
+      border:1px solid rgba(142,239,255,.18) !important;
+      border-left:4px solid var(--accent) !important;
+      border-radius:8px !important;
+      background:linear-gradient(180deg,rgba(7,10,12,.42),rgba(7,10,12,.14)) !important;
+      clip-path:none !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 16px 36px rgba(0,0,0,.24) !important;
+    }
+    #barrage-ui .showroom-mode{
+      position:absolute !important;
+      z-index:5 !important;
+      right:14px !important;
+      top:12px !important;
+      color:rgba(216,226,234,.72) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .showroom-v2 .showroom-copy{
+      position:absolute !important;
+      z-index:5 !important;
+      left:14px !important;
+      right:auto !important;
+      top:14px !important;
+      bottom:auto !important;
+      width:206px !important;
+      padding:12px 12px 11px !important;
+      border:1px solid rgba(238,247,255,.14) !important;
+      border-left:3px solid var(--accent) !important;
+      border-radius:8px !important;
+      background-color:rgba(5,8,10,.84) !important;
+      clip-path:none !important;
+      box-shadow:0 10px 24px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .showroom-v2 .showroom-copy b{
+      color:var(--accent) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .showroom-v2 .showroom-copy strong{
+      margin-top:8px !important;
+      color:var(--final-text) !important;
+      font-size:20px !important;
+      line-height:1.05 !important;
+    }
+    #barrage-ui .showroom-v2 .showroom-copy span{
+      margin-top:7px !important;
+      color:var(--final-muted) !important;
+      font-size:10px !important;
+      line-height:1.2 !important;
+    }
+    #barrage-ui .showroom-part-stack{
+      position:absolute !important;
+      z-index:5 !important;
+      left:14px !important;
+      right:14px !important;
+      bottom:64px !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:7px !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .showroom-part-chip{
+      min-width:0 !important;
+      height:42px !important;
+      padding:8px 8px 7px !important;
+      border:1px solid rgba(238,247,255,.13) !important;
+      border-top:2px solid var(--accent) !important;
+      border-radius:8px !important;
+      background-color:rgba(5,8,10,.78) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .showroom-part-chip.disabled{
+      opacity:.42 !important;
+    }
+    #barrage-ui .showroom-part-chip b,
+    #barrage-ui .showroom-part-chip span{
+      display:block !important;
+      min-width:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .showroom-part-chip b{
+      color:var(--final-cyan) !important;
+      font-size:8px !important;
+    }
+    #barrage-ui .showroom-part-chip span{
+      margin-top:6px !important;
+      color:var(--final-text) !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .showroom-v2 .showroom-tabs{
+      z-index:6 !important;
+      left:14px !important;
+      right:14px !important;
+      bottom:14px !important;
+      width:auto !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui :is(.store-v2,.garage-v2){
+      height:100% !important;
+      display:grid !important;
+      gap:10px !important;
+      min-width:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-v2{
+      grid-template-rows:44px 136px minmax(0,1fr) !important;
+    }
+    #barrage-ui .garage-v2{
+      grid-template-rows:minmax(0,1fr) 70px 44px !important;
+    }
+    #barrage-ui .store-v2 .compact-stats b{
+      font-size:13px !important;
+    }
+    #barrage-ui .store-v2 .compact-stats .token-value{
+      justify-content:flex-start !important;
+    }
+    #barrage-ui :is(.store-v2,.garage-v2) .compact-head{
+      grid-template-columns:minmax(0,1fr) !important;
+    }
+    #barrage-ui .store-v2 .compact-head span,
+    #barrage-ui .garage-v2 .compact-head span{
+      max-width:100% !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      justify-self:start !important;
+      font-size:9px !important;
+    }
+    #barrage-ui .garage-v2 .garage-slot-board{
+      height:calc(100% - 28px) !important;
+      overflow-x:auto !important;
+      overflow-y:hidden !important;
+    }
+    #barrage-ui .garage-v2 .garage-ship-rail{
+      padding-top:4px !important;
+      padding-bottom:4px !important;
+    }
+    #barrage-ui .garage-v2 .garage-ship{
+      height:42px !important;
+      min-height:42px !important;
+    }
+    #barrage-ui .garage-v2 .garage-quick-actions button{
+      height:42px !important;
+      min-height:42px !important;
+    }
+    @media (max-height:660px){
+      #barrage-ui .home-header{height:52px !important}
+      #barrage-ui .brand-lockup,
+      #barrage-ui .wallet-chip{height:52px !important;padding-top:8px !important;padding-bottom:8px !important}
+      #barrage-ui .brand-lockup span{font-size:22px !important}
+      #barrage-ui .brand-lockup small{font-size:8px !important;margin-top:4px !important}
+      #barrage-ui .wallet-chip span{font-size:15px !important;margin-top:6px !important}
+      #barrage-ui .home-hub::before,
+      #barrage-ui .hangar-visual{top:74px !important;height:302px !important}
+      #barrage-ui .mission-tag{top:90px !important}
+      #barrage-ui .record-stack{top:124px !important}
+      #barrage-ui .loadout-panel{bottom:174px !important;height:64px !important;min-height:64px !important}
+      #barrage-ui .loadout-copy h1{font-size:17px !important}
+      #barrage-ui .loadout-copy p{display:none !important}
+      #barrage-ui .primary-start{bottom:110px !important;height:52px !important;min-height:52px !important}
+      #barrage-ui .home-actions{bottom:10px !important;gap:7px !important}
+      #barrage-ui .action-tile{height:44px !important;min-height:44px !important;padding:7px !important}
+      #barrage-ui .action-tile span{display:none !important}
+      #barrage-ui .page-title{height:60px !important;padding-top:10px !important}
+      #barrage-ui .page-title h1{font-size:20px !important}
+      #barrage-ui .page-title p{font-size:9px !important}
+      #barrage-ui :is(.ranking-list,.settings-panel,.gacha-panel,.upgrade-path-list,.commerce-panel,.garage-panel){top:48% !important}
+      #barrage-ui .ship-showroom-ui{height:238px !important}
+      #barrage-ui .ship-showroom-ui.showroom-v2{top:56px !important;height:276px !important}
+      #barrage-ui :is(.store-screen .commerce-panel,.garage-screen .garage-panel){top:50% !important}
+      #barrage-ui .showroom-v2 .showroom-copy{width:184px !important}
+      #barrage-ui .showroom-part-stack{bottom:58px !important}
+      #barrage-ui .showroom-part-chip{height:36px !important;padding-top:6px !important;padding-bottom:6px !important}
+      #barrage-ui .showroom-part-chip span{font-size:9px !important;margin-top:5px !important}
+      #barrage-ui .store-v2{grid-template-rows:42px 118px minmax(0,1fr) !important}
+      #barrage-ui .garage-v2{grid-template-rows:minmax(0,1fr) 58px 40px !important}
+    }
     @keyframes zzzButtonPulse{
       0%,100%{box-shadow:5px 5px 0 rgba(184,167,255,.62),0 16px 32px rgba(0,0,0,.38),0 0 20px rgba(142,239,255,.14)}
       50%{box-shadow:5px 5px 0 rgba(184,167,255,.76),0 16px 32px rgba(0,0,0,.38),0 0 34px rgba(142,239,255,.24)}
@@ -8996,7 +11679,7 @@ function renderUi2(){
       <div class="ui-stage home-hub">
         <div class="home-header">
           <div class="brand-lockup"><span>BARRAGE</span><small>PIPE ASSAULT</small></div>
-          <div class="wallet-chip"><b>TOKEN</b><span>${formatNumber(state.tokens)}</span></div>
+          <div class="wallet-chip">${tokenAmount(state.tokens, 'wallet-token')}</div>
         </div>
         <div class="hangar-visual">
           <div class="home-dots"></div>
@@ -9027,7 +11710,7 @@ function renderUi2(){
           <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>アップグレード</b><span>ベース強化を開く</span></button>
           <button class="action-tile" data-action="gacha" style="--accent:#d8e2ea"><b>サプライ抽選</b><span>スキンとクロマコート</span></button>
           <button class="action-tile" data-action="ranking" style="--accent:#8eefff"><b>ランキング</b><span>ハイスコア記録</span></button>
-          <button class="action-tile" data-action="settings" style="--accent:#b8a7ff"><b>オプション</b><span>環境とステータス</span></button>
+          <button class="action-tile" data-action="settings" style="--accent:#d8e2ea"><b>オプション</b><span>環境とステータス</span></button>
         </div>
       </div>
     </div>
@@ -9048,18 +11731,18 @@ function renderUi2(){
     <div class="screen store-screen ${state.mode==='store'?'on':''}">
       <div class="ui-stage page-stage showroom-stage">
         <button class="page-back showroom-back" data-action="home">戻る</button>
-        ${state.mode === 'store' ? renderShipShowroom('store') : ''}
+        ${state.mode === 'store' ? renderShipShowroomV2('store') : ''}
         <div class="catalog-grid commerce-panel">
-          ${state.mode === 'store' ? renderStoreMarket() : ''}
+          ${state.mode === 'store' ? renderStoreMarketV2() : ''}
         </div>
       </div>
     </div>
     <div class="screen garage-screen ${state.mode==='garage'?'on':''}">
       <div class="ui-stage page-stage showroom-stage">
         <button class="page-back showroom-back" data-action="home">戻る</button>
-        ${state.mode === 'garage' ? renderShipShowroom('garage') : ''}
+        ${state.mode === 'garage' ? renderShipShowroomV2('garage') : ''}
         <div class="garage-panel">
-          ${garageActive ? renderGaragePanel(equippedSummary) : ''}
+          ${garageActive ? renderGaragePanelV2(equippedSummary) : ''}
         </div>
       </div>
     </div>
@@ -9068,7 +11751,7 @@ function renderUi2(){
         <div class="page-header">
           <div class="page-title glass-panel">
             <h1>サプライ</h1>
-            <p>${GACHA_COST}T / 所持 ${gachaActive ? Object.keys(state.cosmetics.owned).length : 0}/${COSMETIC_ITEMS.length}</p>
+            <p>${tokenAmount(GACHA_COST)} / 所持 ${gachaActive ? Object.keys(state.cosmetics.owned).length : 0}/${COSMETIC_ITEMS.length}</p>
           </div>
           <button class="page-back" data-action="home">戻る</button>
         </div>
@@ -9082,7 +11765,7 @@ function renderUi2(){
         <div class="page-header">
           <div class="page-title glass-panel">
             <h1>強化</h1>
-            <p>トークン ${formatNumber(state.tokens)} / 下位10で上位解放</p>
+            <p>${tokenAmount(state.tokens)} / 下位10で上位解放</p>
           </div>
           <button class="page-back" data-action="home">戻る</button>
         </div>
@@ -9116,7 +11799,7 @@ function renderUi2(){
         <div class="game-top-card game-score">
           <b>SCORE</b>
           <span data-ref="score">${formatNumber(state.score)}</span>
-          <small>TOKEN <i data-ref="tokenTop">+${formatNumber(tokenReward)}</i></small>
+          <small>${tokenAmount(tokenReward, 'token-gain', '+', 'tokenTop')}</small>
         </div>
         <button class="game-pause" data-action="pause" aria-label="ポーズ"><span>ポーズ</span></button>
       </div>
@@ -9130,7 +11813,7 @@ function renderUi2(){
             <div class="game-meter-track"><i data-ref="hp" style="width:${Math.max(0, state.hp / state.maxHp * 100)}%"></i></div>
             <span data-ref="hpText">${Math.ceil(state.hp)}/${state.maxHp}</span>
           </div>
-          <div class="game-meter" style="--meter-a:#1ed6ff;--meter-b:#9cf5ff">
+          <div class="game-meter is-energy" style="--meter-a:#1ed6ff;--meter-b:#9cf5ff">
             <b>EN</b>
             <div class="game-meter-track"><i data-ref="energy" style="width:${Math.max(0, state.energy)}%"></i></div>
             <span data-ref="energyText">${Math.floor(state.energy)}%</span>
@@ -9138,7 +11821,7 @@ function renderUi2(){
           <div class="game-meter" style="--meter-a:#36f39b;--meter-b:#d8e2ea">
             <b data-ref="xpLabel">XP ${state.level}</b>
             <div class="game-meter-track"><i data-ref="xp" style="width:${Math.min(100, state.xp / xpThreshold() * 100)}%"></i></div>
-            <span data-ref="xpText">${state.skillPoints}SP</span>
+            <span data-ref="xpText">${Math.floor(state.xp)}/${xpThreshold()}</span>
           </div>
         </div>
         <div class="game-console">
@@ -9146,7 +11829,7 @@ function renderUi2(){
             <div class="game-chip"><b>LV</b><span data-ref="levelChip">${state.level}</span></div>
             <div class="game-chip"><b>SP</b><span data-ref="specialPointChip">${state.skillPoints}</span></div>
             <div class="game-chip"><b>BP</b><span data-ref="bpChip">${state.basicPoints}</span></div>
-            <div class="game-chip"><b>TK</b><span data-ref="tokenPreview">+${formatNumber(tokenReward)}</span></div>
+            <div class="game-chip"><b>TK</b><span>${tokenAmount(tokenReward, 'token-gain', '+', 'tokenPreview')}</span></div>
           </div>
           <button class="game-upgrade" data-ref="skillControl" data-action="openUpgrade">基礎強化 ${state.basicPoints}</button>
         </div>
@@ -9160,6 +11843,9 @@ function renderUi2(){
             <div class="level-note">武装・弾種・防御・領域から選択</div>
           </div>
           <div class="level-sp">SP ${state.skillPoints}</div>
+        </div>
+        <div class="level-special-slots" aria-label="取得中の特殊強化">
+          ${renderSpecialSlotsHud()}
         </div>
         <div class="upgrade-grid">
           ${state.upgradeOptions.map(id => renderSpecialUpgradeCard(id)).join('')}
@@ -9201,7 +11887,7 @@ function renderUi2(){
           <div class="result-grid">
             <div class="result-stat"><b>スコア</b><span>${formatNumber(state.score)}</span></div>
             <div class="result-stat"><b>ウェーブ</b><span>${state.wave}</span></div>
-            <div class="result-stat"><b>獲得</b><span>+${formatNumber(state.runTokenGain)}</span></div>
+            <div class="result-stat"><b>獲得</b><span>${tokenAmount(state.runTokenGain, 'token-gain', '+')}</span></div>
           </div>
           <div class="dialog-actions">
             <button data-action="start">リトライ</button>
@@ -9289,7 +11975,7 @@ function renderShipShowroom(kind){
   const ownedParts = PART_DEFS.filter(part => partOwned(part.id)).length;
   const active = kind === 'store' ? 'ストア' : 'ガレージ';
   const sub = kind === 'store'
-    ? `${formatNumber(state.tokens)}T / 機体 ${ownedShips}/${SHIP_DEFS.length} / パーツ ${ownedParts}/${PART_DEFS.length}`
+    ? `${tokenAmount(state.tokens, 'showroom-token')} / 機体 ${ownedShips}/${SHIP_DEFS.length} / パーツ ${ownedParts}/${PART_DEFS.length}`
     : `${ship.name} / ${equippedPartCount()} 装備中`;
   return `
     <div class="ship-showroom-ui" style="--accent:${ship.color}">
@@ -9312,7 +11998,7 @@ function renderStoreMarket(){
   return `
     <div class="store-compact">
       <div class="compact-stats">
-        <span><b>${formatNumber(state.tokens)}T</b><small>TOKEN</small></span>
+        <span><b>${tokenAmount(state.tokens, 'compact-token')}</b><small>TOKEN</small></span>
         <span><b>${ownedShips}/${SHIP_DEFS.length}</b><small>FRAME</small></span>
         <span><b>${ownedParts}/${PART_DEFS.length}</b><small>PARTS</small></span>
       </div>
@@ -9345,7 +12031,7 @@ function renderStoreShipCard(ship){
   const owned = shipOwned(ship.id);
   const selected = currentShip().id === ship.id;
   const canBuy = !owned && state.tokens >= ship.cost;
-  const buttonLabel = selected ? '使用中' : owned ? '選択' : `${formatNumber(ship.cost)}T`;
+  const buttonLabel = selected ? '使用中' : owned ? '選択' : tokenAmount(ship.cost, 'button-token');
   const action = owned ? `equipShip:${ship.id}` : `buyShip:${ship.id}`;
   return `
     <div class="store-tile frame-tile ${owned ? 'owned' : 'locked'} ${selected ? 'selected' : ''}" style="--accent:${ship.color}">
@@ -9367,7 +12053,7 @@ function renderStorePartChip(part){
   const cost = partCost(part);
   const canBuy = !owned && state.tokens >= cost;
   const action = owned ? 'garage' : `buyPart:${part.id}`;
-  const label = owned ? '装備へ' : `${formatNumber(cost)}T`;
+  const label = owned ? '装備へ' : tokenAmount(cost, 'button-token');
   return `
     <button class="part-buy-chip ${owned ? 'owned' : 'locked'}" ${owned || canBuy ? '' : 'disabled'} data-action="${action}" style="--accent:${colorCss(part.color)}">
       <b>${PART_TYPE_LABELS[part.type]} / ${part.rarity}</b>
@@ -9448,10 +12134,105 @@ function renderGarageShipPicker(){
     return `
       <button class="garage-ship ${selected ? 'selected' : ''} ${owned ? '' : 'locked'}" ${owned && !selected ? '' : 'disabled'} data-action="equipShip:${ship.id}" style="--accent:${ship.color}">
         <b>${ship.name}</b>
-        <span>${owned ? selected ? '使用中' : '選択' : `${formatNumber(ship.cost)}T`}</span>
+        <span>${owned ? selected ? '使用中' : '選択' : tokenAmount(ship.cost, 'button-token')}</span>
       </button>
     `;
   }).join('');
+}
+
+function renderShipShowroomV2(kind){
+  const ship = currentShip();
+  const ownedShips = SHIP_DEFS.filter(item => shipOwned(item.id)).length;
+  const ownedParts = PART_DEFS.filter(part => partOwned(part.id)).length;
+  const totalSlots = PART_TYPES.reduce((sum, type) => sum + shipSlotCount(type, ship), 0);
+  const sub = kind === 'store'
+    ? `${tokenAmount(state.tokens, 'showroom-token')} / FRAME ${ownedShips}/${SHIP_DEFS.length} / PARTS ${ownedParts}/${PART_DEFS.length}`
+    : `${equippedPartCount()}/${totalSlots} PARTS EQUIPPED`;
+  return `
+    <div class="ship-showroom-ui showroom-v2" style="--accent:${ship.color}">
+      <div class="showroom-mode">${kind === 'store' ? 'STORE' : 'GARAGE'}</div>
+      <div class="showroom-copy">
+        <b>SELECTED FRAME</b>
+        <strong>${ship.name}</strong>
+        <span>${sub}</span>
+      </div>
+      <div class="showroom-part-stack">
+        ${renderShowroomPartChipsV2(ship)}
+      </div>
+      <div class="showroom-tabs">
+        <button class="${kind === 'store' ? 'active' : ''}" ${kind === 'store' ? 'disabled' : ''} data-action="store">BUY</button>
+        <button class="${kind === 'garage' ? 'active' : ''}" ${kind === 'garage' ? 'disabled' : ''} data-action="garage">EQUIP</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderShowroomPartChipsV2(ship = currentShip()){
+  return PART_TYPES.map(type => {
+    const slots = shipSlotCount(type, ship);
+    const equipped = (state.garage?.equippedParts?.[type] || [])
+      .slice(0, slots)
+      .map(id => PART_BY_ID[id])
+      .filter(Boolean);
+    const names = equipped.length ? equipped.map(part => part.name).join(' / ') : 'EMPTY';
+    return `
+      <div class="showroom-part-chip ${slots ? '' : 'disabled'}">
+        <b>${PART_TYPE_LABELS[type]} ${equipped.length}/${slots}</b>
+        <span>${names}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderStoreMarketV2(){
+  const ownedShips = SHIP_DEFS.filter(ship => shipOwned(ship.id)).length;
+  const ownedParts = PART_DEFS.filter(part => partOwned(part.id)).length;
+  return `
+    <div class="store-compact store-v2">
+      <div class="compact-stats">
+        <span><b>${tokenAmount(state.tokens, 'compact-token')}</b><small>TOKEN</small></span>
+        <span><b>${ownedShips}/${SHIP_DEFS.length}</b><small>FRAME</small></span>
+        <span><b>${ownedParts}/${PART_DEFS.length}</b><small>PARTS</small></span>
+      </div>
+      <section class="compact-section">
+        <div class="compact-head"><b>SELECT FRAME</b><span>selected ship appears above</span></div>
+        <div class="store-ship-rail">
+          ${SHIP_DEFS.map(renderStoreShipCard).join('')}
+        </div>
+      </section>
+      <section class="compact-section">
+        <div class="compact-head"><b>BUY PARTS</b><span>purchased parts attach to open slots</span></div>
+        <div class="store-part-board">
+          ${PART_TYPES.map(renderStorePartColumn).join('')}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderGaragePanelV2(){
+  const ship = currentShip();
+  const totalSlots = PART_TYPES.reduce((sum, type) => sum + shipSlotCount(type, ship), 0);
+  return `
+    <div class="garage-compact garage-v2">
+      <section class="compact-section loadout-compact">
+        <div class="compact-head"><b>EQUIP PARTS</b><span>${equippedPartCount()}/${totalSlots} equipped / reflected above</span></div>
+        <div class="garage-slot-board">
+          ${renderGarageLoadoutBoard()}
+        </div>
+      </section>
+      <section class="compact-section">
+        <div class="compact-head"><b>FRAME SELECT</b><span>${SHIP_DEFS.filter(s => shipOwned(s.id)).length}/${SHIP_DEFS.length}</span></div>
+        <div class="garage-ship-rail">
+          ${renderGarageShipPicker()}
+        </div>
+      </section>
+      <div class="garage-quick-actions">
+        <button data-action="store">BUY PARTS</button>
+        <button data-action="gacha">SUPPLY</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderPartSection(type){
@@ -9507,7 +12288,7 @@ function renderHomeUpgradeCard(def){
   const cost = homeUpgradeCost(def.id);
   const canBuy = unlocked && !maxed && Number.isFinite(cost) && state.tokens >= cost;
   const tierLabel = fullDef.tier === 'base' ? `${lv}/${HOME_UPGRADE_CAP}` : `Lv.${lv}`;
-  const buttonLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : `${formatNumber(cost)}T`;
+  const buttonLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : tokenAmount(cost, 'button-token');
   const note = fullDef.tier === 'base' ? '上限あり' : `${homeUpgradeDef(fullDef.parent).name} 10/10で解放`;
   return `
     <div class="upgrade-card ${!unlocked ? 'locked' : ''} ${maxed ? 'maxed' : ''}" style="--accent:${colorCss(fullDef.color)}">
@@ -9529,16 +12310,16 @@ function renderSpecialSlotsHud(){
         <div class="special-slot empty" style="--accent:#d8e2ea">
           <b>${index + 1}</b>
           <span>EMPTY</span>
-          <small>SLOT</small>
+          <small></small>
         </div>
       `;
     }
     const lv = specialUpgradeLevel(def.id);
     return `
       <div class="special-slot filled" style="--accent:${colorCss(def.color)}" title="${escapeHtml(def.name)}">
-        <b>${def.icon}</b>
+        <b>${specialUpgradeIcon(def)}</b>
         <span>${specialSlotLabel(def)}</span>
-        <small>Lv.${lv}/${def.max}</small>
+        <small>${lv}</small>
       </div>
     `;
   }).join('');
@@ -9551,7 +12332,8 @@ function renderSpecialUpgradeCard(id){
   const buttonLabel = lv > 0 ? '強化' : '取得';
   return `
     <button class="upgrade-card upgrade-choice special-upgrade-card" type="button" data-action="pickUpgrade:${id}" style="--accent:${colorCss(d.color)}">
-      <b>${d.tag || d.family.toUpperCase()} / ${d.icon} / Lv.${lv}/${d.max}</b>
+      <i class="special-card-icon">${specialUpgradeIcon(d)}</i>
+      <b>${d.tag || d.family.toUpperCase()} / Lv.${lv}/${d.max}</b>
       <span>${d.name}</span>
       <small>${d.text}</small>
       <em>${d.family === 'barrel' ? '武装型は1系統だけ選択' : '基礎値とは別枠で発動'}</em>
@@ -9612,7 +12394,7 @@ function renderSupplyPanel(equippedSummary, gachaResult){
     <div class="supply-hero">
       <div class="supply-copy">
         <b>SUPPLY DROP</b>
-        <strong>${GACHA_COST}T</strong>
+        <strong>${tokenAmount(GACHA_COST, 'supply-cost')}</strong>
         <span>${Object.keys(state.cosmetics.owned).length}/${COSMETIC_ITEMS.length} 所持</span>
       </div>
       <button class="gacha-roll" ${state.tokens < GACHA_COST ? 'disabled' : ''} data-action="rollGacha">抽選</button>
@@ -9636,7 +12418,7 @@ function renderGachaResult(){
   if(!state.lastGacha) return '<div class="gacha-result empty"><b>RESULT</b><span>未抽選</span><small>---</small></div>';
   const item = cosmeticItem(state.lastGacha.id);
   const rarity = COSMETIC_RARITY_BY_ID[item.rarity];
-  const duplicateText = state.lastGacha.duplicate ? ` / 重複 +${rarity.refund}T` : '';
+  const duplicateText = state.lastGacha.duplicate ? ` / 重複 ${tokenAmount(rarity.refund, 'token-gain', '+')}` : '';
   return `
     <div class="gacha-result" style="--accent:${rarity.color}">
       <b>${rarity.name}${duplicateText}</b>
@@ -9688,7 +12470,6 @@ function updateHud(){
   const now = performance.now();
   if(now < state.nextHudAt) return;
   state.nextHudAt = now + 100;
-  const tokenReward = calculateTokenReward();
   const threshold = xpThreshold();
   const hudClass = `hud game-hud on${state.hp / Math.max(1, state.maxHp) < .30 ? ' critical' : ''}${state.basicPoints > 0 ? ' has-bp' : ''}`;
   if(ui.refs.hud && hudCache.hudClass !== hudClass){
@@ -9697,20 +12478,12 @@ function updateHud(){
   }
   setHudText('wave', state.wave);
   setHudText('score', formatNumber(state.score));
-  setHudText('time', `${waveSeconds()}秒`);
-  setHudText('tokenTop', `+${formatNumber(tokenReward)}`);
   setHudWidth('waveProgress', Math.min(100, state.waveTime / waveDuration() * 100));
   setHudWidth('hp', Math.max(0, state.hp / state.maxHp * 100));
-  setHudWidth('energy', Math.max(0, state.energy));
   setHudText('hpText', `${Math.max(0, Math.ceil(state.hp))}/${state.maxHp}`);
-  setHudText('energyText', `${Math.max(0, Math.floor(state.energy))}%`);
   setHudWidth('xp', Math.min(100, state.xp / threshold * 100));
   setHudText('xpLabel', `XP ${state.level}`);
-  setHudText('xpText', `${state.skillPoints}SP`);
-  setHudText('levelChip', state.level);
-  setHudText('specialPointChip', state.skillPoints);
-  setHudText('bpChip', state.basicPoints);
-  setHudText('tokenPreview', `+${formatNumber(tokenReward)}`);
+  setHudText('xpText', `${Math.floor(state.xp)}/${threshold}`);
   setHudText('skillControl', `基礎強化 ${state.basicPoints}`);
 }
 
@@ -9974,7 +12747,7 @@ function loop(now){
   else setTimeout(() => requestAnimationFrame(loop), 120);
   if(state.mode === 'home' || state.mode === 'store' || state.mode === 'garage'){
     const minFrameMs = homeShipDrag.pointer === null && Math.abs(homeShipDrag.velocity) < .06
-      ? (LOW_POWER_DEVICE ? 50 : 33)
+      ? (VISUAL_LOW_POWER ? 50 : 33)
       : 16;
     if(now - lastVisualFrameAt < minFrameMs) return;
   }
@@ -10021,10 +12794,16 @@ function updatePlay(dt, t){
   }
 
   state.firing -= dt;
-  if(state.firing <= 0 && bullets.length < MAX_BULLETS){
+  if(state.firing <= 0){
     const fireBoost = (1 + statLevel('fireRate') * .085) * barrelFireBoost() * loadoutMult('fireRate');
-    state.firing = Math.max(.055, (.18 - Math.min(.08, state.wave * .0014)) / fireBoost);
-    fireShot();
+    const fireInterval = Math.max(.052, (.18 - Math.min(.08, state.wave * .0014)) / fireBoost);
+    let volleys = 0;
+    while(state.firing <= 0 && volleys < 3){
+      fireShot();
+      state.firing += fireInterval;
+      volleys++;
+    }
+    if(state.firing <= 0) state.firing = fireInterval;
   }
 
   state.spawnTimer -= dt;
@@ -10048,9 +12827,9 @@ function applySceneVisualMode(mode){
   if(mode === 'home'){
     player.root.visible = false;
     homeShip.root.visible = true;
-    homeShip.materials.edge.opacity = .92;
-    homeShip.materials.goldLine.opacity = .82;
-    homeShip.materials.roseLine.opacity = .78;
+    homeShip.materials.edge.opacity = .72;
+    homeShip.materials.goldLine.opacity = .64;
+    homeShip.materials.roseLine.opacity = .58;
     homeShip.materials.shadow.opacity = .07;
     if(homeShip.materials.hull.emissive) homeShip.materials.hull.emissiveIntensity = 1.55;
     if(homeShip.materials.wing.emissive) homeShip.materials.wing.emissiveIntensity = 1.05;
@@ -10061,7 +12840,7 @@ function applySceneVisualMode(mode){
     player.root.visible = true;
     player.root.position.y = PLAYER_Y;
     player.root.position.z = PLAYER_Z;
-    player.root.scale.setScalar(2.12);
+    player.root.scale.setScalar(1.78);
     player.root.rotation.x = -.13;
     player.root.rotation.y = 0;
     player.root.rotation.z = 0;
@@ -10073,6 +12852,7 @@ function applySceneVisualMode(mode){
 
 function updateHomePreview(dt, t){
   applySceneVisualMode('home');
+  syncHomeShipParts();
   const showroomMode = state.mode === 'store' || state.mode === 'garage';
   ringPhase = (ringPhase + 6.5 * dt) % PIPE_RING_LOOP;
   for(let i=0;i<stage.starLayers.length;i++){
@@ -10096,14 +12876,14 @@ function updateHomePreview(dt, t){
     homeShipDrag.pitch += (-.02 - homeShipDrag.pitch) * Math.min(1, dt * .42);
   }
   homeShip.root.position.set(
-    (showroomMode ? 2.92 : 3.72) + Math.sin(t * .65) * .08,
-    (showroomMode ? 7.05 : 2.18) + Math.sin(t * 1.15) * .09,
-    showroomMode ? -8.30 : -8.05
+    (showroomMode ? 2.12 : 1.12) + Math.sin(t * .65) * .06,
+    (showroomMode ? 4.42 : 3.62) + Math.sin(t * 1.15) * .07,
+    showroomMode ? -8.58 : -8.42
   );
-  homeShip.root.rotation.x = (showroomMode ? -.56 : -.40) + homeShipDrag.pitch + Math.sin(t * .55) * .020;
-  homeShip.root.rotation.y = (showroomMode ? -.25 : -.58) + homeShipDrag.yaw + Math.sin(t * .42) * .018;
-  homeShip.root.rotation.z = (showroomMode ? -.31 : -.36) + Math.sin(t * .80) * .028;
-  homeShip.root.scale.setScalar((showroomMode ? 2.58 : 3.05) + Math.sin(t * 1.2) * .034);
+  homeShip.root.rotation.x = (showroomMode ? -.47 : -.46) + homeShipDrag.pitch + Math.sin(t * .55) * .018;
+  homeShip.root.rotation.y = (showroomMode ? -.62 : -.44) + homeShipDrag.yaw + Math.sin(t * .42) * .016;
+  homeShip.root.rotation.z = (showroomMode ? -.25 : -.18) + Math.sin(t * .80) * .024;
+  homeShip.root.scale.setScalar((showroomMode ? 2.20 : 2.60) + Math.sin(t * 1.2) * .030);
   homeShip.core.scale.setScalar(1.08 + Math.sin(t * 9) * .12);
 
   ambient.intensity += (1.7 - ambient.intensity) * Math.min(1, dt * 4.8);
@@ -10111,10 +12891,10 @@ function updateHomePreview(dt, t){
   rimLight.intensity += (9.5 - rimLight.intensity) * Math.min(1, dt * 4.8);
   keyLight.position.set(3.8, -2.4, 6.8);
   rimLight.position.set(6.4, 2.8, -7.6);
-  camera.position.x += ((showroomMode ? -.52 : -.62) - camera.position.x) * Math.min(1, dt * 5.2);
-  camera.position.y += ((showroomMode ? CAMERA_BASE_Y + 1.95 : CAMERA_BASE_Y + 2.25) - camera.position.y) * Math.min(1, dt * 5.2);
-  camera.position.z += ((showroomMode ? 9.88 : 10.15) - camera.position.z) * Math.min(1, dt * 5.2);
-  cameraHomeTarget.set(showroomMode ? .42 : .58, showroomMode ? -1.10 : .55, -8.55);
+  camera.position.x += ((showroomMode ? -.42 : -.36) - camera.position.x) * Math.min(1, dt * 5.2);
+  camera.position.y += ((showroomMode ? CAMERA_BASE_Y + 1.20 : CAMERA_BASE_Y + 1.45) - camera.position.y) * Math.min(1, dt * 5.2);
+  camera.position.z += ((showroomMode ? 10.28 : 10.15) - camera.position.z) * Math.min(1, dt * 5.2);
+  cameraHomeTarget.set(showroomMode ? .34 : .25, showroomMode ? -.20 : -.20, showroomMode ? -8.55 : -8.42);
   camera.lookAt(cameraHomeTarget);
 }
 
@@ -10133,14 +12913,14 @@ function updateStage(dt, t){
     const loop = layer.userData.loop || PIPE_RING_LOOP;
     const scroll = layer.userData.scroll || 8;
     layer.position.z = (ringPhase * scroll / 18) % loop;
-    layer.rotation.z = -state.roll * (.05 + i * .035) + Math.sin(t * (.10 + i * .03)) * .015;
+    layer.rotation.z = -state.roll * (.04 + i * .025) + Math.sin(t * (.08 + i * .02)) * .006;
     if(layer.userData.twinkle && layer.material){
       const wave = .5 + .5 * Math.sin(t * (.45 + i * .13) + layer.userData.phase);
       layer.material.opacity = layer.userData.baseOpacity * (1 - layer.userData.twinkle + layer.userData.twinkle * wave);
     }
   }
   world.rotation.z = -state.roll;
-  pipeRoot.rotation.z = Math.sin(t * .4) * .018;
+  pipeRoot.rotation.z = Math.sin(t * .32) * .006;
 
   const bank = -state.input * PLAYER_BANK_SCALE - state.rollVel * .06;
   player.root.rotation.z += (bank - player.root.rotation.z) * Math.min(1, dt * 5.8);
@@ -10164,6 +12944,19 @@ function updateBullets(dt){
     const b = bullets[i];
     b.z -= b.speed * dt;
     b.life -= dt;
+    if(b.angleVelocity){
+      const nextAngle = normalizeAngle(b.angle + b.angleVelocity * dt);
+      const spread = signedAngleDelta(nextAngle, b.originAngle ?? b.angle);
+      const limit = Math.max(0, b.spreadLimit || 0);
+      if(limit && Math.abs(spread) > limit){
+        b.angle = normalizeAngle((b.originAngle ?? b.angle) + Math.sign(spread) * limit);
+        b.angleVelocity = 0;
+      }else{
+        b.angle = nextAngle;
+      }
+      b.sin = Math.sin(b.angle);
+      b.cos = Math.cos(b.angle);
+    }
     if(b.life <= 0 || b.z < PIPE_Z_FAR){
       removeBullet(i);
     }
@@ -10181,7 +12974,7 @@ function updateEnemies(dt, t){
       : 1;
     if(e.boss){
       e.z += (e.targetZ - e.z) * Math.min(1, dt * .55 * stasisSlow);
-      e.angle += Math.sin(t * .7 + e.phase) * dt * .22;
+      e.angle += Math.sin(t * .55 + e.phase) * dt * .09;
       e.fire -= dt;
       if(e.fire <= 0){
         e.fire = Math.max(.55, 1.25 - state.wave * .006);
@@ -10195,6 +12988,7 @@ function updateEnemies(dt, t){
     const visible = rollDistance < ENEMY_VISIBLE_ARC || (e.boss && e.z <= BOSS_SIGHT_Z);
     e.root.visible = visible;
     e.hitFlash = Math.max(0, (e.hitFlash || 0) - dt * 5.8);
+    e.hitAura = Math.max(0, (e.hitAura || 0) - dt * 2.8);
     if(visible){
       setPipePosition(e.root, e.angle, e.z, e.boss ? .68 : .88);
       const presence = enemyDepthPresence(e);
@@ -10217,8 +13011,7 @@ function updateEnemies(dt, t){
         const counterDamage = collisionDamageAmount(e);
         if(counterDamage > 0){
           e.hp -= counterDamage;
-          e.hitFlash = 1;
-          burst(e.angle, e.z, 0xffd36a, e.boss ? 3 : 2);
+          triggerEnemyHit(e, 0xffd36a, e.boss ? 3 : 2);
           if(e.hp <= 0){
             defeatEnemy(e, i);
             continue;
@@ -10241,8 +13034,7 @@ function hitEnemyWithBullets(enemy, enemyIndex){
     const da = angleDistance(enemy.angle, b.angle);
     if(da > (enemy.boss ? .38 : .16 + enemy.radius * .08)) continue;
     enemy.hp -= b.damage;
-    enemy.hitFlash = 1;
-    burst(enemy.angle, enemy.z, b.crit ? 0xffd36a : enemy.type.color, enemy.boss ? 3 : 1);
+    triggerEnemyHit(enemy, b.crit ? 0xffd36a : enemy.type.color, b.crit ? 2 : 1);
     removeBullet(i);
     if(enemy.hp <= 0){
       defeatEnemy(enemy, enemyIndex);
@@ -10255,7 +13047,9 @@ function hitEnemyWithBullets(enemy, enemyIndex){
 function defeatEnemy(enemy, enemyIndex){
   state.score += enemy.boss ? 5200 + state.wave * 140 : 90 + state.wave * 12;
   state.kills++;
-  grantXp(enemy.boss ? 95 + state.wave * 8 : 18 + state.wave * 2);
+  const xpGain = enemy.boss ? 95 + state.wave * 8 : 18 + state.wave * 2;
+  spawnXpBurst(enemy, xpGain);
+  grantXp(xpGain);
   if(enemy.boss){
     state.bossAlive = false;
     state.energy = Math.min(100, state.energy + 28);
@@ -10267,14 +13061,14 @@ function damagePlayer(amount){
   if(amount <= 0) return;
   const evade = evasionChance();
   if(evade > 0 && Math.random() < evade){
-    state.shake = Math.max(state.shake, .38);
-    burst(state.roll, PLAYER_Z - .3, 0x1ed6ff, 2);
+    state.shake = Math.max(state.shake, .24);
+    burst(state.roll, PLAYER_Z - .3, 0x1ed6ff, 3);
     return;
   }
   const taken = Math.max(1, Math.ceil(amount * defenseMultiplier() * specialDefenseMultiplier()));
   state.hp -= taken;
-  state.shake = 1;
-  burst(state.roll, PLAYER_Z - .3, 0xff3b62, 2);
+  state.shake = Math.max(state.shake, .62);
+  burst(state.roll, PLAYER_Z - .3, 0xff3b62, 4);
 }
 
 function fireShot(){
@@ -10292,7 +13086,7 @@ function fireShot(){
   }else if(sniper > 0){
     pushBullet(0, baseDamage, speed, life, 3.25, 1.72, 1.55);
   }else if(multishot > 0){
-    for(const offset of MULTISHOT_OFFSETS) pushBullet(offset, baseDamage, speed, life, .74, 1, .96);
+    for(const spread of MULTISHOT_SPREADS) pushBullet(0, baseDamage, speed, life, .74, 1, .96, PLAYER_RADIAL, spread, MULTISHOT_SPREAD_LIMIT);
   }else if(doubleBarrel > 0){
     const offsets = DOUBLE_BARREL_OFFSETS[Math.min(2, doubleBarrel - 1)] || DOUBLE_BARREL_OFFSETS[0];
     for(const offset of offsets) pushBullet(offset, baseDamage, speed, life, .82, 1.03, 1);
@@ -10304,12 +13098,15 @@ function fireShot(){
   bulletsDirty = true;
 }
 
-function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedMult = 1, lifeMult = 1, radial = PLAYER_RADIAL){
-  if(bullets.length >= MAX_BULLETS) return;
+function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedMult = 1, lifeMult = 1, radial = PLAYER_RADIAL, angleVelocity = 0, spreadLimit = 0){
+  if(!reserveBulletSlot()) return;
   const angle = normalizeAngle(state.roll + angleOffset);
   const crit = Math.random() < (critChance() + cosmeticBuff('crit'));
   bullets.push({
     angle,
+    originAngle: angle,
+    angleVelocity,
+    spreadLimit,
     sin: Math.sin(angle),
     cos: Math.cos(angle),
     z: PLAYER_Z - .72,
@@ -10319,6 +13116,22 @@ function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedM
     crit,
     life: life * lifeMult
   });
+}
+
+function reserveBulletSlot(){
+  if(bullets.length < MAX_BULLETS) return true;
+  let recycleIndex = 0;
+  let oldestScore = -Infinity;
+  for(let i=0;i<bullets.length;i++){
+    const b = bullets[i];
+    const score = Math.max(0, PLAYER_Z - b.z) + Math.max(0, 1 - b.life) * 18;
+    if(score > oldestScore){
+      oldestScore = score;
+      recycleIndex = i;
+    }
+  }
+  removeBullet(recycleIndex);
+  return true;
 }
 
 function spawnEnemyPack(){
@@ -10341,14 +13154,14 @@ function spawnEnemy(offset = 0){
     hp: Math.ceil(type.hp * wavePower * (1 + state.wave * .022)),
     damage: Math.ceil(type.damage * (1 + state.wave * .018)),
     speed: 12.5 + Math.min(8.5, state.wave * .11) + Math.random() * 2.2,
-    radius: type.radius,
-    baseScale: 1,
+    radius: type.radius * ENEMY_HITBOX_MULT,
+    baseScale: ENEMY_SIZE_MULT,
     phase: Math.random() * TAU,
-    drift: .09 + Math.random() * .08,
-    wobble: .8 + Math.random() * .6,
-    spinX: (Math.random() - .5) * 1.8,
-    spinY: (Math.random() - .5) * 1.8,
-    spinZ: (Math.random() - .5) * 2.4
+    drift: .026 + Math.random() * .030,
+    wobble: .45 + Math.random() * .34,
+    spinX: (Math.random() - .5) * 1.15,
+    spinY: (Math.random() - .5) * 1.15,
+    spinZ: (Math.random() - .5) * 1.55
   };
   enemy.spawnZ = enemy.z;
   enemies.push(enemy);
@@ -10371,14 +13184,14 @@ function spawnBoss(){
     targetZ: -18,
     hp: Math.ceil((220 + state.wave * 38) * Math.pow(1.035, state.wave - 10)),
     damage: 42 + Math.floor(state.wave * 1.2),
-    radius:1.4,
-    baseScale:1.55,
+    radius:1.4 * ENEMY_HITBOX_MULT,
+    baseScale:2.26,
     speed:0,
     phase:Math.random() * TAU,
     fire:1.4,
-    spinX:.45,
-    spinY:.72,
-    spinZ:.34
+    spinX:.30,
+    spinY:.48,
+    spinZ:.22
   };
   enemy.spawnZ = enemy.z;
   enemies.push(enemy);
@@ -10401,14 +13214,14 @@ function spawnBossShard(boss){
       hp: Math.ceil(8 + state.wave * .6),
       damage: Math.ceil(18 + state.wave * .4),
       speed: 24 + Math.min(8, state.wave * .08),
-      radius:.42,
-      baseScale:.72,
+      radius:.42 * ENEMY_HITBOX_MULT,
+      baseScale:1.20,
       phase:Math.random() * TAU,
-      drift:.035,
-      wobble:1,
-      spinX:1.5,
-      spinY:.7,
-      spinZ:2.1
+      drift:.018,
+      wobble:.58,
+      spinX:.95,
+      spinY:.44,
+      spinZ:1.28
     };
     shard.spawnZ = shard.z;
     enemies.push(shard);
@@ -10431,6 +13244,10 @@ function acquireEnemyObject(type, boss = false){
     root.userData.opacity = null;
     if(root.userData.core) root.userData.core.visible = true;
     if(root.userData.glow) root.userData.glow.visible = true;
+    if(root.userData.damageAura){
+      root.userData.damageAura.visible = false;
+      root.userData.damageAura.material.opacity = 0;
+    }
   }
   return root;
 }
@@ -10441,6 +13258,10 @@ function releaseEnemyObject(enemy){
   const pool = enemyPools.get(key) || [];
   enemy.root.visible = false;
   setEnemyFlash(enemy.root, 0);
+  if(enemy.root.userData?.damageAura){
+    enemy.root.userData.damageAura.visible = false;
+    enemy.root.userData.damageAura.material.opacity = 0;
+  }
   if(pool.length < ENEMY_POOL_LIMIT){
     pool.push(enemy.root);
     enemyPools.set(key, pool);
@@ -10467,7 +13288,7 @@ function makeEnemyObject(type, boss = false){
     const outerHalo = addEnemyRing(root, 2.28, shared.edgeMaterials.get('boss'), Math.PI / 2, 0, Math.PI / 3, -.34);
     outerHalo.rotation.x = Math.PI / 2;
     outerHalo.rotation.z = Math.PI / 3;
-    const sightRing = new THREE.Line(makeRingCircleGeometry(3.05, LOW_POWER_DEVICE ? 44 : 52), shared.materials.bossSight);
+    const sightRing = new THREE.Line(makeRingCircleGeometry(3.05, VISUAL_LOW_POWER ? 44 : 52), shared.materials.bossSight);
     sightRing.rotation.x = Math.PI / 2;
     sightRing.position.z = -.08;
     root.add(sightRing);
@@ -10480,15 +13301,21 @@ function decorateEnemyObject(root, type, boss, key){
   const coreGeometry = boss ? shared.geometries.bossCore : shared.geometries.enemyCore;
   const core = new THREE.Mesh(coreGeometry, shared.coreMaterials.get(key));
   const glow = new THREE.Mesh(shared.geometries.enemyGlow, shared.glowMaterials.get(key));
+  const damageAura = new THREE.Mesh(shared.geometries.enemyGlow, shared.glowMaterials.get(key));
   const coreScale = boss ? 1.05 : type.id === 'orb' ? .78 : .62;
   const glowScale = boss ? 1.85 : type.id === 'orb' ? 1.05 : .92;
+  const damageAuraScale = glowScale * (boss ? 1.36 : 1.42);
   core.scale.setScalar(coreScale);
   glow.scale.setScalar(glowScale);
+  damageAura.scale.setScalar(damageAuraScale);
+  damageAura.visible = false;
   root.userData.core = core;
   root.userData.glow = glow;
+  root.userData.damageAura = damageAura;
   root.userData.coreBase = coreScale;
   root.userData.glowBase = glowScale;
-  root.add(glow, core);
+  root.userData.damageAuraBase = damageAuraScale;
+  root.add(glow, damageAura, core);
 
   if(boss){
     addEnemyRing(root, 1.06, shared.edgeMaterials.get(key), 0, Math.PI / 2, 0, .95);
@@ -10582,9 +13409,45 @@ function removeBullet(index){
   bulletsDirty = true;
 }
 
-function burst(angle, z, color, amount = 1){
-  const count = Math.min(MAX_PARTICLES - particles.length, amount * 3);
+function triggerEnemyHit(enemy, color, amount = 1){
+  enemy.hitFlash = 1;
+  enemy.hitAura = 1;
+  burst(enemy.angle, enemy.z, color, enemy.boss ? amount + 2 : amount);
+}
+
+function spawnXpBurst(enemy, amount){
+  const count = Math.max(0, Math.min(
+    MAX_PARTICLES - particles.length,
+    enemy.boss
+      ? (VISUAL_LOW_POWER ? 8 : 12)
+      : Math.max(VISUAL_LOW_POWER ? 3 : 4, Math.min(VISUAL_LOW_POWER ? 5 : 7, Math.ceil(amount / 8)))
+  ));
   for(let i=0;i<count;i++){
+    const life = .82 + Math.random() * .34;
+    particles.push({
+      color: i % 3 === 0 ? 0xd8e2ea : 0x36f39b,
+      angle: enemy.angle + (Math.random() - .5) * .24,
+      z: enemy.z + (Math.random() - .5) * .72,
+      radial: .76 + Math.random() * .16,
+      va: (Math.random() - .5) * .28,
+      vz: 0,
+      vr: 0,
+      life,
+      maxLife: life,
+      size: enemy.boss ? 1.7 : 1.18,
+      seekPlayer: true,
+      seekRate: 3.4 + Math.random() * 1.8,
+      targetRadial: PLAYER_RADIAL,
+      targetZ: PLAYER_Z - .12
+    });
+  }
+  particlesDirty = true;
+}
+
+function burst(angle, z, color, amount = 1){
+  const count = Math.max(0, Math.min(MAX_PARTICLES - particles.length, amount * (VISUAL_LOW_POWER ? 2 : 3)));
+  for(let i=0;i<count;i++){
+    const life = .55 + Math.random() * .35;
     const p = {
       color,
       angle: angle + (Math.random() - .5) * .42,
@@ -10592,8 +13455,9 @@ function burst(angle, z, color, amount = 1){
       radial: .65 + Math.random() * .18,
       va: (Math.random() - .5) * 1.2,
       vz: (Math.random() - .5) * 10,
-      life: .55 + Math.random() * .35,
-      maxLife: .9
+      life,
+      maxLife: life,
+      size: 1
     };
     particles.push(p);
   }
@@ -10605,8 +13469,16 @@ function updateParticles(dt){
   for(let i=particles.length-1;i>=0;i--){
     const p = particles[i];
     p.life -= dt;
-    p.angle += p.va * dt;
-    p.z += p.vz * dt;
+    if(p.seekPlayer){
+      const ease = Math.min(1, dt * (p.seekRate || 4));
+      p.angle = normalizeAngle(p.angle + signedAngleDelta(state.roll, p.angle) * ease);
+      p.radial += ((p.targetRadial ?? PLAYER_RADIAL) - p.radial) * ease;
+      p.z += ((p.targetZ ?? PLAYER_Z) - p.z) * ease;
+    }else{
+      p.angle += p.va * dt;
+      p.z += p.vz * dt;
+      p.radial += (p.vr || 0) * dt;
+    }
     if(p.life <= 0){
       removeParticle(i);
     }
@@ -10697,7 +13569,7 @@ function syncParticleInstances(){
       p.z
     );
     particleDummy.rotation.set(0, 0, 0);
-    particleDummy.scale.setScalar(Math.max(.05, p.life / p.maxLife));
+    particleDummy.scale.setScalar(Math.max(.05, (p.size || 1) * p.life / p.maxLife));
     particleDummy.updateMatrix();
     particleMesh.setMatrixAt(i, particleDummy.matrix);
     particleColor.set(p.color);
@@ -10781,6 +13653,16 @@ function syncEnemyDetail(enemy){
 function animateEnemyObject(enemy, dt, t){
   const data = enemy.root.userData;
   if(!data) return;
+  const hitAura = enemy.hitAura || 0;
+  if(data.damageAura){
+    data.damageAura.visible = hitAura > .02;
+    if(data.damageAura.visible){
+      const base = data.damageAuraBase || 1;
+      data.damageAura.scale.setScalar(base * (1.08 + (1 - hitAura) * .32));
+      data.damageAura.rotation.z -= dt * (enemy.boss ? 1.9 : 2.6);
+      data.damageAura.material.opacity = (enemy.boss ? .34 : .28) * hitAura;
+    }
+  }
   if(!enemy.boss && !data.detailVisible) return;
   if(data.core){
     const pulse = 1 + Math.sin(t * (enemy.boss ? 7.5 : 9.0) + enemy.phase) * (enemy.boss ? .12 : .08);
@@ -10804,6 +13686,12 @@ function angleDistance(a, b){
   return Math.abs(d);
 }
 
+function signedAngleDelta(target, current){
+  let d = normalizeAngle(target - current);
+  if(d > Math.PI) d -= TAU;
+  return d;
+}
+
 function normalizeAngle(a){
   a %= TAU;
   return a < 0 ? a + TAU : a;
@@ -10820,13 +13708,19 @@ function formatNumber(n){
   return v.toLocaleString('ja-JP');
 }
 
+function tokenAmount(value, className = '', prefix = '', ref = ''){
+  const extraClass = className ? ` ${className}` : '';
+  const refAttr = ref ? ` data-ref="${ref}"` : '';
+  return `<span class="token-value${extraClass}"><i class="token-diamond" aria-hidden="true"></i><span class="token-number"${refAttr}>${prefix}${formatNumber(value)}</span></span>`;
+}
+
 function colorCss(color){
   if(typeof color === 'string') return color;
   return `#${Number(color).toString(16).padStart(6, '0')}`;
 }
 
 function render(t){
-  if(state.mode !== 'play' && state.mode !== 'home'){
+  if(state.mode !== 'play' && state.mode !== 'home' && state.mode !== 'store' && state.mode !== 'garage'){
     return;
   }
   renderer.render(scene, camera);
