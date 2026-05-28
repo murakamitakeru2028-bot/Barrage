@@ -379,7 +379,8 @@ const state = {
   cosmetics: freshCosmeticState(),
   lastGacha: null,
   nextHudAt: 0,
-  storeCategory: 'ship'
+  storeCategory: 'ship',
+  storePreviewShipId: null
 };
 
 const save = loadSave();
@@ -389,6 +390,7 @@ state.tokens = save.tokens;
 state.homeUpgrades = {...freshHomeUpgradeMap(), ...save.homeUpgrades};
 state.garage = save.garage;
 state.cosmetics = save.cosmetics;
+state.storePreviewShipId = state.garage?.selectedShipId || DEFAULT_SHIP_ID;
 
 let renderQualityScale = 1;
 const renderPerf = {sum:0, count:0, windowStart:0, lastChange:0};
@@ -460,6 +462,7 @@ let loadoutBuffCache = null;
 let loadoutMultCache = null;
 let statLevelCache = null;
 let statMultCache = null;
+let uiMotionTimer = 0;
 const uiBoundsCache = {left:null, top:null, width:null, height:null, scale:null};
 const canvasBoundsCache = {left:0, top:0, width:W, height:H, scale:1};
 let canvasVisibilityState = null;
@@ -786,6 +789,14 @@ function currentShip(){
   return SHIP_BY_ID[state.garage?.selectedShipId] || SHIP_BY_ID[DEFAULT_SHIP_ID];
 }
 
+function storePreviewShip(){
+  return SHIP_BY_ID[state.storePreviewShipId] || currentShip();
+}
+
+function visualPreviewShip(){
+  return state.mode === 'store' ? storePreviewShip() : currentShip();
+}
+
 function shipOwned(id){
   return !!state.garage?.ownedShips?.[id];
 }
@@ -1041,6 +1052,7 @@ function buyShip(id){
   state.tokens -= ship.cost;
   state.garage.ownedShips[id] = 1;
   state.garage.selectedShipId = id;
+  state.storePreviewShipId = id;
   invalidateLoadoutCache();
   markHomeShipPartsDirty();
   refreshLoadoutVitals();
@@ -1088,6 +1100,7 @@ function buyPart(id){
 function equipShip(id){
   if(!SHIP_BY_ID[id] || !shipOwned(id)) return;
   state.garage.selectedShipId = id;
+  state.storePreviewShipId = id;
   invalidateLoadoutCache();
   refreshLoadoutVitals();
   saveProgress();
@@ -1169,6 +1182,29 @@ function applyLineColor(material, color){
   if(material?.color) material.color.setHex(color);
 }
 
+function colorHexValue(color, fallback = 0x8eefff){
+  if(typeof color === 'number' && Number.isFinite(color)) return color & 0xffffff;
+  if(typeof color === 'string'){
+    let value = color.trim();
+    if(value.startsWith('#')) value = value.slice(1);
+    if(value.length === 3) value = value.split('').map(ch => ch + ch).join('');
+    const parsed = Number.parseInt(value, 16);
+    if(Number.isFinite(parsed)) return parsed & 0xffffff;
+  }
+  return fallback;
+}
+
+function applyHomeShipFrameAccent(ship){
+  if(!homeShip?.materials || !ship) return;
+  const accent = colorHexValue(ship.color);
+  applyColor(homeShip.materials.core, accent);
+  applyColor(homeShip.materials.glass, accent);
+  applyLineColor(homeShip.materials.edge, accent);
+  applyLineColor(homeShip.materials.roseLine, accent);
+  if(homeShip.materials.glass?.emissive) homeShip.materials.glass.emissive.setHex(accent);
+  if(homeShip.materials.panel?.emissive) homeShip.materials.panel.emissive.setHex(accent);
+}
+
 function applyCosmetics(){
   if(!shared?.materials) return;
   const bullet = equippedCosmetic('bulletSkin');
@@ -1213,7 +1249,7 @@ function markHomeShipPartsDirty(){
 function syncHomeShipParts(force = false){
   if(!homeShip?.partVisuals) return;
   if(!force && !homeShipPartsDirty) return;
-  const ship = currentShip();
+  const ship = visualPreviewShip();
   const equippedKey = PART_TYPES
     .map(type => `${type}:${(state.garage?.equippedParts?.[type] || []).join(',')}:${shipSlotCount(type, ship)}`)
     .join('|');
@@ -1224,6 +1260,7 @@ function syncHomeShipParts(force = false){
   }
   previewPartVisualKey = key;
   homeShipPartsDirty = false;
+  applyHomeShipFrameAccent(ship);
   for(const type of PART_TYPES){
     const equipped = state.garage?.equippedParts?.[type] || [];
     const slots = shipSlotCount(type, ship);
@@ -16214,11 +16251,11 @@ function createUi(){
       transform:translateY(1px) !important;
     }
     #barrage-ui .home-actions{
-      grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
       gap:7px !important;
     }
     #barrage-ui .home-actions .action-tile{
-      grid-column:span 2 !important;
+      grid-column:span 1 !important;
     }
     #barrage-ui .home-actions .action-tile:nth-child(4),
     #barrage-ui .home-actions .action-tile:nth-child(5){
@@ -17486,6 +17523,134 @@ function createUi(){
       font-size:8px !important;
       opacity:.78 !important;
     }
+    @keyframes uiModeWipe{
+      0%{opacity:0;translate:-118% 0;scale:1 .96}
+      18%{opacity:.78}
+      64%{opacity:.42}
+      100%{opacity:0;translate:118% 0;scale:1 1}
+    }
+    @keyframes uiModeGridKick{
+      0%{opacity:0;clip-path:inset(42% 0 42% 0)}
+      34%{opacity:.42;clip-path:inset(0 0 0 0)}
+      100%{opacity:0;clip-path:inset(0 0 0 0)}
+    }
+    @keyframes uiTapBurst{
+      0%{opacity:.92;scale:.36;rotate:0deg}
+      38%{opacity:.74;scale:1.05;rotate:8deg}
+      100%{opacity:0;scale:1.52;rotate:15deg}
+    }
+    @keyframes uiOfferIn{
+      0%{opacity:0;translate:18px 10px;scale:.985;filter:brightness(1.24)}
+      62%{opacity:1;translate:-3px -1px;scale:1.006;filter:brightness(1.08)}
+      100%{opacity:1;translate:0 0;scale:1;filter:brightness(1)}
+    }
+    @keyframes uiActiveScan{
+      0%{opacity:0;translate:-122% 0}
+      18%{opacity:.88}
+      82%{opacity:.42}
+      100%{opacity:0;translate:122% 0}
+    }
+    @keyframes uiTabSnap{
+      0%{translate:0 5px;scale:.94;filter:brightness(.9)}
+      56%{translate:0 -2px;scale:1.055;filter:brightness(1.18)}
+      100%{translate:0 0;scale:1;filter:brightness(1)}
+    }
+    #barrage-ui.motion-switch::before,
+    #barrage-ui.motion-switch::after{
+      content:"" !important;
+      position:absolute !important;
+      inset:-3px !important;
+      z-index:60 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui.motion-switch::before{
+      background:
+        linear-gradient(102deg,transparent 0 18%,rgba(102,247,255,.18) 18% 24%,rgba(242,251,251,.70) 24% 31%,rgba(102,247,255,.18) 31% 38%,transparent 38% 100%) !important;
+      mix-blend-mode:screen !important;
+      animation:uiModeWipe 320ms cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui.motion-switch::after{
+      background:
+        linear-gradient(rgba(242,251,251,.10) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(102,247,255,.11) 1px,transparent 1px) !important;
+      background-size:22px 22px !important;
+      box-shadow:inset 0 0 0 1px rgba(102,247,255,.18),inset 0 0 42px rgba(102,247,255,.10) !important;
+      animation:uiModeGridKick 300ms cubic-bezier(.2,.8,.2,1) both !important;
+    }
+    #barrage-ui .ui-tap-burst{
+      position:absolute !important;
+      z-index:70 !important;
+      width:44px !important;
+      height:44px !important;
+      margin:-22px 0 0 -22px !important;
+      pointer-events:none !important;
+      border:2px solid rgba(102,247,255,.86) !important;
+      border-left-color:rgba(242,251,251,.96) !important;
+      border-bottom-color:rgba(242,251,251,.28) !important;
+      background:
+        linear-gradient(135deg,rgba(102,247,255,.20),transparent 48%),
+        linear-gradient(90deg,transparent 47%,rgba(242,251,251,.78) 47% 53%,transparent 53%) !important;
+      clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px) !important;
+      box-shadow:0 0 22px rgba(102,247,255,.34),inset 0 0 18px rgba(102,247,255,.18) !important;
+      mix-blend-mode:screen !important;
+      animation:uiTapBurst 360ms cubic-bezier(.16,1,.3,1) forwards !important;
+    }
+    #barrage-ui .store-offer-card{
+      isolation:isolate !important;
+      animation:uiOfferIn 300ms cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .store-offer-card:nth-child(2){animation-delay:35ms !important}
+    #barrage-ui .store-offer-card:nth-child(3){animation-delay:70ms !important}
+    #barrage-ui .store-offer-card:nth-child(n+4){animation-delay:105ms !important}
+    #barrage-ui .store-offer-card::before{
+      content:"" !important;
+      position:absolute !important;
+      inset:-18% auto -18% 0 !important;
+      z-index:-1 !important;
+      width:46% !important;
+      background:linear-gradient(90deg,transparent,rgba(102,247,255,.18),rgba(242,251,251,.24),transparent) !important;
+      transform:skewX(-18deg) !important;
+      opacity:0 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .store-offer-card::after{
+      content:"" !important;
+      position:absolute !important;
+      left:8px !important;
+      top:8px !important;
+      width:18px !important;
+      height:3px !important;
+      z-index:1 !important;
+      background:linear-gradient(90deg,var(--accent,var(--zzz-cyan)),transparent) !important;
+      box-shadow:0 0 14px color-mix(in srgb,var(--accent,var(--zzz-cyan)) 45%,transparent) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .store-offer-card:is(:hover,.is-selected)::before{
+      animation:uiActiveScan 520ms cubic-bezier(.2,.8,.2,1) 1 both !important;
+    }
+    #barrage-ui .store-category-tab.active{
+      animation:uiTabSnap 230ms cubic-bezier(.2,1.4,.24,1) both !important;
+    }
+    #barrage-ui .store-category-tab b{
+      position:relative !important;
+    }
+    #barrage-ui .store-category-tab.active b::after{
+      content:"" !important;
+      position:absolute !important;
+      left:50% !important;
+      bottom:-7px !important;
+      width:26px !important;
+      height:3px !important;
+      translate:-50% 0 !important;
+      background:#061014 !important;
+      box-shadow:0 0 12px rgba(6,16,20,.32) !important;
+      clip-path:polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%) !important;
+    }
+    #barrage-ui .upgrade-choice:not(:disabled):hover,
+    #barrage-ui .store-offer-card:hover,
+    #barrage-ui .garage-ship:not(:disabled):hover{
+      translate:0 -2px !important;
+    }
     @media (max-width:370px){
       #barrage-ui .store-market-v3{
         grid-template-rows:38px 44px minmax(0,1fr) 52px !important;
@@ -17527,6 +17692,1079 @@ function createUi(){
         box-shadow:0 8px 16px rgba(0,0,0,.34) !important;
       }
     }
+    /* Home start recovery: keep the launch command visible above the footer action grid. */
+    #barrage-ui .home-screen .primary-start{
+      display:grid !important;
+      visibility:visible !important;
+      opacity:1 !important;
+      pointer-events:auto !important;
+      position:absolute !important;
+      z-index:58 !important;
+      left:14px !important;
+      right:14px !important;
+      top:auto !important;
+      bottom:140px !important;
+      width:auto !important;
+      height:62px !important;
+      min-height:62px !important;
+      grid-template-rows:auto auto !important;
+      align-content:center !important;
+      justify-items:center !important;
+      gap:4px !important;
+      padding:0 54px 0 18px !important;
+      color:#061014 !important;
+      border:1px solid rgba(102,247,255,.90) !important;
+      border-top:4px solid #f2fbfb !important;
+      border-bottom:4px solid #66f7ff !important;
+      background:
+        linear-gradient(118deg,rgba(255,255,255,.82) 0 18%,transparent 18% 72%,rgba(6,16,20,.12) 72% 75%,transparent 75%),
+        linear-gradient(90deg,#f2fbfb 0%,#66f7ff 100%) !important;
+      box-shadow:0 18px 34px rgba(0,0,0,.44),0 0 28px rgba(102,247,255,.24),inset 0 1px 0 rgba(255,255,255,.50) !important;
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px) !important;
+      transform:none !important;
+      translate:0 0 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .home-screen.on .primary-start{
+      opacity:1 !important;
+    }
+    #barrage-ui .home-screen .primary-start span,
+    #barrage-ui .home-screen .primary-start small{
+      display:block !important;
+      min-width:0 !important;
+      max-width:100% !important;
+      color:#061014 !important;
+      line-height:1 !important;
+      text-align:center !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .home-screen .primary-start span{
+      font-size:24px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .primary-start small{
+      margin:0 !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+      opacity:.70 !important;
+    }
+    #barrage-ui .home-screen .primary-start::before{
+      content:"" !important;
+      display:block !important;
+      position:absolute !important;
+      left:14px !important;
+      top:14px !important;
+      width:10px !important;
+      height:10px !important;
+      border:2px solid #061014 !important;
+      background:transparent !important;
+      opacity:.70 !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .home-screen .primary-start::after{
+      content:"" !important;
+      display:block !important;
+      position:absolute !important;
+      right:18px !important;
+      top:50% !important;
+      bottom:auto !important;
+      width:18px !important;
+      height:18px !important;
+      border:0 !important;
+      border-top:4px solid #061014 !important;
+      border-right:4px solid #061014 !important;
+      background:transparent !important;
+      transform:translateY(-50%) rotate(45deg) !important;
+      opacity:.82 !important;
+      box-shadow:none !important;
+    }
+    /* Home audit hard fit: keep every primary command visible after all legacy animation overrides. */
+    #barrage-ui .home-screen .record-stack{
+      display:block !important;
+      visibility:visible !important;
+      opacity:1 !important;
+      pointer-events:none !important;
+      position:absolute !important;
+      z-index:59 !important;
+      left:auto !important;
+      right:24px !important;
+      top:96px !important;
+      width:128px !important;
+      transform:none !important;
+      translate:0 0 !important;
+      scale:1 !important;
+    }
+    #barrage-ui .home-screen .loadout-panel{
+      display:grid !important;
+      visibility:visible !important;
+      opacity:1 !important;
+      position:absolute !important;
+      z-index:57 !important;
+      left:14px !important;
+      right:14px !important;
+      top:auto !important;
+      bottom:210px !important;
+      width:auto !important;
+      height:64px !important;
+      min-height:64px !important;
+      transform:none !important;
+      translate:0 0 !important;
+      scale:1 !important;
+      animation:none !important;
+    }
+    #barrage-ui .home-screen .primary-start{
+      display:grid !important;
+      visibility:visible !important;
+      opacity:1 !important;
+      pointer-events:auto !important;
+      position:absolute !important;
+      z-index:58 !important;
+      left:14px !important;
+      right:14px !important;
+      top:auto !important;
+      bottom:142px !important;
+      width:auto !important;
+      height:56px !important;
+      min-height:56px !important;
+      transform:none !important;
+      translate:0 0 !important;
+      scale:1 !important;
+      animation:none !important;
+    }
+    #barrage-ui .home-screen .home-actions{
+      display:flex !important;
+      visibility:visible !important;
+      opacity:1 !important;
+      pointer-events:auto !important;
+      position:absolute !important;
+      z-index:58 !important;
+      left:18px !important;
+      right:72px !important;
+      top:auto !important;
+      bottom:12px !important;
+      width:auto !important;
+      flex-wrap:wrap !important;
+      align-content:flex-end !important;
+      gap:7px !important;
+      overflow:visible !important;
+      transform:none !important;
+      translate:0 0 !important;
+      scale:1 !important;
+      animation:none !important;
+    }
+    #barrage-ui .home-screen .action-tile{
+      display:block !important;
+      visibility:visible !important;
+      opacity:1 !important;
+      pointer-events:auto !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:calc(33.333% - 5px) !important;
+      flex:1 1 calc(33.333% - 5px) !important;
+      box-sizing:border-box !important;
+      height:52px !important;
+      min-height:52px !important;
+      padding:7px 8px !important;
+      grid-column:auto !important;
+      transform:none !important;
+      translate:0 0 !important;
+      scale:1 !important;
+      animation:none !important;
+    }
+    #barrage-ui .home-screen .action-start{
+      grid-column:1 / -1 !important;
+      max-width:100% !important;
+      flex:1 1 100% !important;
+      height:58px !important;
+      min-height:58px !important;
+      display:grid !important;
+      grid-template-columns:1fr auto !important;
+      grid-template-rows:auto auto !important;
+      align-content:center !important;
+      align-items:center !important;
+      gap:4px 12px !important;
+      padding:0 18px !important;
+      color:#061014 !important;
+      border-color:transparent !important;
+      border-top:4px solid #f2fbfb !important;
+      border-bottom:4px solid #66f7ff !important;
+      background:
+        linear-gradient(118deg,rgba(255,255,255,.82) 0 18%,transparent 18% 72%,rgba(6,16,20,.12) 72% 75%,transparent 75%),
+        linear-gradient(90deg,#f2fbfb 0%,#66f7ff 100%) !important;
+      box-shadow:0 18px 34px rgba(0,0,0,.44),0 0 28px rgba(102,247,255,.24),inset 0 1px 0 rgba(255,255,255,.50) !important;
+    }
+    #barrage-ui .home-screen .action-start b{
+      grid-column:1 !important;
+      color:#061014 !important;
+      font-size:23px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-align:left !important;
+      margin:0 !important;
+    }
+    #barrage-ui .home-screen .action-start span{
+      grid-column:1 !important;
+      color:rgba(6,16,20,.70) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-align:left !important;
+      margin:0 !important;
+    }
+    #barrage-ui .home-screen .action-start::after{
+      content:"" !important;
+      grid-column:2 !important;
+      grid-row:1 / span 2 !important;
+      justify-self:end !important;
+      width:18px !important;
+      height:18px !important;
+      border-top:4px solid #061014 !important;
+      border-right:4px solid #061014 !important;
+      background:transparent !important;
+      transform:rotate(45deg) !important;
+      opacity:.82 !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .home-screen .action-tile:nth-child(2),
+    #barrage-ui .home-screen .action-tile:nth-child(3),
+    #barrage-ui .home-screen .action-tile:nth-child(4){
+      grid-column:auto !important;
+      max-width:calc(33.333% - 5px) !important;
+      flex:1 1 calc(33.333% - 5px) !important;
+    }
+    #barrage-ui .home-screen .action-tile:nth-child(5),
+    #barrage-ui .home-screen .action-tile:nth-child(6){
+      grid-column:auto !important;
+      max-width:calc(50% - 4px) !important;
+      flex:1 1 calc(50% - 4px) !important;
+    }
+    #barrage-ui .home-screen .action-tile:nth-child(6){
+      grid-column:auto !important;
+    }
+    /* Upgrade layout audit: no ship field, only a clean upgrade board. */
+    #barrage-ui .upgrade-screen .page-stage{
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path-list{
+      left:20px !important;
+      right:20px !important;
+      top:92px !important;
+      bottom:12px !important;
+      width:auto !important;
+      height:auto !important;
+      min-height:0 !important;
+      padding:0 !important;
+      display:grid !important;
+      grid-template-rows:62px minmax(0,1fr) !important;
+      grid-auto-rows:unset !important;
+      gap:9px !important;
+      overflow:hidden !important;
+      border:0 !important;
+      background:transparent !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .upgrade-overview{
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1.35fr) repeat(3,minmax(0,.72fr)) !important;
+      gap:7px !important;
+    }
+    #barrage-ui .upgrade-overview-main,
+    #barrage-ui .upgrade-overview-stat{
+      min-width:0 !important;
+      min-height:0 !important;
+      padding:8px 9px !important;
+      border:1px solid rgba(232,225,211,.18) !important;
+      border-top:3px solid rgba(232,225,211,.62) !important;
+      background:
+        linear-gradient(118deg,rgba(232,225,211,.10) 0 24%,transparent 24%),
+        rgba(6,7,8,.88) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overview-main{
+      display:grid !important;
+      grid-template-rows:auto 1fr auto !important;
+      align-content:center !important;
+      gap:2px !important;
+      border-top-color:var(--zzz-cyan,#66f7ff) !important;
+    }
+    #barrage-ui .upgrade-overview-main b,
+    #barrage-ui .upgrade-overview-stat span{
+      color:rgba(232,225,211,.62) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overview-main strong{
+      color:var(--zzz-paper,#f4f1e8) !important;
+      font-size:20px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .upgrade-overview-main .token-value{
+      color:var(--zzz-cyan,#66f7ff) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .upgrade-overview-stat{
+      display:grid !important;
+      grid-template-rows:1fr auto !important;
+      align-items:center !important;
+      text-align:center !important;
+      gap:5px !important;
+    }
+    #barrage-ui .upgrade-overview-stat b{
+      color:var(--zzz-paper,#f4f1e8) !important;
+      font-size:17px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-path-grid{
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      grid-auto-rows:122px !important;
+      gap:8px !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+      padding:0 2px 2px 0 !important;
+      scroll-padding-block:8px !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path-grid::-webkit-scrollbar{
+      width:3px !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path-grid::-webkit-scrollbar-thumb{
+      background:rgba(102,247,255,.42) !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path{
+      display:block !important;
+      min-width:0 !important;
+      min-height:0 !important;
+      height:122px !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path-grid .upgrade-path:last-child:nth-child(odd){
+      grid-column:1 / -1 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card{
+      position:relative !important;
+      width:100% !important;
+      height:122px !important;
+      min-height:122px !important;
+      padding:10px 9px 9px 43px !important;
+      display:grid !important;
+      grid-template-rows:auto auto 5px minmax(0,1fr) auto 28px !important;
+      align-content:stretch !important;
+      gap:4px !important;
+      color:var(--zzz-paper,#f4f1e8) !important;
+      border:1px solid rgba(232,225,211,.18) !important;
+      border-top:3px solid var(--accent,var(--zzz-cyan,#66f7ff)) !important;
+      border-left:1px solid rgba(232,225,211,.18) !important;
+      background:
+        linear-gradient(122deg,color-mix(in srgb,var(--accent,var(--zzz-cyan,#66f7ff)) 14%,transparent) 0 18%,transparent 18%),
+        rgba(6,7,8,.91) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      box-shadow:0 12px 22px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.045) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card-mark{
+      position:absolute !important;
+      left:10px !important;
+      top:10px !important;
+      width:25px !important;
+      height:25px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      background:linear-gradient(90deg,#ecfeff,var(--accent,var(--zzz-cyan,#66f7ff))) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card b{
+      color:rgba(232,225,211,.62) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card span{
+      color:var(--zzz-paper,#f4f1e8) !important;
+      font-size:15px !important;
+      line-height:1.05 !important;
+      font-weight:950 !important;
+      display:block !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-progress{
+      height:5px !important;
+      border:1px solid rgba(232,225,211,.16) !important;
+      background:rgba(232,225,211,.08) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-progress i{
+      display:block !important;
+      height:100% !important;
+      background:linear-gradient(90deg,var(--accent,var(--zzz-cyan,#66f7ff)),#f2fbfb) !important;
+      box-shadow:0 0 12px color-mix(in srgb,var(--accent,var(--zzz-cyan,#66f7ff)) 42%,transparent) !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card small,
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card em{
+      color:rgba(232,225,211,.66) !important;
+      font-size:9px !important;
+      line-height:1.14 !important;
+      font-weight:900 !important;
+      display:block !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card em{
+      color:rgba(232,225,211,.46) !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button{
+      position:relative !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      width:100% !important;
+      height:28px !important;
+      min-height:28px !important;
+      transform:none !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#ecfeff,var(--accent,var(--zzz-cyan,#66f7ff))) !important;
+      box-shadow:0 0 16px color-mix(in srgb,var(--accent,var(--zzz-cyan,#66f7ff)) 24%,transparent) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button:active{
+      transform:translateY(1px) !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button:disabled{
+      color:rgba(232,225,211,.50) !important;
+      border:1px solid rgba(232,225,211,.14) !important;
+      background:rgba(232,225,211,.06) !important;
+      box-shadow:none !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .upgrade-screen .upgrade-path-list{
+        left:18px !important;
+        right:18px !important;
+        top:86px !important;
+        grid-template-rows:56px minmax(0,1fr) !important;
+        gap:7px !important;
+      }
+      #barrage-ui .upgrade-overview{
+        gap:5px !important;
+      }
+      #barrage-ui .upgrade-overview-main,
+      #barrage-ui .upgrade-overview-stat{
+        padding:7px !important;
+      }
+      #barrage-ui .upgrade-overview-main strong{
+        font-size:17px !important;
+      }
+      #barrage-ui .upgrade-overview-stat b{
+        font-size:14px !important;
+      }
+      #barrage-ui .upgrade-path-grid{
+        grid-auto-rows:112px !important;
+        gap:7px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path,
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card{
+        height:112px !important;
+        min-height:112px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card{
+        padding:9px 8px 8px 39px !important;
+        grid-template-rows:auto auto 4px minmax(0,1fr) auto 26px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card-mark{
+        left:9px !important;
+        top:9px !important;
+        width:23px !important;
+        height:23px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card span{
+        font-size:13px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card small,
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card em{
+        font-size:8px !important;
+      }
+    }
+    /* Store/Garage controls: collect navigation buttons in a bottom dock, away from the ship field. */
+    #barrage-ui :is(.store-screen,.garage-screen) .page-header{
+      grid-template-columns:minmax(0,1fr) !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .page-header .showroom-back,
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-v2 .showroom-tabs,
+    #barrage-ui :is(.store-screen,.garage-screen) .garage-v2 .garage-quick-actions{
+      display:none !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-part-stack{
+      bottom:14px !important;
+    }
+    #barrage-ui :is(.store-screen .commerce-panel,.garage-screen .garage-panel){
+      bottom:76px !important;
+    }
+    #barrage-ui .garage-v2{
+      grid-template-rows:minmax(0,1fr) 56px !important;
+    }
+    #barrage-ui .commerce-bottom-dock{
+      position:absolute !important;
+      z-index:64 !important;
+      left:12px !important;
+      right:12px !important;
+      bottom:10px !important;
+      height:54px !important;
+      display:grid !important;
+      grid-template-columns:.86fr 1fr 1fr .86fr !important;
+      gap:7px !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui .commerce-bottom-dock button{
+      width:100% !important;
+      height:54px !important;
+      min-height:54px !important;
+      padding:0 6px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:var(--zzz-button-text,#f2fbfb) !important;
+      border:1px solid var(--zzz-button-line,rgba(198,218,222,.28)) !important;
+      border-top:3px solid rgba(102,247,255,.46) !important;
+      background:
+        linear-gradient(118deg,rgba(102,247,255,.12) 0 18%,transparent 18% 74%,rgba(255,255,255,.06) 74% 76%,transparent 76%),
+        linear-gradient(180deg,#303840,#1f252b) !important;
+      box-shadow:0 12px 22px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.09) !important;
+      clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px) !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .commerce-bottom-dock button.active,
+    #barrage-ui .commerce-bottom-dock button:disabled.active{
+      color:#061014 !important;
+      border-color:transparent !important;
+      background:
+        linear-gradient(116deg,rgba(255,255,255,.70) 0 20%,transparent 20%),
+        linear-gradient(90deg,#ecfeff,#66f7ff) !important;
+      box-shadow:0 0 22px rgba(102,247,255,.24),0 12px 22px rgba(0,0,0,.42) !important;
+      opacity:1 !important;
+      filter:none !important;
+    }
+    #barrage-ui .commerce-bottom-dock button:not(:disabled):active{
+      transform:translateY(1px) !important;
+    }
+    #barrage-ui .store-offer-ship[data-action]{
+      pointer-events:auto !important;
+      cursor:pointer !important;
+      touch-action:manipulation !important;
+    }
+    #barrage-ui .store-offer-ship.is-selected{
+      outline:1px solid rgba(102,247,255,.62) !important;
+      outline-offset:-4px !important;
+      box-shadow:0 0 0 1px rgba(102,247,255,.32),0 0 24px rgba(102,247,255,.16),0 10px 20px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .store-offer-ship.is-selected .store-offer-main b{
+      color:var(--zzz-cyan,#66f7ff) !important;
+    }
+    #barrage-ui .store-offer-ship.is-equipped .store-offer-action:disabled{
+      color:#061014 !important;
+      border-color:transparent !important;
+      background:
+        linear-gradient(116deg,rgba(255,255,255,.70) 0 20%,transparent 20%),
+        linear-gradient(90deg,#ecfeff,var(--zzz-cyan,#66f7ff)) !important;
+      opacity:1 !important;
+    }
+    @media (max-width:370px){
+      #barrage-ui :is(.store-screen .commerce-panel,.garage-screen .garage-panel){
+        bottom:70px !important;
+      }
+      #barrage-ui .commerce-bottom-dock{
+        left:10px !important;
+        right:10px !important;
+        bottom:8px !important;
+        height:50px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .commerce-bottom-dock button{
+        height:50px !important;
+        min-height:50px !important;
+        font-size:9px !important;
+      }
+    }
+    /* In-run upgrade pass: keep upgrade choices as bottom controls over the playfield. */
+    #barrage-ui .game-hud.leveling .game-top,
+    #barrage-ui .game-hud.leveling .game-special-slots,
+    #barrage-ui .game-hud.leveling .game-bottom{
+      opacity:.22 !important;
+      filter:none !important;
+    }
+    #barrage-ui .upgrade-overlay.on{
+      display:block !important;
+      pointer-events:auto !important;
+      background:
+        linear-gradient(180deg,rgba(0,0,0,.05) 0 40%,rgba(0,0,0,.42) 66%,rgba(0,0,0,.88) 100%) !important;
+      backdrop-filter:none !important;
+    }
+    #barrage-ui .upgrade-overlay.on::before{
+      content:"" !important;
+      display:block !important;
+      position:absolute !important;
+      left:0 !important;
+      right:0 !important;
+      top:auto !important;
+      bottom:334px !important;
+      height:2px !important;
+      background:linear-gradient(90deg,transparent,rgba(102,247,255,.68),rgba(242,251,251,.72),transparent) !important;
+      box-shadow:0 0 18px rgba(102,247,255,.24) !important;
+      opacity:.9 !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog,
+    #barrage-ui .upgrade-overlay.on .basic-dialog{
+      pointer-events:auto !important;
+      position:absolute !important;
+      left:10px !important;
+      right:10px !important;
+      top:auto !important;
+      bottom:10px !important;
+      width:auto !important;
+      max-width:none !important;
+      height:318px !important;
+      min-height:0 !important;
+      max-height:318px !important;
+      margin:0 !important;
+      padding:10px !important;
+      transform:none !important;
+      display:grid !important;
+      color:var(--zzz-paper,#f4f1e8) !important;
+      border:1px solid rgba(232,225,211,.18) !important;
+      border-top:4px solid rgba(242,251,251,.72) !important;
+      background:
+        linear-gradient(118deg,rgba(232,225,211,.10) 0 18%,transparent 18%),
+        rgba(4,5,6,.93) !important;
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px) !important;
+      box-shadow:0 -18px 42px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.055) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog{
+      grid-template-rows:38px 42px minmax(0,1fr) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-dialog{
+      grid-template-rows:38px 42px minmax(0,1fr) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .upgrade-overlay.on :is(.level-head,.basic-head){
+      min-width:0 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:10px !important;
+      padding:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.on :is(.level-title,.basic-head .level-title){
+      color:var(--zzz-paper,#f4f1e8) !important;
+      font-size:22px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.on :is(.level-note,.basic-head .level-note){
+      margin-top:4px !important;
+      color:rgba(232,225,211,.62) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-sp,
+    #barrage-ui .upgrade-overlay.on .basic-actions .level-sp{
+      width:auto !important;
+      min-width:64px !important;
+      height:32px !important;
+      min-height:32px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#ecfeff,var(--zzz-cyan,#66f7ff)) !important;
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px) !important;
+      box-shadow:0 0 18px rgba(102,247,255,.22) !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-special-slots{
+      width:100% !important;
+      height:42px !important;
+      min-height:42px !important;
+      display:grid !important;
+      grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+      gap:6px !important;
+      padding:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot{
+      min-width:0 !important;
+      width:100% !important;
+      height:42px !important;
+      min-height:42px !important;
+      padding:5px 4px !important;
+      display:grid !important;
+      grid-template-rows:auto auto !important;
+      align-content:center !important;
+      gap:3px !important;
+      text-align:center !important;
+      border:1px solid rgba(232,225,211,.16) !important;
+      border-top:2px solid rgba(232,225,211,.48) !important;
+      background:rgba(8,9,10,.72) !important;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot b{
+      color:var(--zzz-paper,#f4f1e8) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot span{
+      color:rgba(232,225,211,.58) !important;
+      font-size:7px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot small{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog .upgrade-grid{
+      min-height:0 !important;
+      height:100% !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:7px !important;
+      margin:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+      width:100% !important;
+      min-width:0 !important;
+      height:100% !important;
+      min-height:0 !important;
+      max-height:none !important;
+      padding:8px 7px !important;
+      display:grid !important;
+      grid-template-rows:48px auto auto minmax(0,1fr) 28px !important;
+      grid-template-columns:1fr !important;
+      grid-template-areas:"icon" "meta" "title" "body" "action" !important;
+      justify-items:stretch !important;
+      align-items:center !important;
+      gap:5px !important;
+      text-align:left !important;
+      border:1px solid rgba(232,225,211,.18) !important;
+      border-top:3px solid var(--accent,var(--zzz-cyan,#66f7ff)) !important;
+      background:
+        linear-gradient(122deg,color-mix(in srgb,var(--accent,var(--zzz-cyan,#66f7ff)) 12%,transparent) 0 22%,transparent 22%),
+        rgba(7,8,9,.92) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      box-shadow:0 12px 22px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon{
+      grid-area:icon !important;
+      justify-self:center !important;
+      width:46px !important;
+      height:46px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      background:linear-gradient(90deg,#ecfeff,var(--accent,var(--zzz-cyan,#66f7ff))) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+      box-shadow:0 0 18px color-mix(in srgb,var(--accent,var(--zzz-cyan,#66f7ff)) 28%,transparent) !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon{
+      width:30px !important;
+      height:30px !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice b{
+      grid-area:meta !important;
+      color:rgba(232,225,211,.62) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice span{
+      grid-area:title !important;
+      color:var(--zzz-paper,#f4f1e8) !important;
+      font-size:13px !important;
+      line-height:1.05 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice small{
+      grid-area:body !important;
+      color:rgba(232,225,211,.66) !important;
+      font-size:8px !important;
+      line-height:1.15 !important;
+      font-weight:900 !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:3 !important;
+      -webkit-box-orient:vertical !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice em{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice strong{
+      grid-area:action !important;
+      width:100% !important;
+      height:28px !important;
+      min-height:28px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      background:linear-gradient(90deg,#ecfeff,var(--accent,var(--zzz-cyan,#66f7ff))) !important;
+      border:0 !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-actions{
+      display:grid !important;
+      grid-template-columns:1fr auto !important;
+      gap:8px !important;
+      align-items:center !important;
+      margin:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-actions button{
+      position:relative !important;
+      inset:auto !important;
+      top:auto !important;
+      right:auto !important;
+      bottom:auto !important;
+      left:auto !important;
+      z-index:auto !important;
+      transform:none !important;
+      width:76px !important;
+      min-width:76px !important;
+      max-width:76px !important;
+      height:32px !important;
+      min-height:32px !important;
+      color:var(--zzz-paper,#f4f1e8) !important;
+      border:1px solid rgba(232,225,211,.18) !important;
+      border-top:3px solid rgba(232,225,211,.46) !important;
+      background:rgba(8,9,10,.82) !important;
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px) !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-dialog .basic-upgrade-list{
+      min-height:0 !important;
+      height:100% !important;
+      display:block !important;
+      overflow:hidden !important;
+      padding:0 !important;
+      margin:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-dialog .basic-tree.run-basic-path-list{
+      height:100% !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      grid-auto-rows:92px !important;
+      gap:7px !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+      padding:0 2px 2px 0 !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-dialog button.run-basic-card.upgrade-choice{
+      width:100% !important;
+      min-width:0 !important;
+      height:92px !important;
+      min-height:92px !important;
+      max-height:92px !important;
+      padding:8px 8px 7px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) !important;
+      grid-template-rows:9px 16px 12px 24px !important;
+      grid-template-areas:
+        "meta"
+        "title"
+        "body"
+        "action" !important;
+      gap:4px !important;
+      align-content:start !important;
+      color:var(--zzz-paper,#f4f1e8) !important;
+      text-align:left !important;
+      border:1px solid rgba(232,225,211,.18) !important;
+      border-top:3px solid var(--accent,var(--zzz-cyan,#66f7ff)) !important;
+      background:
+        linear-gradient(122deg,color-mix(in srgb,var(--accent,var(--zzz-cyan,#66f7ff)) 12%,transparent) 0 22%,transparent 22%),
+        rgba(7,8,9,.92) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-dialog button.run-basic-card.upgrade-choice b{
+      grid-area:meta !important;
+      position:relative !important;
+      z-index:1 !important;
+      color:rgba(232,225,211,.60) !important;
+      font-size:7px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-dialog button.run-basic-card.upgrade-choice span{
+      grid-area:title !important;
+      position:relative !important;
+      z-index:1 !important;
+      color:var(--zzz-paper,#f4f1e8) !important;
+      font-size:13px !important;
+      line-height:1.05 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-dialog button.run-basic-card.upgrade-choice small{
+      grid-area:body !important;
+      position:relative !important;
+      z-index:1 !important;
+      color:rgba(232,225,211,.64) !important;
+      font-size:8px !important;
+      line-height:1.1 !important;
+      font-weight:900 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-dialog button.run-basic-card.upgrade-choice em{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.on .basic-dialog button.run-basic-card.upgrade-choice strong{
+      grid-area:action !important;
+      position:relative !important;
+      z-index:1 !important;
+      width:100% !important;
+      height:24px !important;
+      min-height:24px !important;
+      margin:0 !important;
+      align-self:end !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#ecfeff,var(--accent,var(--zzz-cyan,#66f7ff))) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .upgrade-overlay.on::before{
+        bottom:308px !important;
+      }
+      #barrage-ui .upgrade-overlay.on .level-dialog,
+      #barrage-ui .upgrade-overlay.on .basic-dialog{
+        left:8px !important;
+        right:8px !important;
+        bottom:8px !important;
+        height:292px !important;
+        max-height:292px !important;
+        padding:8px !important;
+        grid-template-rows:34px 38px minmax(0,1fr) !important;
+        gap:7px !important;
+      }
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+        grid-template-rows:38px auto auto minmax(0,1fr) 24px !important;
+        padding:7px 6px !important;
+      }
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon{
+        width:38px !important;
+        height:38px !important;
+      }
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon{
+        width:25px !important;
+        height:25px !important;
+      }
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice span,
+      #barrage-ui .upgrade-overlay.on .basic-dialog button.run-basic-card.upgrade-choice span{
+        font-size:11px !important;
+      }
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice small{
+        -webkit-line-clamp:2 !important;
+      }
+      #barrage-ui .upgrade-overlay.on .basic-dialog .basic-tree.run-basic-path-list{
+        grid-auto-rows:82px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .upgrade-overlay.on .basic-dialog button.run-basic-card.upgrade-choice{
+        height:82px !important;
+        min-height:82px !important;
+        max-height:82px !important;
+        padding:7px !important;
+        grid-template-rows:8px 14px 10px 22px !important;
+        grid-template-areas:
+          "meta"
+          "title"
+          "body"
+          "action" !important;
+      }
+      #barrage-ui .upgrade-overlay.on .basic-dialog button.run-basic-card.upgrade-choice strong{
+        height:22px !important;
+        min-height:22px !important;
+      }
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
       #barrage-ui .brand-lockup,
@@ -17549,6 +18787,12 @@ function createUi(){
       #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot,
       #barrage-ui .game-hud.on :is(.game-pause,.game-score,.game-xpbar,.game-wave,.game-bottom,.game-upgrade),
       #barrage-ui .game-hud.on .game-special-slots .special-slot,
+      #barrage-ui.motion-switch::before,
+      #barrage-ui.motion-switch::after,
+      #barrage-ui .ui-tap-burst,
+      #barrage-ui .store-offer-card,
+      #barrage-ui .store-offer-card::before,
+      #barrage-ui .store-category-tab.active,
       #barrage-ui .game-xp-track::after,
       #barrage-ui .game-meter-track::after,
       #barrage-ui .game-wave-track::after,
@@ -17564,14 +18808,18 @@ function createUi(){
     const button = e.target?.closest?.('[data-action]');
     if(!button || !root.contains(button) || button.disabled) return;
     e.preventDefault();
+    const tapPoint = uiTapPoint(button, e);
     handleAction(button.dataset.action);
+    spawnUiTapBurst(tapPoint);
   });
   root.addEventListener('keydown', e => {
     if(e.key !== 'Enter' && e.key !== ' ') return;
     const target = e.target?.closest?.('[data-action][role="button"]');
     if(!target || !root.contains(target)) return;
     e.preventDefault();
+    const tapPoint = uiTapPoint(target, e);
     handleAction(target.dataset.action);
+    spawnUiTapBurst(tapPoint);
   });
   root.addEventListener('change', e => {
     const select = e.target?.closest?.('select[data-equip-part]');
@@ -17582,6 +18830,42 @@ function createUi(){
   });
   document.body.appendChild(root);
   return {root, refs:{}};
+}
+
+function uiMotionAllowed(){
+  return !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+function uiTapPoint(target, event){
+  const rootRect = ui.root.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const fallbackX = targetRect.left + targetRect.width * .5;
+  const fallbackY = targetRect.top + targetRect.height * .5;
+  return {
+    x: (Number.isFinite(event?.clientX) ? event.clientX : fallbackX) - rootRect.left,
+    y: (Number.isFinite(event?.clientY) ? event.clientY : fallbackY) - rootRect.top
+  };
+}
+
+function spawnUiTapBurst(point){
+  if(!ui?.root || !point || !uiMotionAllowed()) return;
+  const burst = document.createElement('span');
+  burst.className = 'ui-tap-burst';
+  burst.style.left = `${Math.round(point.x)}px`;
+  burst.style.top = `${Math.round(point.y)}px`;
+  ui.root.appendChild(burst);
+  window.setTimeout(() => burst.remove(), 420);
+}
+
+function playUiModeTransition(){
+  if(!ui?.root || !uiMotionAllowed()) return;
+  ui.root.classList.remove('motion-switch');
+  void ui.root.offsetWidth;
+  ui.root.classList.add('motion-switch');
+  window.clearTimeout(uiMotionTimer);
+  uiMotionTimer = window.setTimeout(() => {
+    ui.root?.classList.remove('motion-switch');
+  }, 360);
 }
 
 function renderUi2(){
@@ -17623,8 +18907,8 @@ function renderUi2(){
             <strong>Lv.${homeUpgradeTotal}</strong>
           </div>
         </div>
-        <button class="primary-start" data-action="start"><span>スタート</span><small>READY</small></button>
         <div class="home-actions">
+          <button class="action-tile action-start" data-action="start"><b>スタート</b><span>READY</span></button>
           <button class="action-tile" data-action="store" style="--accent:#d8e2ea"><b>ストア</b><span>機体とパーツ</span></button>
           <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>アップグレード</b><span>ベース強化を開く</span></button>
           <button class="action-tile" data-action="gacha" style="--accent:#d8e2ea"><b>ガチャ</b><span>スキンとクロマコート</span></button>
@@ -17660,6 +18944,7 @@ function renderUi2(){
         <div class="catalog-grid commerce-panel" data-store-market>
           ${state.mode === 'store' ? renderStoreMarketV2() : ''}
         </div>
+        ${state.mode === 'store' ? renderCommerceBottomDock('store') : ''}
       </div>
     </div>
     <div class="screen garage-screen ${state.mode==='garage'?'on':''}">
@@ -17675,6 +18960,7 @@ function renderUi2(){
         <div class="garage-panel">
           ${garageActive ? renderGaragePanelV2(equippedSummary) : ''}
         </div>
+        ${garageActive ? renderCommerceBottomDock('garage') : ''}
       </div>
     </div>
     <div class="screen gacha-screen ${state.mode==='gacha'?'on':''}">
@@ -18081,12 +19367,13 @@ function renderGarageShipPicker(){
 }
 
 function renderShipShowroomV2(kind){
-  const ship = currentShip();
+  const ship = kind === 'store' ? storePreviewShip() : currentShip();
   const ownedShips = ownedShipCount();
   const ownedParts = ownedPartCount();
   const totalSlots = PART_TYPES.reduce((sum, type) => sum + shipSlotCount(type, ship), 0);
+  const previewingLocked = kind === 'store' && !shipOwned(ship.id);
   const sub = kind === 'store'
-    ? `${tokenAmount(state.tokens, 'showroom-token')} / FRAME ${ownedShips}/${SHIP_DEFS.length} / PARTS ${ownedParts}/${STORE_TOTAL_PARTS}`
+    ? `${previewingLocked ? 'PREVIEW / LOCKED' : 'PREVIEW / OWNED'} / ${tokenAmount(state.tokens, 'showroom-token')} / FRAME ${ownedShips}/${SHIP_DEFS.length}`
     : `${equippedPartCount()}/${totalSlots} PARTS EQUIPPED`;
   /*
   const note = fullDef.tier === 'advanced'
@@ -18097,7 +19384,7 @@ function renderShipShowroomV2(kind){
     <div class="ship-showroom-ui showroom-v2" style="--accent:${ship.color}">
       <div class="showroom-mode">${kind === 'store' ? 'STORE' : 'GARAGE'}</div>
       <div class="showroom-copy">
-        <b>SELECTED FRAME</b>
+        <b>${kind === 'store' ? 'PREVIEW FRAME' : 'SELECTED FRAME'}</b>
         <strong>${ship.name}</strong>
         <span>${sub}</span>
       </div>
@@ -18127,6 +19414,23 @@ function renderShowroomPartChipsV2(ship = currentShip()){
       </div>
     `;
   }).join('');
+}
+
+function renderCommerceBottomDock(active){
+  const items = [
+    ['home', '戻る'],
+    ['store', 'ストア'],
+    ['garage', 'ガレージ'],
+    ['gacha', 'ガチャ']
+  ];
+  return `
+    <div class="commerce-bottom-dock" aria-label="ストア・ガレージ操作">
+      ${items.map(([action, label]) => {
+        const selected = action === active;
+        return `<button class="${selected ? 'active' : ''}" ${selected ? 'disabled' : ''} data-action="${action}">${label}</button>`;
+      }).join('')}
+    </div>
+  `;
 }
 
 function renderStoreMarketV2(){
@@ -18204,14 +19508,15 @@ function storeCategoryTotalCount(categoryId){
 
 function renderStoreShipOffer(ship){
   const owned = shipOwned(ship.id);
-  const selected = currentShip().id === ship.id;
+  const equipped = currentShip().id === ship.id;
+  const selected = storePreviewShip().id === ship.id;
   const canBuy = !owned && state.tokens >= ship.cost;
   const action = owned ? `equipShip:${ship.id}` : `buyShip:${ship.id}`;
-  const buttonLabel = selected ? '使用中' : owned ? '選択' : tokenAmount(ship.cost, 'button-token');
+  const buttonLabel = equipped ? '使用中' : owned ? '装備' : tokenAmount(ship.cost, 'button-token');
   return `
-    <article class="store-offer-card store-offer-ship ${owned ? 'is-owned' : 'is-locked'} ${selected ? 'is-selected' : ''}" style="--accent:${ship.color}">
+    <article class="store-offer-card store-offer-ship ${owned ? 'is-owned' : 'is-locked'} ${selected ? 'is-selected' : ''} ${equipped ? 'is-equipped' : ''}" style="--accent:${ship.color}" data-action="previewShip:${ship.id}" role="button" tabindex="0">
       <div class="store-offer-main">
-        <b>${selected ? 'ACTIVE FRAME' : owned ? 'OWNED FRAME' : 'FRAME'}</b>
+        <b>${equipped ? 'ACTIVE FRAME' : selected ? 'PREVIEWING' : owned ? 'OWNED FRAME' : 'LOCKED PREVIEW'}</b>
         <strong>${escapeHtml(ship.name)}</strong>
         <span>${escapeHtml(ship.role)}</span>
       </div>
@@ -18222,7 +19527,7 @@ function renderStoreShipOffer(ship){
       <div class="store-buff-grid">
         ${renderStoreShipBuffs(ship)}
       </div>
-      <button class="store-offer-action" ${selected || (!owned && !canBuy) ? 'disabled' : ''} data-action="${action}">${buttonLabel}</button>
+      <button class="store-offer-action" ${equipped || (!owned && !canBuy) ? 'disabled' : ''} data-action="${action}">${buttonLabel}</button>
     </article>
   `;
 }
@@ -18273,10 +19578,12 @@ function renderStoreBuffChips(buff = {}){
 }
 
 function storePartSlotStatus(type){
-  const slots = shipSlotCount(type);
-  if(!slots) return `現在の機体: ${PART_TYPE_LABELS[type]}スロットなし`;
+  const ship = state.mode === 'store' ? storePreviewShip() : currentShip();
+  const slots = shipSlotCount(type, ship);
+  const label = PART_TYPE_LABELS[type] || String(type).toUpperCase();
+  if(!slots) return `${ship.name} / ${label} 0 SLOT`;
   const equipped = (state.garage?.equippedParts?.[type] || []).slice(0, slots).filter(Boolean).length;
-  return `現在の機体: ${equipped}/${slots} SLOT`;
+  return `${ship.name} / ${label} ${equipped}/${slots} SLOT`;
 }
 
 function formatStoreBuff(value){
@@ -18350,18 +19657,40 @@ function renderPartSlot(type, index){
 }
 
 function renderHomeUpgradePaths(){
-  return HOME_UPGRADE_PATHS.map(path => {
+  const baseTotal = HOME_UPGRADE_PATHS.reduce((sum, path) => sum + homeUpgradeLevel(path.base.id), 0);
+  const advancedOpen = HOME_UPGRADE_PATHS.filter(path => homeUpgradeLevel(path.base.id) >= HOME_UPGRADE_CAP).length;
+  const totalLevel = totalHomeUpgradeLevel();
+  const activeBuys = HOME_UPGRADE_PATHS.filter(path => {
+    const active = homeUpgradeLevel(path.base.id) >= HOME_UPGRADE_CAP ? path.advanced : path.base;
+    const cost = homeUpgradeCost(active.id);
+    return isHomeUpgradeUnlocked(active.id) && !isHomeUpgradeMaxed(active.id) && Number.isFinite(cost) && state.tokens >= cost;
+  }).length;
+  return `
+    <div class="upgrade-overview">
+      <div class="upgrade-overview-main">
+        <b>BASE PROGRAM</b>
+        <strong>Lv.${totalLevel}</strong>
+        <span>${tokenAmount(state.tokens, 'upgrade-wallet')}</span>
+      </div>
+      <div class="upgrade-overview-stat"><b>${baseTotal}/${HOME_UPGRADE_PATHS.length * HOME_UPGRADE_CAP}</b><span>BASE CAP</span></div>
+      <div class="upgrade-overview-stat"><b>${advancedOpen}/${HOME_UPGRADE_PATHS.length}</b><span>LIMIT</span></div>
+      <div class="upgrade-overview-stat"><b>${activeBuys}</b><span>READY</span></div>
+    </div>
+    <div class="upgrade-path-grid">
+      ${HOME_UPGRADE_PATHS.map(path => {
     const baseMaxed = homeUpgradeLevel(path.base.id) >= HOME_UPGRADE_CAP;
     const active = baseMaxed ? path.advanced : path.base;
     return `
       <div class="upgrade-path single-upgrade-path ${baseMaxed ? 'cap-open' : 'cap-locked'}">
-        ${renderHomeUpgradeCard(active)}
+        ${renderHomeUpgradeCard(active, path)}
       </div>
     `;
-  }).join('');
+  }).join('')}
+    </div>
+  `;
 }
 
-function renderHomeUpgradeCard(def){
+function renderHomeUpgradeCard(def, path = null){
   const fullDef = homeUpgradeDef(def.id);
   const lv = homeUpgradeLevel(def.id);
   const unlocked = isHomeUpgradeUnlocked(def.id);
@@ -18369,12 +19698,19 @@ function renderHomeUpgradeCard(def){
   const cost = homeUpgradeCost(def.id);
   const canBuy = unlocked && !maxed && Number.isFinite(cost) && state.tokens >= cost;
   const tierLabel = fullDef.tier === 'base' ? `${lv}/${HOME_UPGRADE_CAP}` : `Lv.${lv}`;
-  const buttonLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : tokenAmount(cost, 'button-token');
+  const buttonLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : `強化 ${formatNumber(cost)}`;
   const note = fullDef.tier === 'base' ? '上限あり' : `${homeUpgradeDef(fullDef.parent).name} 10/10で解放`;
+  const progress = fullDef.tier === 'base'
+    ? Math.min(100, lv / HOME_UPGRADE_CAP * 100)
+    : Math.min(100, 18 + lv * 9);
+  const stateLabel = !unlocked ? 'LOCKED' : maxed ? 'CAPPED' : fullDef.tier === 'base' ? 'CAPPED BASE' : 'LIMITLESS';
+  const pathLabel = path?.base?.icon || fullDef.icon;
   return `
     <div class="upgrade-card ${!unlocked ? 'locked' : ''} ${maxed ? 'maxed' : ''}" style="--accent:${colorCss(fullDef.color)}">
-      <b>${fullDef.icon} / ${tierLabel}</b>
+      <div class="upgrade-card-mark">${pathLabel}</div>
+      <b>${stateLabel} / ${tierLabel}</b>
       <span>${fullDef.name}</span>
+      <div class="upgrade-progress"><i style="width:${progress}%"></i></div>
       <small>${fullDef.text}</small>
       <em>${note}</em>
       <button ${canBuy ? '' : 'disabled'} data-action="buyHome:${fullDef.id}">${buttonLabel}</button>
@@ -18626,6 +19962,7 @@ function handleAction(action){
   else if(action === 'settings') setMode('settings');
   else if(action === 'rollGacha') rollGacha();
   else if(action.startsWith('setStoreCategory:')) setStoreCategory(action.slice(17));
+  else if(action.startsWith('previewShip:')) previewStoreShip(action.slice(12));
   else if(action.startsWith('buyShip:')) buyShip(action.slice(8));
   else if(action.startsWith('buyPart:')) buyPart(action.slice(8));
   else if(action.startsWith('equipShip:')) equipShip(action.slice(10));
@@ -18664,12 +20001,27 @@ function renderStoreMarketOnly(){
   return true;
 }
 
+function previewStoreShip(id){
+  if(!SHIP_BY_ID[id]) return;
+  if(state.storePreviewShipId === id && !uiDirty) return;
+  state.storePreviewShipId = id;
+  markHomeShipPartsDirty();
+  lastVisualFrameAt = 0;
+  uiDirty = true;
+  renderUi2();
+}
+
 function setMode(mode){
   if(state.mode === mode && !uiDirty) return;
+  const previousMode = state.mode;
   state.mode = mode;
+  if(previousMode !== mode && (previousMode === 'store' || mode === 'store')){
+    markHomeShipPartsDirty();
+  }
   uiDirty = true;
   renderUi2();
   syncCanvasVisibility();
+  playUiModeTransition();
 }
 
 function startRun(){
@@ -18706,6 +20058,7 @@ function startRun(){
   uiDirty = true;
   renderUi2();
   syncCanvasVisibility();
+  playUiModeTransition();
 }
 
 function clearRunObjects(){
