@@ -41,11 +41,17 @@ const RENDER_QUALITY_RAISE_FRAME_MS = LOW_POWER_DEVICE ? 16.5 : 15.2;
 const RENDER_QUALITY_SAMPLE_MS = 900;
 const HUD_UPDATE_INTERVAL_MS = LOW_POWER_DEVICE ? 140 : 100;
 const HOME_IDLE_FRAME_MS = VISUAL_LOW_POWER ? 66 : 40;
+const SHOWROOM_IDLE_FRAME_MS = VISUAL_LOW_POWER ? 120 : 84;
+const HIDDEN_UI_FRAME_MS = 240;
+const PASSIVE_3D_FRAME_MS = 140;
 const MAX_ENEMIES = LOW_POWER_DEVICE ? 24 : 30;
 const MAX_BULLETS = LOW_POWER_DEVICE ? 72 : 128;
 const MAX_PARTICLES = VISUAL_LOW_POWER ? 36 : 48;
 const ENEMY_POOL_LIMIT = LOW_POWER_DEVICE ? 24 : 34;
 const ENEMY_DETAIL_Z = VISUAL_LOW_POWER ? -74 : -92;
+const BULLET_HIT_Z_PAD = .22;
+const BULLET_HIT_ANGLE_PAD = .020;
+const HIT_SWEEP_EPSILON = 0.0001;
 const ENEMY_SIZE_BOOST = 2.05;
 const ENEMY_SIZE_MULT = 1.62 * ENEMY_SIZE_BOOST;
 const ENEMY_HITBOX_MULT = 1.20 * ENEMY_SIZE_BOOST;
@@ -121,6 +127,7 @@ const BASIC_SKILL_TREE = RUN_BASIC_PATHS.flatMap((path, pathIndex) => [
 const BASIC_SKILL_DEFS_BY_ID = Object.fromEntries(
   BASIC_SKILL_TREE.map((node, index) => [node.id, {...BASIC_STAT_DEFS_BY_ID[node.id], ...node, index}])
 );
+const BASIC_SKILL_IDS = Object.keys(BASIC_SKILL_DEFS_BY_ID);
 
 const HOME_UPGRADE_CAP = 10;
 const HOME_UPGRADE_PATHS = [
@@ -159,6 +166,7 @@ const HOME_UPGRADE_DEFS = Object.fromEntries(
     [path.advanced.id, {...path.advanced, tier:'advanced', parent:path.base.id}]
   ])
 );
+const HOME_UPGRADE_IDS = Object.keys(HOME_UPGRADE_DEFS);
 
 const SPECIAL_UPGRADE_DEFS = [
   { id:'barrelMultishot', family:'barrel', name:'マルチショット', icon:'MS', color:COLORS.cyan, text:'弾丸を扇状に拡散。武装の射撃型を決める', max:1, tag:'武装' },
@@ -227,7 +235,25 @@ const PART_DEFS = [
   { id:'drone_strike', type:'drone', name:'ストライクドローン', rarity:'攻撃', cost:560, color:COLORS.rose, text:'弾丸ダメージを少し上げる', buff:{damage:.025} }
 ];
 const PART_BY_ID = Object.fromEntries(PART_DEFS.map(part => [part.id, part]));
+const EMPTY_PART_LIST = Object.freeze([]);
+const PARTS_BY_TYPE = Object.fromEntries(PART_TYPES.map(type => [
+  type,
+  PART_DEFS.filter(part => part.type === type)
+]));
 const STARTER_PART_IDS = PART_DEFS.filter(part => part.starter).map(part => part.id);
+const STORE_CATEGORY_DEFS = [
+  { id:'ship', label:'機体', short:'機体', eyebrow:'FRAME', description:'フレーム本体を購入・選択する' },
+  { id:'barrel', label:PART_TYPE_LABELS.barrel, short:'バレル', eyebrow:'BARREL', description:'弾の火力、連射、弾速を伸ばす' },
+  { id:'innerFrame', label:PART_TYPE_LABELS.innerFrame, short:'フレーム', eyebrow:'INNER', description:'HP、防御、機動力を伸ばす' },
+  { id:'drone', label:PART_TYPE_LABELS.drone, short:'ドローン', eyebrow:'DRONE', description:'報酬、経験値、火力支援を伸ばす' }
+];
+const STORE_CATEGORY_BY_ID = Object.fromEntries(STORE_CATEGORY_DEFS.map(category => [category.id, category]));
+const STORE_CATEGORY_IDS = STORE_CATEGORY_DEFS.map(category => category.id);
+const STORE_CATEGORY_TOTALS = Object.fromEntries(STORE_CATEGORY_DEFS.map(category => [
+  category.id,
+  category.id === 'ship' ? SHIP_DEFS.length : (PARTS_BY_TYPE[category.id] || EMPTY_PART_LIST).length
+]));
+const STORE_TOTAL_PARTS = PART_DEFS.length;
 
 const GACHA_COST = 120;
 const COSMETIC_RARITIES = [
@@ -352,7 +378,8 @@ const state = {
   garage: freshGarageState(),
   cosmetics: freshCosmeticState(),
   lastGacha: null,
-  nextHudAt: 0
+  nextHudAt: 0,
+  storeCategory: 'ship'
 };
 
 const save = loadSave();
@@ -436,6 +463,7 @@ let statMultCache = null;
 const uiBoundsCache = {left:null, top:null, width:null, height:null, scale:null};
 const canvasBoundsCache = {left:0, top:0, width:W, height:H, scale:1};
 let canvasVisibilityState = null;
+const CANVAS_VISIBLE_MODES = new Set(['home', 'store', 'garage', 'play', 'levelup', 'pause', 'dead']);
 const HOME_PREVIEW_REST_PITCH = -.18;
 const HOME_PREVIEW_PITCH_MIN = -.48;
 const HOME_PREVIEW_PITCH_MAX = .22;
@@ -500,12 +528,12 @@ function applyUiPreviewMode(){
 }
 
 function freshStatMap(){
-  const ids = new Set([...Object.keys(HOME_UPGRADE_DEFS), ...Object.keys(BASIC_SKILL_DEFS_BY_ID)]);
+  const ids = new Set([...HOME_UPGRADE_IDS, ...BASIC_SKILL_IDS]);
   return Object.fromEntries([...ids].map(id => [id, 0]));
 }
 
 function freshHomeUpgradeMap(){
-  return Object.fromEntries(Object.keys(HOME_UPGRADE_DEFS).map(id => [id, 0]));
+  return Object.fromEntries(HOME_UPGRADE_IDS.map(id => [id, 0]));
 }
 
 function freshSpecialUpgradeMap(){
@@ -1022,6 +1050,10 @@ function buyShip(id){
 
 function partOwned(id){
   return !!state.garage?.ownedParts?.[id];
+}
+
+function partsForType(type){
+  return PARTS_BY_TYPE[type] || EMPTY_PART_LIST;
 }
 
 function partCost(part){
@@ -16165,6 +16197,33 @@ function createUi(){
       overflow:hidden !important;
       text-overflow:ellipsis !important;
     }
+    /* Garage entry moved to the ship display; five footer actions keep a balanced grid. */
+    #barrage-ui .home-screen .hangar-visual[data-action]{
+      pointer-events:auto !important;
+      cursor:pointer !important;
+      touch-action:manipulation !important;
+    }
+    #barrage-ui .home-screen .hangar-visual[data-action]:hover,
+    #barrage-ui .home-screen .hangar-visual[data-action]:focus-visible{
+      border-color:var(--zzz-paper-42) !important;
+      border-top-color:var(--zzz-paper) !important;
+      box-shadow:0 18px 34px rgba(0,0,0,.36),0 0 0 1px rgba(232,225,211,.18),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      outline:0 !important;
+    }
+    #barrage-ui .home-screen .hangar-visual[data-action]:active{
+      transform:translateY(1px) !important;
+    }
+    #barrage-ui .home-actions{
+      grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+      gap:7px !important;
+    }
+    #barrage-ui .home-actions .action-tile{
+      grid-column:span 2 !important;
+    }
+    #barrage-ui .home-actions .action-tile:nth-child(4),
+    #barrage-ui .home-actions .action-tile:nth-child(5){
+      grid-column:span 3 !important;
+    }
     @media (max-width:720px){
       #barrage-ui .home-screen .home-hub{
         left:0 !important;
@@ -16412,6 +16471,9 @@ function createUi(){
         bottom:10px !important;
         padding:10px !important;
       }
+      #barrage-ui .home-actions{
+        grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+      }
     }
     @keyframes zzzButtonPulse{
       0%,100%{box-shadow:5px 5px 0 rgba(184,167,255,.62),0 16px 32px rgba(0,0,0,.38),0 0 20px rgba(142,239,255,.14)}
@@ -16420,6 +16482,1050 @@ function createUi(){
     @keyframes zzzStartIn{
       from{opacity:1;transform:translateY(16px) skewY(-1deg)}
       to{opacity:1;transform:translateY(0) skewY(0)}
+    }
+    @keyframes zzzSliceInLeft{
+      0%{opacity:0;translate:-24px 0;rotate:-1deg}
+      58%{opacity:1;translate:5px 0;rotate:.3deg}
+      100%{opacity:1;translate:0 0;rotate:0deg}
+    }
+    @keyframes zzzSliceInRight{
+      0%{opacity:0;translate:24px 0;rotate:1deg}
+      58%{opacity:1;translate:-5px 0;rotate:-.3deg}
+      100%{opacity:1;translate:0 0;rotate:0deg}
+    }
+    @keyframes zzzRackRise{
+      0%{opacity:0;translate:0 22px;scale:.985}
+      62%{opacity:1;translate:0 -3px;scale:1.006}
+      100%{opacity:1;translate:0 0;scale:1}
+    }
+    @keyframes zzzTagSnap{
+      0%{opacity:0;translate:-14px -8px;scale:.92}
+      42%{opacity:1;translate:4px 1px;scale:1.04}
+      100%{opacity:1;translate:0 0;scale:1}
+    }
+    @keyframes zzzPanelLock{
+      0%{opacity:0;translate:0 16px;scale:.99}
+      36%{opacity:1;translate:0 -2px;scale:1.006}
+      100%{opacity:1;translate:0 0;scale:1}
+    }
+    @keyframes zzzHudDrop{
+      0%{opacity:0;translate:0 -18px;scale:.985}
+      64%{opacity:1;translate:0 3px;scale:1.005}
+      100%{opacity:1;translate:0 0;scale:1}
+    }
+    @keyframes zzzHudRise{
+      0%{opacity:0;translate:0 34px;scale:.99}
+      62%{opacity:1;translate:0 -4px;scale:1.004}
+      100%{opacity:1;translate:0 0;scale:1}
+    }
+    @keyframes zzzSlotPop{
+      0%{opacity:0;translate:0 12px;scale:.86}
+      52%{opacity:1;translate:0 -2px;scale:1.07}
+      100%{opacity:1;translate:0 0;scale:1}
+    }
+    @keyframes zzzSweepLine{
+      0%{opacity:0;translate:-110% 0}
+      14%{opacity:.72}
+      82%{opacity:.56}
+      100%{opacity:0;translate:110% 0}
+    }
+    #barrage-ui :is(button,[role="button"],.part-buy-chip,.garage-ship,.store-tile,.upgrade-choice):not(:disabled){
+      transition:translate 110ms cubic-bezier(.2,.9,.2,1),scale 110ms cubic-bezier(.2,.9,.2,1),border-color 110ms ease,box-shadow 110ms ease !important;
+    }
+    #barrage-ui :is(button,[role="button"],.part-buy-chip,.garage-ship,.store-tile,.upgrade-choice):not(:disabled):active{
+      translate:0 2px !important;
+      scale:.992 !important;
+    }
+    #barrage-ui .home-screen.on .home-hub,
+    #barrage-ui .screen.on .page-stage{
+      animation:zzzPanelLock 420ms cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .home-screen.on .brand-lockup,
+    #barrage-ui .screen.on .page-title{
+      animation:zzzSliceInLeft 480ms cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .home-screen.on .wallet-chip,
+    #barrage-ui .screen.on .page-back,
+    #barrage-ui .screen.on .showroom-back{
+      animation:zzzSliceInRight 460ms cubic-bezier(.16,1,.3,1) 40ms both !important;
+    }
+    #barrage-ui .home-screen.on .hangar-visual{
+      animation:zzzPanelLock 500ms cubic-bezier(.16,1,.3,1) 50ms both !important;
+    }
+    #barrage-ui .home-screen.on .hangar-visual::after{
+      animation:zzzSweepLine 1450ms cubic-bezier(.18,.86,.24,1) 220ms both !important;
+    }
+    #barrage-ui .home-screen.on .mission-tag{
+      animation:zzzTagSnap 420ms cubic-bezier(.2,1.35,.24,1) 140ms both !important;
+    }
+    #barrage-ui .home-screen.on .record-pill{
+      animation:zzzSliceInLeft 430ms cubic-bezier(.16,1,.3,1) 170ms both !important;
+    }
+    #barrage-ui .home-screen.on .loadout-panel{
+      animation:zzzRackRise 460ms cubic-bezier(.16,1,.3,1) 220ms both !important;
+    }
+    #barrage-ui .home-screen.on .primary-start{
+      animation:zzzRackRise 450ms cubic-bezier(.16,1,.3,1) 240ms both !important;
+    }
+    #barrage-ui .home-screen.on .action-tile,
+    #barrage-ui .screen.on :is(.store-tile,.part-buy-chip,.garage-slot-card,.garage-ship,.settings-row,.ranking-row,.gacha-result,.equipped-card,.cosmetic-row,.upgrade-path .upgrade-card){
+      animation:zzzRackRise 420ms cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .home-screen.on .action-tile:nth-child(1){animation-delay:330ms !important}
+    #barrage-ui .home-screen.on .action-tile:nth-child(2){animation-delay:370ms !important}
+    #barrage-ui .home-screen.on .action-tile:nth-child(3){animation-delay:410ms !important}
+    #barrage-ui .home-screen.on .action-tile:nth-child(4){animation-delay:450ms !important}
+    #barrage-ui .home-screen.on .action-tile:nth-child(5){animation-delay:490ms !important}
+    #barrage-ui .screen.on :is(.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.upgrade-path-list){
+      animation:zzzPanelLock 520ms cubic-bezier(.16,1,.3,1) 70ms both !important;
+    }
+    #barrage-ui .screen.on :is(.ship-showroom-ui.showroom-v2,.showroom-v2 .showroom-copy){
+      animation:zzzSliceInLeft 500ms cubic-bezier(.16,1,.3,1) 80ms both !important;
+    }
+    #barrage-ui .screen.on :is(.showroom-v2 .showroom-tabs,.store-ship-rail,.garage-ship-rail,.store-part-rail,.garage-slot-rail){
+      animation:zzzRackRise 440ms cubic-bezier(.16,1,.3,1) 150ms both !important;
+    }
+    #barrage-ui .screen.on :is(.store-tile,.part-buy-chip,.garage-slot-card,.garage-ship,.settings-row,.ranking-row,.gacha-result,.equipped-card,.cosmetic-row,.upgrade-path .upgrade-card):nth-child(2){animation-delay:110ms !important}
+    #barrage-ui .screen.on :is(.store-tile,.part-buy-chip,.garage-slot-card,.garage-ship,.settings-row,.ranking-row,.gacha-result,.equipped-card,.cosmetic-row,.upgrade-path .upgrade-card):nth-child(3){animation-delay:150ms !important}
+    #barrage-ui .screen.on :is(.store-tile,.part-buy-chip,.garage-slot-card,.garage-ship,.settings-row,.ranking-row,.gacha-result,.equipped-card,.cosmetic-row,.upgrade-path .upgrade-card):nth-child(4){animation-delay:190ms !important}
+    #barrage-ui .screen.on :is(.store-tile,.part-buy-chip,.garage-slot-card,.garage-ship,.settings-row,.ranking-row,.gacha-result,.equipped-card,.cosmetic-row,.upgrade-path .upgrade-card):nth-child(5){animation-delay:230ms !important}
+    #barrage-ui .screen.on :is(.store-tile,.part-buy-chip,.garage-slot-card,.garage-ship,.settings-row,.ranking-row,.gacha-result,.equipped-card,.cosmetic-row,.upgrade-path .upgrade-card):nth-child(n+6){animation-delay:270ms !important}
+    #barrage-ui .upgrade-overlay.on{
+      animation:zzzPanelLock 260ms ease-out both !important;
+    }
+    #barrage-ui .upgrade-overlay.on :is(.level-dialog,.basic-dialog,.dialog-card){
+      animation:zzzPanelLock 430ms cubic-bezier(.16,1,.3,1) 70ms both !important;
+    }
+    #barrage-ui .upgrade-overlay.on :is(.special-upgrade-card,.run-basic-card){
+      animation:zzzSliceInRight 420ms cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .upgrade-overlay.on :is(.special-upgrade-card,.run-basic-card):nth-child(2){animation-delay:90ms !important}
+    #barrage-ui .upgrade-overlay.on :is(.special-upgrade-card,.run-basic-card):nth-child(3){animation-delay:130ms !important}
+    #barrage-ui .upgrade-overlay.on :is(.special-upgrade-card,.run-basic-card):nth-child(4){animation-delay:170ms !important}
+    #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot{
+      animation:zzzSlotPop 360ms cubic-bezier(.2,1.35,.24,1) both !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot:nth-child(2){animation-delay:40ms !important}
+    #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot:nth-child(3){animation-delay:80ms !important}
+    #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot:nth-child(4){animation-delay:120ms !important}
+    #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot:nth-child(5){animation-delay:160ms !important}
+    #barrage-ui .upgrade-overlay.on .special-card-icon{
+      animation:none !important;
+    }
+    #barrage-ui .game-hud.on .game-pause{
+      animation:zzzHudDrop 360ms cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .game-hud.on .game-score{
+      animation:zzzHudDrop 390ms cubic-bezier(.16,1,.3,1) 40ms both !important;
+    }
+    #barrage-ui .game-hud.on .game-xpbar{
+      animation:zzzHudDrop 420ms cubic-bezier(.16,1,.3,1) 90ms both !important;
+    }
+    #barrage-ui .game-hud.on .game-wave{
+      animation:zzzSliceInLeft 430ms cubic-bezier(.16,1,.3,1) 130ms both !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom{
+      animation:zzzHudRise 480ms cubic-bezier(.16,1,.3,1) 120ms both !important;
+    }
+    #barrage-ui .game-hud.on .game-special-slots .special-slot{
+      animation:zzzSlotPop 380ms cubic-bezier(.2,1.35,.24,1) both !important;
+    }
+    #barrage-ui .game-hud.on .game-special-slots .special-slot:nth-child(1){animation-delay:210ms !important}
+    #barrage-ui .game-hud.on .game-special-slots .special-slot:nth-child(2){animation-delay:250ms !important}
+    #barrage-ui .game-hud.on .game-special-slots .special-slot:nth-child(3){animation-delay:290ms !important}
+    #barrage-ui .game-hud.on .game-special-slots .special-slot:nth-child(4){animation-delay:330ms !important}
+    #barrage-ui .game-hud.on .game-special-slots .special-slot:nth-child(5){animation-delay:370ms !important}
+    #barrage-ui .game-hud.on .game-upgrade{
+      animation:zzzSliceInRight 420ms cubic-bezier(.16,1,.3,1) 250ms both !important;
+    }
+    #barrage-ui .game-hud .game-wave{
+      color:var(--hud-black,#030405) !important;
+      border:0 !important;
+      border-left:8px solid var(--hud-black,#030405) !important;
+      background-color:var(--hud-white,#f4f3ed) !important;
+      background-image:linear-gradient(135deg,transparent 0 9px,var(--hud-white,#f4f3ed) 9px) !important;
+      box-shadow:0 10px 24px rgba(0,0,0,.42),inset -3px -3px 0 rgba(0,0,0,.22) !important;
+    }
+    #barrage-ui .game-hud .game-wave::before{
+      background:var(--hud-black,#030405) !important;
+    }
+    #barrage-ui .game-hud .game-wave :is(b,span,small){
+      color:var(--hud-black,#030405) !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .game-hud .game-wave small{
+      color:rgba(3,4,5,.72) !important;
+    }
+    #barrage-ui .game-hud .game-wave-track{
+      border-color:var(--hud-black,#030405) !important;
+      background:rgba(3,4,5,.20) !important;
+    }
+    #barrage-ui .game-hud .game-wave-track i{
+      background:var(--hud-black,#030405) !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .game-xp-track,
+    #barrage-ui .game-meter-track,
+    #barrage-ui .game-wave-track{
+      position:relative !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-xp-track::after,
+    #barrage-ui .game-meter-track::after,
+    #barrage-ui .game-wave-track::after{
+      content:"" !important;
+      position:absolute !important;
+      inset:-3px auto -3px 0 !important;
+      width:38px !important;
+      background:linear-gradient(90deg,transparent,rgba(244,243,237,.70),transparent) !important;
+      transform:skewX(-24deg) !important;
+      animation:zzzSweepLine 1180ms cubic-bezier(.22,.8,.28,1) 220ms 1 both !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-xp-track i,
+    #barrage-ui .game-meter-track i,
+    #barrage-ui .game-wave-track i{
+      background-size:auto !important;
+      animation:none !important;
+      will-change:auto !important;
+    }
+    #barrage-ui .home-screen.on :is(.hollow-tape,.home-dots,.ship-showcase){
+      animation:none !important;
+    }
+    /* Home audit fix: keep the score chip out of the ship preview sightline. */
+    #barrage-ui .home-screen .record-stack{
+      left:auto !important;
+      right:28px !important;
+      top:104px !important;
+      width:132px !important;
+      height:44px !important;
+      z-index:9 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .home-screen .record-pill{
+      width:100% !important;
+      height:44px !important;
+      min-height:44px !important;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      grid-template-rows:auto auto !important;
+      align-content:center !important;
+      gap:4px !important;
+      padding:7px 10px !important;
+      border:1px solid rgba(232,225,211,.22) !important;
+      border-left:4px solid var(--zzz-paper,#f4f1e8) !important;
+      background:
+        linear-gradient(118deg,rgba(232,225,211,.13) 0 34%,transparent 34%),
+        rgba(5,6,7,.86) !important;
+      box-shadow:0 8px 18px rgba(0,0,0,.28) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+    }
+    #barrage-ui .home-screen .record-pill b,
+    #barrage-ui .home-screen .record-pill small{
+      display:block !important;
+      grid-column:1 !important;
+      grid-row:auto !important;
+      min-width:0 !important;
+      max-width:100% !important;
+      text-align:left !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .home-screen .record-pill b{
+      color:rgba(232,225,211,.70) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .record-pill span{
+      display:none !important;
+    }
+    #barrage-ui .home-screen .record-pill small{
+      color:var(--zzz-paper,#f4f1e8) !important;
+      font-size:14px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    /* Full UI audit pass: make dense pages scan cleanly on mobile. */
+    #barrage-ui .page-title h1{
+      line-height:1.04 !important;
+      padding-bottom:2px !important;
+    }
+    #barrage-ui .ranking-empty{
+      min-height:164px !important;
+      display:grid !important;
+      grid-template-rows:auto auto auto;
+      align-content:center !important;
+      justify-items:start !important;
+      gap:9px !important;
+      padding:22px 18px !important;
+      color:var(--zzz-paper,#f4f1e8) !important;
+      border:1px solid var(--zzz-paper-22,rgba(232,225,211,.22)) !important;
+      border-left:5px solid var(--zzz-paper,#f4f1e8) !important;
+      background:
+        linear-gradient(118deg,rgba(232,225,211,.12) 0 26%,transparent 26%),
+        rgba(9,10,12,.92) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+      text-align:left !important;
+    }
+    #barrage-ui .ranking-empty b{
+      font-size:24px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      color:var(--zzz-paper,#f4f1e8) !important;
+    }
+    #barrage-ui .ranking-empty span{
+      font-size:11px !important;
+      line-height:1.2 !important;
+      font-weight:900 !important;
+      color:rgba(232,225,211,.72) !important;
+    }
+    #barrage-ui .ranking-empty small{
+      min-width:88px !important;
+      height:24px !important;
+      display:grid !important;
+      place-items:center !important;
+      padding:0 10px !important;
+      color:#08090b !important;
+      background:var(--zzz-paper,#f4f1e8) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .settings-summary{
+      min-height:96px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 82px !important;
+      gap:10px !important;
+      align-items:center !important;
+      padding:14px !important;
+      margin-bottom:10px !important;
+      color:var(--zzz-paper,#f4f1e8) !important;
+      border:1px solid var(--zzz-paper-22,rgba(232,225,211,.22)) !important;
+      border-top:4px solid var(--zzz-paper,#f4f1e8) !important;
+      background:
+        linear-gradient(120deg,rgba(232,225,211,.13) 0 18%,transparent 18%),
+        rgba(9,10,12,.94) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.30) !important;
+    }
+    #barrage-ui .settings-summary b,
+    #barrage-ui .settings-summary span,
+    #barrage-ui .settings-summary small{
+      display:block !important;
+      min-width:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .settings-summary b{
+      color:rgba(232,225,211,.68) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .settings-summary span{
+      margin-top:8px !important;
+      color:var(--zzz-paper,#f4f1e8) !important;
+      font-size:22px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .settings-summary small{
+      margin-top:7px !important;
+      color:rgba(232,225,211,.62) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .settings-summary strong{
+      width:82px !important;
+      height:62px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#08090b !important;
+      background:var(--zzz-paper,#f4f1e8) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      font-size:20px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path-list{
+      grid-auto-rows:auto !important;
+      gap:11px !important;
+      padding-right:4px !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path{
+      grid-template-columns:1fr !important;
+      gap:5px !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .upgrade-screen .single-upgrade-path{
+      display:block !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-link{
+      height:20px !important;
+      display:grid !important;
+      place-items:center !important;
+      transform:rotate(90deg) !important;
+      font-size:15px !important;
+      opacity:.82 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card{
+      min-height:90px !important;
+      padding:10px 92px 10px 12px !important;
+      display:grid !important;
+      align-content:center !important;
+      gap:4px !important;
+      width:100% !important;
+      box-sizing:border-box !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card span{
+      font-size:16px !important;
+      line-height:1.05 !important;
+      -webkit-line-clamp:1 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card small,
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card em{
+      font-size:9px !important;
+      line-height:1.15 !important;
+      -webkit-line-clamp:1 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button{
+      left:auto !important;
+      right:10px !important;
+      top:50% !important;
+      bottom:auto !important;
+      width:70px !important;
+      height:42px !important;
+      transform:translateY(-50%) !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button:active{
+      transform:translateY(calc(-50% + 2px)) !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) :is(.store-ship-rail,.garage-ship-rail,.store-part-rail,.garage-slot-rail){
+      padding-right:24px !important;
+      scroll-padding-inline:12px !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) :is(.store-tile,.part-buy-chip,.garage-slot-card,.garage-ship){
+      scroll-snap-align:start !important;
+    }
+    #barrage-ui :is(.gacha-screen,.ranking-screen,.settings-screen) .ship-showroom-ui,
+    #barrage-ui :is(.gacha-screen,.ranking-screen,.settings-screen) :is(.showroom-copy,.showroom-tabs,.showroom-part-stack,.showroom-mode){
+      display:none !important;
+    }
+    /* Store/Garage bottom-dock pass: reserve the upper field for the ship, and put controls in the lower half. */
+    #barrage-ui :is(.store-screen,.garage-screen) .ship-showroom-ui.showroom-v2{
+      left:12px !important;
+      right:12px !important;
+      top:78px !important;
+      width:auto !important;
+      height:clamp(212px, calc(50% - 100px), 300px) !important;
+      max-height:none !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .ship-showroom-ui.showroom-v2::before{
+      background:
+        linear-gradient(112deg,rgba(244,241,232,.085) 0 16%,transparent 16% 70%,rgba(244,241,232,.05) 70% 72%,transparent 72%),
+        linear-gradient(180deg,rgba(244,241,232,.035),rgba(0,0,0,.22)) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.07),inset 0 -44px 74px rgba(0,0,0,.28),0 18px 42px rgba(0,0,0,.34) !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-v2 .showroom-copy{
+      left:14px !important;
+      right:14px !important;
+      top:12px !important;
+      width:auto !important;
+      min-height:62px !important;
+      padding:10px 12px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) minmax(96px,.42fr) !important;
+      grid-template-rows:auto auto !important;
+      gap:3px 12px !important;
+      align-items:center !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-v2 .showroom-copy b{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-v2 .showroom-copy strong{
+      grid-column:1 !important;
+      grid-row:2 !important;
+      font-size:clamp(19px, 6vw, 27px) !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-v2 .showroom-copy span{
+      grid-column:2 !important;
+      grid-row:1 / span 2 !important;
+      justify-self:end !important;
+      max-width:128px !important;
+      text-align:right !important;
+      overflow:hidden !important;
+      display:-webkit-box !important;
+      -webkit-box-orient:vertical !important;
+      -webkit-line-clamp:3 !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-part-stack{
+      left:14px !important;
+      right:14px !important;
+      bottom:61px !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:8px !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-part-chip{
+      height:44px !important;
+      min-width:0 !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-v2 .showroom-tabs{
+      left:14px !important;
+      right:14px !important;
+      bottom:12px !important;
+      height:40px !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-v2 .showroom-tabs button{
+      height:40px !important;
+      min-height:40px !important;
+    }
+    #barrage-ui :is(.store-screen .commerce-panel,.garage-screen .garage-panel){
+      left:12px !important;
+      right:12px !important;
+      top:calc(50% + 4px) !important;
+      bottom:12px !important;
+      width:auto !important;
+      height:auto !important;
+      padding:10px !important;
+      background:
+        linear-gradient(116deg,rgba(244,241,232,.07) 0 12%,transparent 12% 84%,rgba(244,241,232,.05) 84% 86%,transparent 86%),
+        rgba(5,6,8,.96) !important;
+      box-shadow:0 -18px 38px rgba(0,0,0,.50),inset 0 1px 0 rgba(255,255,255,.07) !important;
+    }
+    #barrage-ui :is(.store-v2,.garage-v2){
+      gap:8px !important;
+      height:100% !important;
+      min-height:0 !important;
+    }
+    #barrage-ui .store-v2{
+      grid-template-rows:40px 104px minmax(0,1fr) !important;
+    }
+    #barrage-ui .garage-v2{
+      grid-template-rows:minmax(0,1fr) 56px 40px !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) :is(.store-part-board,.garage-slot-board){
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:8px !important;
+      overflow-x:hidden !important;
+      overflow-y:auto !important;
+      scrollbar-width:none !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) :is(.store-part-column,.garage-slot-column){
+      min-height:0 !important;
+      grid-template-rows:14px repeat(3,minmax(0,1fr)) !important;
+      gap:5px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .compact-section{
+      min-width:0 !important;
+      min-height:0 !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .compact-head span{
+      max-width:150px !important;
+    }
+    #barrage-ui .store-screen .store-ship-rail{
+      grid-auto-columns:minmax(150px, 46%) !important;
+    }
+    #barrage-ui .garage-screen .garage-ship-rail{
+      grid-auto-columns:minmax(120px, 38%) !important;
+    }
+    #barrage-ui .store-screen .store-tile{
+      height:86px !important;
+      grid-template-rows:8px 16px 10px minmax(0,1fr) 24px !important;
+      gap:3px !important;
+      padding:8px !important;
+    }
+    #barrage-ui .store-screen .store-tile button{
+      height:24px !important;
+      min-height:24px !important;
+    }
+    #barrage-ui .store-screen .part-buy-chip{
+      min-height:0 !important;
+      padding:6px !important;
+      grid-template-rows:8px 13px 10px 14px !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-card{
+      min-height:0 !important;
+      padding:6px !important;
+      grid-template-rows:8px 14px 10px 24px !important;
+      gap:3px !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-card select{
+      height:24px !important;
+      font-size:8px !important;
+    }
+    #barrage-ui .garage-screen .garage-ship{
+      height:40px !important;
+      min-height:40px !important;
+    }
+    #barrage-ui .garage-screen .garage-quick-actions button{
+      height:40px !important;
+      min-height:40px !important;
+    }
+    @media (max-width:370px){
+      #barrage-ui :is(.store-screen,.garage-screen) .ship-showroom-ui.showroom-v2{
+        left:10px !important;
+        right:10px !important;
+        height:clamp(202px, calc(50% - 92px), 284px) !important;
+      }
+      #barrage-ui :is(.store-screen,.garage-screen) .showroom-v2 .showroom-copy{
+        left:12px !important;
+        right:12px !important;
+        min-height:58px !important;
+        grid-template-columns:minmax(0,1fr) 88px !important;
+      }
+      #barrage-ui :is(.store-screen,.garage-screen) .showroom-v2 .showroom-copy span{
+        max-width:88px !important;
+      }
+      #barrage-ui :is(.store-screen .commerce-panel,.garage-screen .garage-panel){
+        left:10px !important;
+        right:10px !important;
+      }
+      #barrage-ui :is(.store-screen,.garage-screen) :is(.store-part-board,.garage-slot-board){
+        gap:6px !important;
+      }
+    }
+    /* Button palette pass: lift black controls into graphite plates with cyan work-light accents. */
+    #barrage-ui{
+      --zzz-cyan:#66f7ff;
+      --zzz-cyan-78:rgba(102,247,255,.78);
+      --zzz-cyan-42:rgba(102,247,255,.42);
+      --zzz-cyan-18:rgba(102,247,255,.18);
+      --zzz-button-face:#1f252b;
+      --zzz-button-face-2:#303840;
+      --zzz-button-text:#f2fbfb;
+      --zzz-button-muted:rgba(221,236,238,.70);
+      --zzz-button-line:rgba(198,218,222,.28);
+    }
+    #barrage-ui :is(.primary-start,.action-tile,.gacha-roll,.dialog-actions button,.garage-quick-actions button,.showroom-v2 .showroom-tabs button,.upgrade-path .upgrade-card button,.upgrade-choice strong,.basic-actions button,.basic-actions .level-sp,.level-sp,.store-tile button,.part-buy-chip,.garage-ship,.cosmetic-row button,.game-pause,.game-upgrade){
+      position:relative !important;
+      color:var(--zzz-button-text) !important;
+      border:1px solid var(--zzz-button-line) !important;
+      border-top:3px solid var(--zzz-cyan-78) !important;
+      border-left-color:var(--zzz-cyan-42) !important;
+      background:
+        linear-gradient(116deg,var(--zzz-cyan-18) 0 12%,transparent 12% 72%,rgba(255,255,255,.055) 72% 74%,transparent 74%),
+        linear-gradient(180deg,var(--zzz-button-face-2),var(--zzz-button-face)) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.38),0 0 18px rgba(102,247,255,.075),inset 0 1px 0 rgba(255,255,255,.10) !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui :is(.primary-start,.action-tile,.gacha-roll,.dialog-actions button,.garage-quick-actions button,.showroom-v2 .showroom-tabs button,.upgrade-path .upgrade-card button,.upgrade-choice strong,.basic-actions button,.basic-actions .level-sp,.level-sp,.store-tile button,.part-buy-chip,.garage-ship,.cosmetic-row button,.game-pause,.game-upgrade):not(.page-back):not(.showroom-back)::before{
+      border-color:var(--zzz-cyan-78) !important;
+      background:rgba(102,247,255,.08) !important;
+      box-shadow:0 0 12px rgba(102,247,255,.24) !important;
+      opacity:.95 !important;
+    }
+    #barrage-ui :is(.primary-start,.action-tile,.gacha-roll,.dialog-actions button,.garage-quick-actions button,.showroom-v2 .showroom-tabs button,.upgrade-path .upgrade-card button,.upgrade-choice strong,.basic-actions button,.basic-actions .level-sp,.level-sp,.store-tile button,.part-buy-chip,.garage-ship,.cosmetic-row button,.game-pause,.game-upgrade)::after{
+      background:linear-gradient(90deg,var(--zzz-cyan),rgba(242,251,251,.88)) !important;
+      box-shadow:0 0 16px rgba(102,247,255,.30) !important;
+      opacity:.86 !important;
+    }
+    #barrage-ui :is(.primary-start,.action-tile,.gacha-roll,.dialog-actions button,.garage-quick-actions button,.showroom-v2 .showroom-tabs button,.upgrade-path .upgrade-card button,.upgrade-choice strong,.basic-actions button,.store-tile button,.part-buy-chip,.garage-ship,.cosmetic-row button,.game-pause,.game-upgrade):not(:disabled):hover{
+      border-color:var(--zzz-cyan-78) !important;
+      background:
+        linear-gradient(116deg,rgba(102,247,255,.26) 0 16%,transparent 16% 72%,rgba(255,255,255,.08) 72% 75%,transparent 75%),
+        linear-gradient(180deg,#35404a,#222a31) !important;
+      box-shadow:0 14px 28px rgba(0,0,0,.40),0 0 22px rgba(102,247,255,.16),inset 0 1px 0 rgba(255,255,255,.14) !important;
+    }
+    #barrage-ui :is(.page-back,.showroom-back){
+      color:var(--zzz-button-text) !important;
+      border:1px solid var(--zzz-button-line) !important;
+      border-left:5px solid var(--zzz-cyan-78) !important;
+      background:
+        linear-gradient(125deg,var(--zzz-cyan-18) 0 28%,transparent 28%),
+        linear-gradient(180deg,#303841,#1d2329) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.38),0 0 18px rgba(102,247,255,.10),inset 0 1px 0 rgba(255,255,255,.11) !important;
+    }
+    #barrage-ui :is(.page-back,.showroom-back)::before{
+      border-color:var(--zzz-cyan) !important;
+      filter:drop-shadow(0 0 6px rgba(102,247,255,.45)) !important;
+    }
+    #barrage-ui .home-screen .primary-start{
+      border-top-color:var(--zzz-cyan) !important;
+      background:
+        linear-gradient(112deg,rgba(102,247,255,.24) 0 14%,transparent 14% 70%,rgba(242,251,251,.08) 70% 73%,transparent 73%),
+        linear-gradient(180deg,#36424b,#222a31) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.46),0 16px 30px rgba(0,0,0,.42),0 0 24px rgba(102,247,255,.14),inset 0 1px 0 rgba(255,255,255,.12) !important;
+    }
+    #barrage-ui .home-screen .primary-start :is(span,small),
+    #barrage-ui :is(.action-tile,.part-buy-chip,.garage-ship,.store-tile button,.garage-quick-actions button,.dialog-actions button,.gacha-roll,.game-upgrade) :is(span,small,b){
+      color:inherit !important;
+    }
+    #barrage-ui .home-screen .primary-start small,
+    #barrage-ui .action-tile span{
+      color:var(--zzz-button-muted) !important;
+    }
+    #barrage-ui .part-buy-chip em,
+    #barrage-ui .store-tile button .button-token,
+    #barrage-ui .upgrade-path .upgrade-card button .button-token{
+      color:#061014 !important;
+      border:1px solid rgba(102,247,255,.40) !important;
+      background:
+        linear-gradient(90deg,rgba(242,251,251,.88),var(--zzz-cyan)) !important;
+      box-shadow:0 0 14px rgba(102,247,255,.22) !important;
+    }
+    #barrage-ui :is(.showroom-v2 .showroom-tabs button.active,.showroom-v2 .showroom-tabs button:disabled:not(:only-child),.garage-ship.selected,.store-tile.selected button:disabled){
+      color:#061014 !important;
+      border-color:transparent !important;
+      background:
+        linear-gradient(116deg,rgba(255,255,255,.70) 0 18%,transparent 18%),
+        linear-gradient(90deg,#ecfeff,var(--zzz-cyan)) !important;
+      box-shadow:0 0 24px rgba(102,247,255,.26),0 12px 24px rgba(0,0,0,.36) !important;
+    }
+    #barrage-ui :is(button:disabled,.part-buy-chip:disabled,.garage-ship:disabled,.cosmetic-row button:disabled):not(.active):not(.selected){
+      color:rgba(221,236,238,.46) !important;
+      border-color:rgba(198,218,222,.16) !important;
+      border-top-color:rgba(198,218,222,.24) !important;
+      background:
+        linear-gradient(116deg,rgba(198,218,222,.07) 0 14%,transparent 14%),
+        linear-gradient(180deg,rgba(42,48,54,.78),rgba(24,28,32,.74)) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.055) !important;
+      opacity:.72 !important;
+    }
+    #barrage-ui .store-market-v3{
+      display:grid !important;
+      grid-template-rows:40px 46px minmax(0,1fr) 56px !important;
+      gap:8px !important;
+      height:100% !important;
+      min-height:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-market-v3 .compact-stats{
+      min-height:0 !important;
+    }
+    #barrage-ui .store-category-head{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:auto minmax(0,1fr) !important;
+      grid-template-rows:15px 22px !important;
+      gap:3px 8px !important;
+      align-items:center !important;
+      padding:7px 10px !important;
+      color:var(--zzz-button-text) !important;
+      border:1px solid var(--zzz-button-line) !important;
+      border-left:5px solid var(--zzz-cyan-78) !important;
+      background:
+        linear-gradient(118deg,rgba(102,247,255,.15) 0 20%,transparent 20%),
+        linear-gradient(180deg,rgba(38,45,52,.92),rgba(17,21,25,.92)) !important;
+      clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px) !important;
+      box-shadow:0 8px 16px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .store-category-head b,
+    #barrage-ui .store-category-head strong,
+    #barrage-ui .store-category-head span{
+      display:block !important;
+      min-width:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .store-category-head b{
+      grid-column:1 !important;
+      grid-row:1 / span 2 !important;
+      align-self:center !important;
+      min-width:58px !important;
+      color:#061014 !important;
+      background:linear-gradient(90deg,#ecfeff,var(--zzz-cyan)) !important;
+      padding:7px 8px !important;
+      text-align:center !important;
+      font-size:9px !important;
+      font-weight:950 !important;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px) !important;
+    }
+    #barrage-ui .store-category-head strong{
+      grid-column:2 !important;
+      grid-row:1 !important;
+      color:var(--zzz-button-text) !important;
+      font-size:15px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .store-category-head span{
+      grid-column:2 !important;
+      grid-row:2 !important;
+      color:var(--zzz-button-muted) !important;
+      font-size:9px !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .store-offer-list{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-auto-rows:minmax(120px,auto) !important;
+      gap:8px !important;
+      overflow-x:hidden !important;
+      overflow-y:auto !important;
+      padding-right:2px !important;
+      scrollbar-width:none !important;
+    }
+    #barrage-ui .store-offer-list::-webkit-scrollbar{
+      display:none !important;
+    }
+    #barrage-ui .store-offer-card{
+      min-width:0 !important;
+      min-height:120px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 78px !important;
+      grid-template-rows:auto auto minmax(30px,auto) !important;
+      grid-template-areas:
+        "main action"
+        "desc action"
+        "buff buff" !important;
+      gap:7px 9px !important;
+      align-items:stretch !important;
+      padding:10px !important;
+      color:var(--zzz-button-text) !important;
+      border:1px solid var(--zzz-button-line) !important;
+      border-left:5px solid var(--accent,var(--zzz-cyan)) !important;
+      background:
+        linear-gradient(118deg,rgba(102,247,255,.10) 0 16%,transparent 16%),
+        linear-gradient(180deg,rgba(30,36,42,.94),rgba(11,14,17,.94)) !important;
+      clip-path:polygon(13px 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%,0 13px) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-offer-card.is-selected,
+    #barrage-ui .store-offer-card.is-owned{
+      border-top-color:var(--zzz-cyan-78) !important;
+      background:
+        linear-gradient(118deg,rgba(102,247,255,.18) 0 18%,transparent 18%),
+        linear-gradient(180deg,rgba(40,48,55,.96),rgba(15,19,23,.96)) !important;
+    }
+    #barrage-ui .store-offer-main{
+      grid-area:main !important;
+      min-width:0 !important;
+      display:grid !important;
+      gap:4px !important;
+      align-content:start !important;
+    }
+    #barrage-ui .store-offer-main b,
+    #barrage-ui .store-offer-main strong,
+    #barrage-ui .store-offer-main span,
+    #barrage-ui .store-offer-desc span,
+    #barrage-ui .store-offer-desc small{
+      display:block !important;
+      min-width:0 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .store-offer-main b{
+      color:var(--zzz-cyan) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .store-offer-main strong{
+      color:var(--zzz-button-text) !important;
+      font-size:17px !important;
+      line-height:1.02 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .store-offer-main span{
+      color:var(--zzz-button-muted) !important;
+      font-size:10px !important;
+      line-height:1.18 !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:2 !important;
+      -webkit-box-orient:vertical !important;
+    }
+    #barrage-ui .store-offer-desc{
+      grid-area:desc !important;
+      min-width:0 !important;
+      display:grid !important;
+      gap:3px !important;
+      align-content:start !important;
+      padding-top:1px !important;
+    }
+    #barrage-ui .store-offer-desc span{
+      color:var(--zzz-button-text) !important;
+      font-size:10px !important;
+      line-height:1.1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .store-offer-desc small{
+      color:rgba(221,236,238,.58) !important;
+      font-size:8px !important;
+      line-height:1.15 !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:2 !important;
+      -webkit-box-orient:vertical !important;
+    }
+    #barrage-ui .store-buff-grid{
+      grid-area:buff !important;
+      min-width:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      gap:5px !important;
+    }
+    #barrage-ui .store-buff-grid span{
+      min-width:0 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,.95fr) auto !important;
+      align-items:center !important;
+      gap:5px !important;
+      padding:5px 6px !important;
+      color:var(--zzz-button-text) !important;
+      border:1px solid rgba(198,218,222,.18) !important;
+      background:rgba(102,247,255,.065) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+    }
+    #barrage-ui .store-buff-grid b,
+    #barrage-ui .store-buff-grid em{
+      min-width:0 !important;
+      display:block !important;
+      font-style:normal !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .store-buff-grid b{
+      color:var(--zzz-button-muted) !important;
+      font-size:8px !important;
+    }
+    #barrage-ui .store-buff-grid em{
+      justify-self:end !important;
+      color:var(--zzz-cyan) !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .store-offer-action{
+      grid-area:action !important;
+      align-self:stretch !important;
+      justify-self:stretch !important;
+      width:78px !important;
+      min-width:78px !important;
+      height:auto !important;
+      min-height:0 !important;
+      padding:0 6px !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:
+        linear-gradient(116deg,rgba(255,255,255,.70) 0 20%,transparent 20%),
+        linear-gradient(90deg,#ecfeff,var(--zzz-cyan)) !important;
+      box-shadow:0 8px 16px rgba(0,0,0,.34),0 0 14px rgba(102,247,255,.20) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+      line-height:1.1 !important;
+    }
+    #barrage-ui .store-offer-action:disabled{
+      color:rgba(221,236,238,.52) !important;
+      border:1px solid rgba(198,218,222,.16) !important;
+      background:
+        linear-gradient(116deg,rgba(198,218,222,.09) 0 18%,transparent 18%),
+        linear-gradient(180deg,rgba(42,48,54,.78),rgba(24,28,32,.76)) !important;
+      box-shadow:none !important;
+      opacity:.82 !important;
+    }
+    #barrage-ui .store-category-tabs{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+      gap:6px !important;
+      align-items:stretch !important;
+    }
+    #barrage-ui .store-category-tab{
+      min-width:0 !important;
+      width:100% !important;
+      height:56px !important;
+      min-height:56px !important;
+      padding:7px 4px !important;
+      display:grid !important;
+      grid-template-rows:minmax(0,1fr) auto !important;
+      align-content:center !important;
+      justify-items:center !important;
+      gap:4px !important;
+      color:var(--zzz-button-text) !important;
+      border:1px solid var(--zzz-button-line) !important;
+      border-top:3px solid rgba(102,247,255,.36) !important;
+      background:
+        linear-gradient(116deg,rgba(102,247,255,.10) 0 20%,transparent 20%),
+        linear-gradient(180deg,var(--zzz-button-face-2),var(--zzz-button-face)) !important;
+      box-shadow:0 8px 14px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px) !important;
+    }
+    #barrage-ui .store-category-tab.active{
+      color:#061014 !important;
+      border-color:transparent !important;
+      background:
+        linear-gradient(116deg,rgba(255,255,255,.72) 0 22%,transparent 22%),
+        linear-gradient(90deg,#ecfeff,var(--zzz-cyan)) !important;
+      box-shadow:0 0 20px rgba(102,247,255,.22),0 8px 16px rgba(0,0,0,.32) !important;
+      opacity:1 !important;
+    }
+    #barrage-ui .store-category-tab b,
+    #barrage-ui .store-category-tab span{
+      max-width:100% !important;
+      display:block !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .store-category-tab b{
+      font-size:10px !important;
+    }
+    #barrage-ui .store-category-tab span{
+      font-size:8px !important;
+      opacity:.78 !important;
+    }
+    @media (max-width:370px){
+      #barrage-ui .store-market-v3{
+        grid-template-rows:38px 44px minmax(0,1fr) 52px !important;
+        gap:7px !important;
+      }
+      #barrage-ui .store-offer-card{
+        grid-template-columns:minmax(0,1fr) 70px !important;
+        min-height:116px !important;
+        padding:8px !important;
+      }
+      #barrage-ui .store-offer-action{
+        width:70px !important;
+        min-width:70px !important;
+      }
+      #barrage-ui .store-category-tab{
+        height:52px !important;
+        min-height:52px !important;
+      }
+      #barrage-ui .store-category-tab b{
+        font-size:9px !important;
+      }
+    }
+    @media (hover:none), (pointer:coarse), (max-width:520px){
+      #barrage-ui :is(.primary-start,.action-tile,.gacha-roll,.dialog-actions button,.garage-quick-actions button,.showroom-v2 .showroom-tabs button,.upgrade-path .upgrade-card button,.upgrade-choice strong,.basic-actions button,.basic-actions .level-sp,.level-sp,.store-tile button,.part-buy-chip,.garage-ship,.cosmetic-row button,.game-pause,.game-upgrade){
+        transition:transform 80ms ease,translate 80ms ease !important;
+        box-shadow:0 8px 16px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.09) !important;
+      }
+      #barrage-ui :is(.primary-start,.action-tile,.gacha-roll,.dialog-actions button,.garage-quick-actions button,.showroom-v2 .showroom-tabs button,.upgrade-path .upgrade-card button,.upgrade-choice strong,.basic-actions button,.basic-actions .level-sp,.level-sp,.store-tile button,.part-buy-chip,.garage-ship,.cosmetic-row button,.game-pause,.game-upgrade)::before,
+      #barrage-ui :is(.primary-start,.action-tile,.gacha-roll,.dialog-actions button,.garage-quick-actions button,.showroom-v2 .showroom-tabs button,.upgrade-path .upgrade-card button,.upgrade-choice strong,.basic-actions button,.basic-actions .level-sp,.level-sp,.store-tile button,.part-buy-chip,.garage-ship,.cosmetic-row button,.game-pause,.game-upgrade)::after{
+        box-shadow:none !important;
+      }
+      #barrage-ui :is(.page-back,.showroom-back){
+        box-shadow:0 8px 16px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.09) !important;
+      }
+      #barrage-ui :is(.page-back,.showroom-back)::before{
+        filter:none !important;
+      }
+      #barrage-ui :is(.showroom-v2 .showroom-tabs button.active,.showroom-v2 .showroom-tabs button:disabled:not(:only-child),.garage-ship.selected,.store-tile.selected button:disabled){
+        box-shadow:0 8px 16px rgba(0,0,0,.34) !important;
+      }
     }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
@@ -16433,7 +17539,22 @@ function createUi(){
       #barrage-ui .ship-showcase,
       #barrage-ui .hollow-tape,
       #barrage-ui .home-dots,
-      #barrage-ui .primary-start{animation:none}
+      #barrage-ui .primary-start,
+      #barrage-ui .screen.on .page-stage,
+      #barrage-ui .screen.on .page-title,
+      #barrage-ui .screen.on .page-back,
+      #barrage-ui .screen.on :is(.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.upgrade-path-list,.ship-showroom-ui.showroom-v2,.store-tile,.part-buy-chip,.garage-slot-card,.garage-ship,.settings-row,.ranking-row,.gacha-result,.equipped-card,.cosmetic-row,.upgrade-path .upgrade-card),
+      #barrage-ui .upgrade-overlay.on,
+      #barrage-ui .upgrade-overlay.on :is(.level-dialog,.basic-dialog,.dialog-card,.special-upgrade-card,.run-basic-card,.special-card-icon),
+      #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot,
+      #barrage-ui .game-hud.on :is(.game-pause,.game-score,.game-xpbar,.game-wave,.game-bottom,.game-upgrade),
+      #barrage-ui .game-hud.on .game-special-slots .special-slot,
+      #barrage-ui .game-xp-track::after,
+      #barrage-ui .game-meter-track::after,
+      #barrage-ui .game-wave-track::after,
+      #barrage-ui .game-xp-track i,
+      #barrage-ui .game-meter-track i,
+      #barrage-ui .game-wave-track i{animation:none !important;transition:none !important;translate:0 0 !important;scale:1 !important;rotate:0deg !important}
     }
   `;
   document.head.appendChild(style);
@@ -16444,6 +17565,13 @@ function createUi(){
     if(!button || !root.contains(button) || button.disabled) return;
     e.preventDefault();
     handleAction(button.dataset.action);
+  });
+  root.addEventListener('keydown', e => {
+    if(e.key !== 'Enter' && e.key !== ' ') return;
+    const target = e.target?.closest?.('[data-action][role="button"]');
+    if(!target || !root.contains(target)) return;
+    e.preventDefault();
+    handleAction(target.dataset.action);
   });
   root.addEventListener('change', e => {
     const select = e.target?.closest?.('select[data-equip-part]');
@@ -16458,13 +17586,14 @@ function createUi(){
 
 function renderUi2(){
   const rankingRows = state.mode === 'ranking' ? getRankingRows(10) : [];
-  const homeUpgradeTotal = Object.keys(HOME_UPGRADE_DEFS).reduce((sum, id) => sum + homeUpgradeLevel(id), 0);
+  const homeUpgradeTotal = state.mode === 'home' ? totalHomeUpgradeLevel() : 0;
   const ship = currentShip();
+  const deadActive = state.mode === 'dead';
   const gachaActive = state.mode === 'gacha';
   const garageActive = state.mode === 'garage';
   const equippedSummary = (gachaActive || garageActive) ? renderEquippedCosmetics() : '';
   const gachaResult = gachaActive ? renderGachaResult() : '';
-  const tokenReward = calculateTokenReward();
+  const tokenReward = deadActive ? calculateTokenReward() : 0;
   ui.root.innerHTML = `
     <div class="screen home-screen ${state.mode==='home'?'on':''}" data-screen="home">
       <div class="ui-stage home-hub">
@@ -16472,7 +17601,7 @@ function renderUi2(){
           <div class="brand-lockup"><span>BARRAGE</span><small>PIPE ASSAULT</small></div>
           <div class="wallet-chip">${tokenAmount(state.tokens, 'wallet-token')}</div>
         </div>
-        <div class="hangar-visual">
+        <div class="hangar-visual" data-action="garage" role="button" tabindex="0" aria-label="ガレージを開く">
           <div class="home-dots"></div>
           <div class="hollow-tape"></div>
           <div class="hangar-status"><b>CHECKPOINT</b><span>BEST WAVE ${Math.max(1, state.bestWave + 10)}+</span></div>
@@ -16497,9 +17626,8 @@ function renderUi2(){
         <button class="primary-start" data-action="start"><span>スタート</span><small>READY</small></button>
         <div class="home-actions">
           <button class="action-tile" data-action="store" style="--accent:#d8e2ea"><b>ストア</b><span>機体とパーツ</span></button>
-          <button class="action-tile" data-action="garage" style="--accent:#8eefff"><b>ガレージ</b><span>機体と装備を変更</span></button>
           <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>アップグレード</b><span>ベース強化を開く</span></button>
-          <button class="action-tile" data-action="gacha" style="--accent:#d8e2ea"><b>サプライ抽選</b><span>スキンとクロマコート</span></button>
+          <button class="action-tile" data-action="gacha" style="--accent:#d8e2ea"><b>ガチャ</b><span>スキンとクロマコート</span></button>
           <button class="action-tile" data-action="ranking" style="--accent:#8eefff"><b>ランキング</b><span>ハイスコア記録</span></button>
           <button class="action-tile" data-action="settings" style="--accent:#d8e2ea"><b>オプション</b><span>環境とステータス</span></button>
         </div>
@@ -16529,7 +17657,7 @@ function renderUi2(){
           <button class="page-back showroom-back" data-action="home">戻る</button>
         </div>
         ${state.mode === 'store' ? renderShipShowroomV2('store') : ''}
-        <div class="catalog-grid commerce-panel">
+        <div class="catalog-grid commerce-panel" data-store-market>
           ${state.mode === 'store' ? renderStoreMarketV2() : ''}
         </div>
       </div>
@@ -16553,7 +17681,7 @@ function renderUi2(){
       <div class="ui-stage page-stage">
         <div class="page-header">
           <div class="page-title glass-panel">
-            <h1>サプライ</h1>
+            <h1>ガチャ</h1>
             <p>${tokenAmount(GACHA_COST)} / 所持 ${gachaActive ? Object.keys(state.cosmetics.owned).length : 0}/${COSMETIC_ITEMS.length}</p>
           </div>
           <button class="page-back" data-action="home">戻る</button>
@@ -16706,7 +17834,7 @@ function renderUi2(){
 }
 
 function renderRankingRows(rows){
-  if(!rows.length) return '<div class="ranking-empty">NO RECORD</div>';
+  if(!rows.length) return '<div class="ranking-empty"><b>NO RECORD</b><span>Run history will appear here after your first score is saved.</span><small>LOCAL TOP 10</small></div>';
   return rows.map(row => `
     <div class="ranking-row">
       <b>#${row.rank}</b>
@@ -16726,10 +17854,20 @@ function renderSettingsPanel(){
     {label:'ステージ', value:'WIDE PIPE', sub:`R ${PIPE_RADIUS.toFixed(1)} / ARC ${Math.round(PIPE_ARC / Math.PI * 180)}deg`, color:'#1ed6ff'},
     {label:'機動設定', value:`SLOW ${motion}%`, sub:'ROLL CONTROL', color:'#b8a7ff'},
     {label:'機体', value:ship.name, sub:`${parts}/${PART_TYPES.reduce((sum, type) => sum + shipSlotCount(type, ship), 0)} PARTS`, color:ship.color},
-    {label:'サプライ', value:`${cosmeticCount} ITEM`, sub:`${Object.keys(state.cosmetics.equipped || {}).length} EQUIPPED`, color:'#36f39b'},
+    {label:'ガチャ', value:`${cosmeticCount} ITEM`, sub:`${Object.keys(state.cosmetics.equipped || {}).length} EQUIPPED`, color:'#36f39b'},
     {label:'保存', value:'LOCAL', sub:`BEST WAVE ${state.bestWave} / ${formatNumber(state.highScore)}`, color:'#d8e2ea'}
   ];
-  return rows.map(row => `
+  const summary = `
+    <div class="settings-summary">
+      <div>
+        <b>SYSTEM STATUS</b>
+        <span>${escapeHtml(ship.name)}</span>
+        <small>${parts} PARTS / BEST WAVE ${state.bestWave}</small>
+      </div>
+      <strong>${motion}%</strong>
+    </div>
+  `;
+  return summary + rows.map(row => `
     <div class="settings-row" style="--accent:${row.color}">
       <b>${row.label}</b>
       <span>${escapeHtml(row.value)}</span>
@@ -16885,7 +18023,7 @@ function renderGaragePanel(){
       </section>
       <div class="garage-quick-actions">
         <button data-action="store">パーツ購入</button>
-        <button data-action="gacha">サプライ</button>
+        <button data-action="gacha">ガチャ</button>
       </div>
     </div>
   `;
@@ -16915,7 +18053,7 @@ function renderGarageLoadoutSlots(){
 function renderGarageLoadoutSlot(type, index){
   const equipped = state.garage?.equippedParts?.[type]?.[index] || null;
   const current = PART_BY_ID[equipped];
-  const options = PART_DEFS.filter(part => part.type === type && state.garage.ownedParts[part.id]);
+  const options = partsForType(type).filter(part => state.garage.ownedParts[part.id]);
   return `
     <div class="garage-slot-card" style="--accent:${colorCss(current?.color || COLORS.cyan)}">
       <b>${PART_TYPE_LABELS[type]} ${index + 1}</b>
@@ -16944,11 +18082,11 @@ function renderGarageShipPicker(){
 
 function renderShipShowroomV2(kind){
   const ship = currentShip();
-  const ownedShips = SHIP_DEFS.filter(item => shipOwned(item.id)).length;
-  const ownedParts = PART_DEFS.filter(part => partOwned(part.id)).length;
+  const ownedShips = ownedShipCount();
+  const ownedParts = ownedPartCount();
   const totalSlots = PART_TYPES.reduce((sum, type) => sum + shipSlotCount(type, ship), 0);
   const sub = kind === 'store'
-    ? `${tokenAmount(state.tokens, 'showroom-token')} / FRAME ${ownedShips}/${SHIP_DEFS.length} / PARTS ${ownedParts}/${PART_DEFS.length}`
+    ? `${tokenAmount(state.tokens, 'showroom-token')} / FRAME ${ownedShips}/${SHIP_DEFS.length} / PARTS ${ownedParts}/${STORE_TOTAL_PARTS}`
     : `${equippedPartCount()}/${totalSlots} PARTS EQUIPPED`;
   /*
   const note = fullDef.tier === 'advanced'
@@ -16992,29 +18130,163 @@ function renderShowroomPartChipsV2(ship = currentShip()){
 }
 
 function renderStoreMarketV2(){
-  const ownedShips = SHIP_DEFS.filter(ship => shipOwned(ship.id)).length;
-  const ownedParts = PART_DEFS.filter(part => partOwned(part.id)).length;
+  const ownedShips = ownedShipCount();
+  const ownedParts = ownedPartCount();
+  const categoryId = activeStoreCategory();
+  const category = STORE_CATEGORY_BY_ID[categoryId] || STORE_CATEGORY_DEFS[0];
   return `
-    <div class="store-compact store-v2">
+    <div class="store-compact store-v2 store-market-v3">
       <div class="compact-stats">
         <span><b>${tokenAmount(state.tokens, 'compact-token')}</b><small>TOKEN</small></span>
         <span><b>${ownedShips}/${SHIP_DEFS.length}</b><small>FRAME</small></span>
-        <span><b>${ownedParts}/${PART_DEFS.length}</b><small>PARTS</small></span>
+        <span><b>${ownedParts}/${STORE_TOTAL_PARTS}</b><small>PARTS</small></span>
       </div>
-      <section class="compact-section">
-        <div class="compact-head"><b>SELECT FRAME</b><span>selected ship appears above</span></div>
-        <div class="store-ship-rail">
-          ${SHIP_DEFS.map(renderStoreShipCard).join('')}
-        </div>
-      </section>
-      <section class="compact-section">
-        <div class="compact-head"><b>BUY PARTS</b><span>purchased parts attach to open slots</span></div>
-        <div class="store-part-board">
-          ${PART_TYPES.map(renderStorePartColumn).join('')}
-        </div>
-      </section>
+      <div class="store-category-head">
+        <b>${category.eyebrow}</b>
+        <strong>${category.label}</strong>
+        <span>${category.description}</span>
+      </div>
+      <div class="store-offer-list">
+        ${renderStoreCategoryOffers(categoryId)}
+      </div>
+      <div class="store-category-tabs" aria-label="ストアカテゴリ">
+        ${renderStoreCategoryTabs(categoryId)}
+      </div>
     </div>
   `;
+}
+
+function activeStoreCategory(){
+  return STORE_CATEGORY_IDS.includes(state.storeCategory) ? state.storeCategory : 'ship';
+}
+
+function ownedShipCount(){
+  return SHIP_DEFS.filter(ship => shipOwned(ship.id)).length;
+}
+
+function ownedPartCount(){
+  let count = 0;
+  for(const part of PART_DEFS){
+    if(partOwned(part.id)) count++;
+  }
+  return count;
+}
+
+function renderStoreCategoryOffers(categoryId){
+  if(categoryId === 'ship') return SHIP_DEFS.map(renderStoreShipOffer).join('');
+  return partsForType(categoryId)
+    .map(renderStorePartOffer)
+    .join('');
+}
+
+function renderStoreCategoryTabs(activeId){
+  return STORE_CATEGORY_DEFS.map(category => {
+    const owned = storeCategoryOwnedCount(category.id);
+    const total = storeCategoryTotalCount(category.id);
+    const active = category.id === activeId;
+    return `
+      <button class="store-category-tab ${active ? 'active' : ''}" ${active ? 'disabled' : ''} data-action="setStoreCategory:${category.id}">
+        <b>${category.short}</b>
+        <span>${owned}/${total}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+function storeCategoryOwnedCount(categoryId){
+  if(categoryId === 'ship') return ownedShipCount();
+  return partsForType(categoryId).filter(part => partOwned(part.id)).length;
+}
+
+function storeCategoryTotalCount(categoryId){
+  return STORE_CATEGORY_TOTALS[categoryId] || 0;
+}
+
+function renderStoreShipOffer(ship){
+  const owned = shipOwned(ship.id);
+  const selected = currentShip().id === ship.id;
+  const canBuy = !owned && state.tokens >= ship.cost;
+  const action = owned ? `equipShip:${ship.id}` : `buyShip:${ship.id}`;
+  const buttonLabel = selected ? '使用中' : owned ? '選択' : tokenAmount(ship.cost, 'button-token');
+  return `
+    <article class="store-offer-card store-offer-ship ${owned ? 'is-owned' : 'is-locked'} ${selected ? 'is-selected' : ''}" style="--accent:${ship.color}">
+      <div class="store-offer-main">
+        <b>${selected ? 'ACTIVE FRAME' : owned ? 'OWNED FRAME' : 'FRAME'}</b>
+        <strong>${escapeHtml(ship.name)}</strong>
+        <span>${escapeHtml(ship.role)}</span>
+      </div>
+      <div class="store-offer-desc">
+        <span>${shipSlotsText(ship)}</span>
+        <small>パーツスロットと基礎倍率が変化します。</small>
+      </div>
+      <div class="store-buff-grid">
+        ${renderStoreShipBuffs(ship)}
+      </div>
+      <button class="store-offer-action" ${selected || (!owned && !canBuy) ? 'disabled' : ''} data-action="${action}">${buttonLabel}</button>
+    </article>
+  `;
+}
+
+function renderStorePartOffer(part){
+  const owned = partOwned(part.id);
+  const cost = partCost(part);
+  const canBuy = !owned && state.tokens >= cost;
+  const action = owned ? 'garage' : `buyPart:${part.id}`;
+  const label = owned ? '装備へ' : tokenAmount(cost, 'button-token');
+  return `
+    <article class="store-offer-card store-offer-part ${owned ? 'is-owned' : 'is-locked'}" style="--accent:${colorCss(part.color)}">
+      <div class="store-offer-main">
+        <b>${PART_TYPE_LABELS[part.type]} / ${escapeHtml(part.rarity)}</b>
+        <strong>${escapeHtml(part.name)}</strong>
+        <span>${escapeHtml(part.text)}</span>
+      </div>
+      <div class="store-offer-desc">
+        <span>${storePartSlotStatus(part.type)}</span>
+        <small>${owned ? '購入済み。ガレージでスロットへ装備できます。' : '購入後、空きスロットがあれば自動装備されます。'}</small>
+      </div>
+      <div class="store-buff-grid">
+        ${renderStoreBuffChips(part.buff)}
+      </div>
+      <button class="store-offer-action" ${owned || canBuy ? '' : 'disabled'} data-action="${action}">${label}</button>
+    </article>
+  `;
+}
+
+function renderStoreShipBuffs(ship){
+  const rows = [
+    ['HP', ship.mult.hp],
+    [COSMETIC_BUFF_LABELS.defense || '防御', ship.mult.defense],
+    [COSMETIC_BUFF_LABELS.damage || '火力', ship.mult.damage],
+    [COSMETIC_BUFF_LABELS.fireRate || '連射', ship.mult.fireRate],
+    [COSMETIC_BUFF_LABELS.speed || '機動', ship.mult.speed],
+    [COSMETIC_BUFF_LABELS.xp || 'XP', ship.mult.xp],
+    [COSMETIC_BUFF_LABELS.token || 'TOKEN', ship.mult.token]
+  ].filter(([, value]) => Number.isFinite(Number(value)) && Math.abs(Number(value) - 1) > .001);
+  if(!rows.length) return '<span><b>BASE</b><em>標準性能</em></span>';
+  return rows.map(([label, value]) => `<span><b>${label}</b><em>${formatStoreMultiplier(value)}</em></span>`).join('');
+}
+
+function renderStoreBuffChips(buff = {}){
+  const rows = Object.entries(buff).filter(([, value]) => Number(value));
+  if(!rows.length) return '<span><b>BUFF</b><em>なし</em></span>';
+  return rows.map(([key, value]) => `<span><b>${COSMETIC_BUFF_LABELS[key] || key}</b><em>${formatStoreBuff(value)}</em></span>`).join('');
+}
+
+function storePartSlotStatus(type){
+  const slots = shipSlotCount(type);
+  if(!slots) return `現在の機体: ${PART_TYPE_LABELS[type]}スロットなし`;
+  const equipped = (state.garage?.equippedParts?.[type] || []).slice(0, slots).filter(Boolean).length;
+  return `現在の機体: ${equipped}/${slots} SLOT`;
+}
+
+function formatStoreBuff(value){
+  const pct = Number(value) * 100;
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(Math.abs(pct) < 10 ? 1 : 0)}%`;
+}
+
+function formatStoreMultiplier(value){
+  const pct = (Number(value) - 1) * 100;
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(Math.abs(pct) < 10 ? 1 : 0)}%`;
 }
 
 function renderGaragePanelV2(){
@@ -17029,14 +18301,14 @@ function renderGaragePanelV2(){
         </div>
       </section>
       <section class="compact-section">
-        <div class="compact-head"><b>FRAME SELECT</b><span>${SHIP_DEFS.filter(s => shipOwned(s.id)).length}/${SHIP_DEFS.length}</span></div>
+        <div class="compact-head"><b>FRAME SELECT</b><span>${ownedShipCount()}/${SHIP_DEFS.length}</span></div>
         <div class="garage-ship-rail">
           ${renderGarageShipPicker()}
         </div>
       </section>
       <div class="garage-quick-actions">
         <button data-action="store">BUY PARTS</button>
-        <button data-action="gacha">SUPPLY</button>
+        <button data-action="gacha">GACHA</button>
       </div>
     </div>
   `;
@@ -17060,7 +18332,7 @@ function renderPartSection(type){
 function renderPartSlot(type, index){
   const equipped = state.garage?.equippedParts?.[type]?.[index] || null;
   const current = PART_BY_ID[equipped];
-  const options = PART_DEFS.filter(part => part.type === type && state.garage.ownedParts[part.id]);
+  const options = partsForType(type).filter(part => state.garage.ownedParts[part.id]);
   return `
     <div class="part-slot" style="--accent:${colorCss(current?.color || COLORS.cyan)}">
       <b>${PART_TYPE_LABELS[type]} ${index + 1}</b>
@@ -17078,13 +18350,15 @@ function renderPartSlot(type, index){
 }
 
 function renderHomeUpgradePaths(){
-  return HOME_UPGRADE_PATHS.map(path => `
-    <div class="upgrade-path">
-      ${renderHomeUpgradeCard(path.base)}
-      <div class="upgrade-link ${homeUpgradeLevel(path.base.id) >= HOME_UPGRADE_CAP ? 'open' : ''}">></div>
-      ${renderHomeUpgradeCard(path.advanced)}
-    </div>
-  `).join('');
+  return HOME_UPGRADE_PATHS.map(path => {
+    const baseMaxed = homeUpgradeLevel(path.base.id) >= HOME_UPGRADE_CAP;
+    const active = baseMaxed ? path.advanced : path.base;
+    return `
+      <div class="upgrade-path single-upgrade-path ${baseMaxed ? 'cap-open' : 'cap-locked'}">
+        ${renderHomeUpgradeCard(active)}
+      </div>
+    `;
+  }).join('');
 }
 
 function renderHomeUpgradeCard(def){
@@ -17227,7 +18501,7 @@ function renderSupplyPanel(equippedSummary, gachaResult){
   return `
     <div class="supply-hero">
       <div class="supply-copy">
-        <b>SUPPLY DROP</b>
+        <b>GACHA</b>
         <strong>${tokenAmount(GACHA_COST, 'supply-cost')}</strong>
         <span>${Object.keys(state.cosmetics.owned).length}/${COSMETIC_ITEMS.length} 所持</span>
       </div>
@@ -17299,6 +18573,10 @@ function escapeHtml(value){
     .replace(/'/g, '&#39;');
 }
 
+function totalHomeUpgradeLevel(){
+  return HOME_UPGRADE_IDS.reduce((sum, id) => sum + homeUpgradeLevel(id), 0);
+}
+
 function updateHud(){
   if(state.mode !== 'play' || uiDirty) return;
   const now = performance.now();
@@ -17347,6 +18625,7 @@ function handleAction(action){
   else if(action === 'gacha') setMode('gacha');
   else if(action === 'settings') setMode('settings');
   else if(action === 'rollGacha') rollGacha();
+  else if(action.startsWith('setStoreCategory:')) setStoreCategory(action.slice(17));
   else if(action.startsWith('buyShip:')) buyShip(action.slice(8));
   else if(action.startsWith('buyPart:')) buyPart(action.slice(8));
   else if(action.startsWith('equipShip:')) equipShip(action.slice(10));
@@ -17365,6 +18644,24 @@ function handleAction(action){
     clearRunObjects();
     setMode('home');
   }
+}
+
+function setStoreCategory(categoryId){
+  if(!STORE_CATEGORY_IDS.includes(categoryId)) return;
+  if(state.storeCategory === categoryId && !uiDirty) return;
+  state.storeCategory = categoryId;
+  if(state.mode === 'store' && !uiDirty && renderStoreMarketOnly()){
+    return;
+  }
+  uiDirty = true;
+  renderUi2();
+}
+
+function renderStoreMarketOnly(){
+  const target = ui.root.querySelector('[data-store-market]');
+  if(!target) return false;
+  target.innerHTML = renderStoreMarketV2();
+  return true;
 }
 
 function setMode(mode){
@@ -17612,7 +18909,7 @@ function syncUiBounds(rect = canvas.getBoundingClientRect()){
 }
 
 function syncCanvasVisibility(){
-  const shouldShow = ['home', 'store', 'garage', 'play', 'levelup', 'pause', 'dead'].includes(state.mode);
+  const shouldShow = CANVAS_VISIBLE_MODES.has(state.mode);
   if(canvasVisibilityState === shouldShow) return;
   canvasVisibilityState = shouldShow;
   canvas.style.visibility = shouldShow ? 'visible' : 'hidden';
@@ -17627,20 +18924,31 @@ function syncCanvasVisibility(){
 }
 
 function loop(now){
+  const canvasVisible = CANVAS_VISIBLE_MODES.has(state.mode);
   const active3dMode = state.mode === 'play' || state.mode === 'home' || state.mode === 'store' || state.mode === 'garage';
   if(document.hidden){
     setTimeout(() => requestAnimationFrame(loop), 500);
     state.last = now;
     return;
   }
-  if(active3dMode) requestAnimationFrame(loop);
-  else setTimeout(() => requestAnimationFrame(loop), 120);
-  if(state.mode === 'home' || state.mode === 'store' || state.mode === 'garage'){
-    const minFrameMs = homeShipDrag.pointer === null && Math.abs(homeShipDrag.velocity) < .06
-      ? HOME_IDLE_FRAME_MS
-      : 16;
-    if(now - lastVisualFrameAt < minFrameMs) return;
+  if(!canvasVisible){
+    setTimeout(() => requestAnimationFrame(loop), HIDDEN_UI_FRAME_MS);
+    state.last = now;
+    return;
   }
+  if(state.mode === 'home' || state.mode === 'store' || state.mode === 'garage'){
+    const idleFrameMs = state.mode === 'home' ? HOME_IDLE_FRAME_MS : SHOWROOM_IDLE_FRAME_MS;
+    const minFrameMs = homeShipDrag.pointer === null && Math.abs(homeShipDrag.velocity) < .06
+      ? idleFrameMs
+      : 16;
+    const waitMs = minFrameMs - (now - lastVisualFrameAt);
+    if(waitMs > 0){
+      setTimeout(() => requestAnimationFrame(loop), waitMs);
+      return;
+    }
+  }
+  if(active3dMode) requestAnimationFrame(loop);
+  else setTimeout(() => requestAnimationFrame(loop), PASSIVE_3D_FRAME_MS);
   lastVisualFrameAt = now;
   const frameMs = state.last ? now - state.last : 16.7;
   const dt = Math.min(.033, Math.max(.001, frameMs / 1000));
@@ -17835,6 +19143,8 @@ function updateBullets(dt){
   if(!bullets.length) return;
   for(let i=bullets.length-1;i>=0;i--){
     const b = bullets[i];
+    b.prevZ = b.z;
+    b.prevAngle = b.angle;
     b.z -= b.speed * dt;
     b.life -= dt;
     if(b.angleVelocity){
@@ -17861,6 +19171,8 @@ function updateEnemies(dt, t){
   const stasisLevel = specialUpgradeLevel('stasisAura');
   for(let i=enemies.length-1;i>=0;i--){
     const e = enemies[i];
+    e.prevZ = e.z;
+    e.prevAngle = e.angle;
     const approachDistance = angleDistance(e.angle, state.roll);
     const stasisSlow = stasisLevel > 0 && e.z > -72 && approachDistance < (.30 + stasisLevel * .045)
       ? Math.max(.52, 1 - stasisLevel * .10)
@@ -17924,12 +19236,14 @@ function hitEnemyWithBullets(enemy, enemyIndex){
   for(let i=bullets.length-1;i>=0;i--){
     const b = bullets[i];
     if(b.hitEnemies?.has(enemy)) continue;
-    const dz = Math.abs(enemy.z - b.z);
-    if(dz > (enemy.boss ? 1.7 : .72 + enemy.radius)) continue;
-    const da = angleDistance(enemy.angle, b.angle);
-    if(da > (enemy.boss ? .38 : .16 + enemy.radius * .08)) continue;
+    const impact = bulletEnemyImpact(enemy, b);
+    if(!impact) continue;
     enemy.hp -= b.damage;
-    triggerEnemyHit(enemy, b.crit ? 0xffd36a : enemy.type.color, b.crit ? 2 : 1);
+    triggerEnemyHit(enemy, b.crit ? 0xffd36a : enemy.type.color, b.crit ? 2 : 1, {
+      angle: impact.angle,
+      z: impact.z,
+      bullet: b
+    });
     if(b.hitEnemies) b.hitEnemies.add(enemy);
     if(b.pierce > 0){
       b.pierce--;
@@ -17942,6 +19256,49 @@ function hitEnemyWithBullets(enemy, enemyIndex){
     }
   }
   return false;
+}
+
+function bulletEnemyImpact(enemy, bullet){
+  const zPad = enemyHitZWindow(enemy);
+  const anglePad = enemyHitAngleWindow(enemy);
+  const bulletStartZ = bullet.prevZ ?? bullet.z;
+  const enemyStartZ = enemy.prevZ ?? enemy.z;
+  const relStart = bulletStartZ - enemyStartZ;
+  const relEnd = bullet.z - enemy.z;
+  const relDelta = relEnd - relStart;
+  let t = Math.abs(relEnd) < Math.abs(relStart) ? 1 : 0;
+  if(Math.abs(relDelta) > HIT_SWEEP_EPSILON){
+    t = clamp(-relStart / relDelta, 0, 1);
+  }
+  const closestZ = relStart + relDelta * t;
+  if(Math.abs(closestZ) > zPad) return null;
+
+  const bulletAngle = interpolateAngle(bullet.prevAngle ?? bullet.angle, bullet.angle, t);
+  const enemyAngle = interpolateAngle(enemy.prevAngle ?? enemy.angle, enemy.angle, t);
+  const angularDistance = Math.abs(signedAngleDelta(enemyAngle, bulletAngle));
+  if(angularDistance > anglePad) return null;
+
+  const bulletZ = bulletStartZ + (bullet.z - bulletStartZ) * t;
+  const enemyZ = enemyStartZ + (enemy.z - enemyStartZ) * t;
+  return {
+    angle: enemyAngle + signedAngleDelta(enemyAngle, bulletAngle) * .42,
+    z: (bulletZ + enemyZ) * .5,
+    t
+  };
+}
+
+function interpolateAngle(from, to, t){
+  return normalizeAngle(from + signedAngleDelta(to, from) * clamp(t, 0, 1));
+}
+
+function enemyHitZWindow(enemy){
+  if(enemy.boss) return 1.95 + BULLET_HIT_Z_PAD;
+  return clamp(.88 + enemy.radius * .32 + BULLET_HIT_Z_PAD, 1.12, 1.64);
+}
+
+function enemyHitAngleWindow(enemy){
+  if(enemy.boss) return .32 + BULLET_HIT_ANGLE_PAD;
+  return clamp(.105 + enemy.radius * .040 + BULLET_HIT_ANGLE_PAD, .14, .19);
 }
 
 function defeatEnemy(enemy, enemyIndex){
@@ -18005,11 +19362,13 @@ function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedM
   bullets.push({
     angle,
     originAngle: angle,
+    prevAngle: angle,
     angleVelocity,
     spreadLimit,
     sin: Math.sin(angle),
     cos: Math.cos(angle),
     z: PLAYER_Z - .72,
+    prevZ: PLAYER_Z - .72,
     radial,
     speed: speed * speedMult,
     damage: Math.ceil(baseDamage * damageMult * (crit ? critDamageMult() : 1)),
@@ -18065,6 +19424,8 @@ function spawnEnemy(offset = 0){
     spinY: (Math.random() - .5) * 1.15,
     spinZ: (Math.random() - .5) * 1.55
   };
+  enemy.prevAngle = enemy.angle;
+  enemy.prevZ = enemy.z;
   enemy.sin = Math.sin(enemy.angle);
   enemy.cos = Math.cos(enemy.angle);
   enemy.spawnZ = enemy.z;
@@ -18097,6 +19458,8 @@ function spawnBoss(){
     spinY:.48,
     spinZ:.22
   };
+  enemy.prevAngle = enemy.angle;
+  enemy.prevZ = enemy.z;
   enemy.sin = Math.sin(enemy.angle);
   enemy.cos = Math.cos(enemy.angle);
   enemy.spawnZ = enemy.z;
@@ -18129,6 +19492,8 @@ function spawnBossShard(boss){
       spinY:.44,
       spinZ:1.28
     };
+    shard.prevAngle = shard.angle;
+    shard.prevZ = shard.z;
     shard.sin = Math.sin(shard.angle);
     shard.cos = Math.cos(shard.angle);
     shard.spawnZ = shard.z;
@@ -18247,9 +19612,54 @@ function removeBullet(index){
   bulletsDirty = true;
 }
 
-function triggerEnemyHit(enemy, color, amount = 1){
+function triggerEnemyHit(enemy, color, amount = 1, impact = null){
   enemy.hitFlash = 1;
-  burst(enemy.angle, enemy.z, color, enemy.boss ? amount + 2 : amount);
+  if(impact?.bullet){
+    spawnBulletImpact(enemy, impact.bullet, impact.angle ?? enemy.angle, impact.z ?? enemy.z, color, amount);
+  }else{
+    burst(enemy.angle, enemy.z, color, enemy.boss ? amount + 2 : amount);
+  }
+}
+
+function spawnBulletImpact(enemy, bullet, angle, z, color, amount = 1){
+  if(enemy.boss || bullet.crit){
+    state.shake = Math.max(state.shake, enemy.boss ? .10 : .055);
+  }
+  const baseCount = enemy.boss ? 9 : 5;
+  const critBonus = bullet.crit ? 3 : 0;
+  const pierceBonus = bullet.pierce > 0 ? 2 : 0;
+  const count = Math.max(0, Math.min(
+    MAX_PARTICLES - particles.length,
+    baseCount + critBonus + pierceBonus + Math.max(0, amount - 1)
+  ));
+  if(!count) return;
+  const palette = [
+    color,
+    bullet.crit ? 0xfff0b8 : 0xf4fbff,
+    bullet.pierce > 0 ? 0x36f39b : 0x8eefff
+  ];
+  const travelSign = Math.sign((bullet.z ?? z) - (bullet.prevZ ?? z)) || -1;
+  for(let i=0;i<count;i++){
+    const strong = i < 2;
+    const life = strong ? .28 + Math.random() * .14 : .38 + Math.random() * .24;
+    const spray = (Math.random() - .5) * (enemy.boss ? .62 : .44);
+    const particleAngle = angle + spray;
+    particles.push({
+      color: palette[i % palette.length],
+      angle: particleAngle,
+      sin: Math.sin(particleAngle),
+      cos: Math.cos(particleAngle),
+      z: z + (Math.random() - .5) * (enemy.boss ? .92 : .56),
+      radial: .74 + Math.random() * .18,
+      va: spray * (strong ? 3.8 : 2.4) + (Math.random() - .5) * .35,
+      vz: travelSign * (strong ? -10 - Math.random() * 8 : -4 - Math.random() * 6),
+      vr: (Math.random() - .5) * .22,
+      life,
+      maxLife: life,
+      size: (strong ? 1.9 : 1.05) + Math.random() * (enemy.boss ? .9 : .5)
+    });
+  }
+  particlesDirty = true;
 }
 
 function spawnXpBurst(enemy, amount){
