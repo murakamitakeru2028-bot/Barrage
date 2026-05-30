@@ -28,6 +28,20 @@ const BOSS_VISUAL_SCALE = 2.02;
 const CONTROL_TURN_SPEED = 0.178;
 const CONTROL_RESPONSE = 5.9;
 const CONTROL_POINTER_RANGE = .46;
+const CONTROL_MODE_DEFAULT = 'direct';
+const CONTROL_MODES = {
+  direct: {label:'ダイレクト', sub:'触れた横位置へ機体を寄せる現在の操作'},
+  stick: {label:'スティック', sub:'触り始めた位置から倒した量で旋回'}
+};
+const CONTROL_STICK_RANGE_MIN = 58;
+const CONTROL_STICK_RANGE_MAX = 96;
+const CONTROL_STICK_RANGE_RATIO = .22;
+const CONTROL_STICK_DEADZONE = .045;
+const CONTROL_HOLD_DEADZONE = .08;
+const CONTROL_HOLD_RAMP_DELAY = .10;
+const CONTROL_HOLD_RAMP_TIME = 1.15;
+const CONTROL_HOLD_TURN_BOOST_MAX = .68;
+const CONTROL_HOLD_RESPONSE_BOOST_MAX = .24;
 const PLAYER_BANK_SCALE = .20;
 const PLAYER_DRIFT_SCALE = .12;
 const LOW_POWER_DEVICE = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
@@ -66,10 +80,16 @@ const FIRE_INTERVAL_WAVE_REDUCTION_MAX = .06;
 const FIRE_RATE_STAT_STEP = .065;
 const BULLET_TARGET_RADIAL = .86;
 const BULLET_VISUAL_RADIAL_SETTLE = 10;
+const BULLET_VISUAL_Z_SETTLE = 14;
+const BULLET_MUZZLE_Z = PLAYER_Z - PLAYER_VISUAL_SCALE * 1.82;
 const BULLET_COLLISION_RADIUS = .42;
 const ENEMY_SIZE_BOOST = 2.05;
 const ENEMY_SIZE_MULT = 1.62 * ENEMY_SIZE_BOOST;
 const ENEMY_HITBOX_MULT = 1.20 * ENEMY_SIZE_BOOST;
+const BOSS_ATTACK_HIT_RADIUS = .30 * ENEMY_HITBOX_MULT;
+const BOSS_ATTACK_PLAYER_Z_WINDOW = .46;
+const BOSS_ATTACK_PLAYER_ANGLE_WINDOW = .105;
+const BOSS_ATTACK_VISUAL_SCALE = 1.22 * ENEMY_SIZE_BOOST;
 const ENEMY_HP_MULT = 1.18;
 const BOSS_HP_MULT = 1.12;
 const BOSS_SHARD_HP_MULT = 1.08;
@@ -192,40 +212,44 @@ const SPECIAL_UPGRADE_DEFS = [
   { id:'barrelGatling', family:'barrel', name:'ガトリング', icon:'GT', color:COLORS.orange, text:'連射速度を大幅上昇、単発火力は低下', max:1, tag:'武装' },
   { id:'barrelShotgun', family:'barrel', name:'ショットガン', icon:'SG', color:COLORS.rose, text:'短射程の散弾。至近距離火力が非常に高い', max:1, tag:'武装' },
   { id:'barrelSniper', family:'barrel', name:'スナイパー', icon:'SR', color:COLORS.violet, text:'低連射の高速高威力弾を撃つ', max:1, tag:'武装' },
-  { id:'powerShot', family:'payload', name:'パワーショット', icon:'PW', color:COLORS.rose, text:'全弾の威力を上げる特殊弾。武装型と併用可能', max:5, tag:'弾種' },
-  { id:'pierceShot', family:'payload', name:'貫通弾', icon:'PR', color:COLORS.jade, text:'弾が敵を貫通する。Lvごとに通過できる敵が増える', max:3, tag:'弾種' },
+  { id:'powerShot', family:'payload', name:'パワーショット', icon:'PW', color:COLORS.rose, text:'全弾の威力を上げる高出力弾。純火力型', max:5, tag:'弾種' },
+  { id:'pierceShot', family:'payload', name:'貫通弾', icon:'PR', color:COLORS.jade, text:'単発威力は少し落ちるが敵を貫通する', max:3, tag:'弾種' },
+  { id:'focusLens', family:'payload', name:'フォーカスレンズ', icon:'FL', color:0x9cf5ff, text:'弾速と射程を伸ばし、遠距離命中と火力を底上げ', max:4, tag:'弾種' },
+  { id:'wideBore', family:'payload', name:'ワイドボア', icon:'WB', color:COLORS.gold, text:'弾の判定を広げる安定型。威力は控えめ', max:3, tag:'弾種' },
   { id:'adrenaline', family:'core', name:'アドレナリン', icon:'AD', color:COLORS.orange, text:'耐久が低いほど射撃威力が上がる', max:4, tag:'コア' },
-  { id:'energyShield', family:'guard', name:'エネルギーシールド', icon:'SH', color:0x9cf5ff, text:'被ダメージを軽減。防御寄りの特殊強化', max:4, tag:'防御' },
-  { id:'stasisAura', family:'field', name:'ステイシスオーラ', icon:'ST', color:COLORS.violet, text:'正面近くの敵の接近速度を落とす領域効果', max:4, tag:'領域' }
+  { id:'overclockCore', family:'core', name:'オーバークロック', icon:'OC', color:COLORS.cyan, text:'連射速度を段階的に上げる攻撃コア', max:4, tag:'コア' },
+  { id:'afterburnerCore', family:'core', name:'アフターバーナー', icon:'AB', color:0xffd36a, text:'旋回速度と回避率を上げる機動コア', max:3, tag:'コア' },
+  { id:'energyShield', family:'guard', name:'エネルギーシールド', icon:'SH', color:0x9cf5ff, text:'被ダメージを安定して軽減する防御型', max:4, tag:'防御' },
+  { id:'repairNanites', family:'guard', name:'リペアナノマシン', icon:'RN', color:COLORS.jade, text:'戦闘中の耐久回復を追加する持久型', max:4, tag:'防御' },
+  { id:'phaseVeil', family:'guard', name:'フェイズヴェール', icon:'PV', color:COLORS.violet, text:'被弾そのものを回避しやすくする軽装防御', max:3, tag:'防御' },
+  { id:'stasisAura', family:'field', name:'ステイシスオーラ', icon:'ST', color:COLORS.violet, text:'正面近くの敵の接近速度を落とす領域効果', max:4, tag:'領域' },
+  { id:'xpSiphon', family:'field', name:'XPサイフォン', icon:'XP', color:COLORS.jade, text:'撃破時の経験値を増やし成長を早める', max:4, tag:'領域' },
+  { id:'targetBeacon', family:'field', name:'ターゲットビーコン', icon:'TB', color:COLORS.gold, text:'照準付近の敵へ与えるダメージを増やす', max:3, tag:'領域' }
 ];
 const SPECIAL_UPGRADE_DEFS_BY_ID = Object.fromEntries(SPECIAL_UPGRADE_DEFS.map(def => [def.id, def]));
 const SPECIAL_SLOT_LIMIT = 5;
+const SPECIAL_FAMILY_ORDER = ['barrel', 'payload', 'core', 'guard', 'field'];
 const SPECIAL_ICON_SVG = {
-  barrelMultishot: '<svg viewBox="0 0 24 24"><path d="M12 20V8"/><path d="M12 8 6 14"/><path d="M12 8l6 6"/><circle cx="12" cy="5" r="2.2" fill="currentColor" stroke="none"/></svg>',
-  barrelDouble: '<svg viewBox="0 0 24 24"><path d="M8 4v12"/><path d="M16 4v12"/><path d="M6.4 16h3.2"/><path d="M14.4 16h3.2"/><path d="M8 20h8"/></svg>',
-  barrelGatling: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="6.5" r="1.25" fill="currentColor" stroke="none"/><circle cx="16.8" cy="9.2" r="1.25" fill="currentColor" stroke="none"/><circle cx="16.8" cy="14.8" r="1.25" fill="currentColor" stroke="none"/><circle cx="12" cy="17.5" r="1.25" fill="currentColor" stroke="none"/><circle cx="7.2" cy="14.8" r="1.25" fill="currentColor" stroke="none"/><circle cx="7.2" cy="9.2" r="1.25" fill="currentColor" stroke="none"/></svg>',
-  barrelShotgun: '<svg viewBox="0 0 24 24"><path d="M12 20V10"/><path d="M6 9l6 2 6-2"/><circle cx="5" cy="5.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="10" cy="4" r="1.4" fill="currentColor" stroke="none"/><circle cx="14" cy="4" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="5.5" r="1.4" fill="currentColor" stroke="none"/></svg>',
-  barrelSniper: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.2"/><path d="M12 3v5"/><path d="M12 16v5"/><path d="M3 12h5"/><path d="M16 12h5"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>',
-  powerShot: '<svg viewBox="0 0 24 24"><path d="M13.2 2.6 5.2 13h5.8l-1 8.4 8.8-12.1h-6.1l.5-6.7Z" fill="currentColor" stroke="none"/></svg>',
-  pierceShot: '<svg viewBox="0 0 24 24"><path d="M4 12h16"/><path d="m15.5 6.5 5.2 5.5-5.2 5.5"/><circle cx="7.5" cy="12" r="2.4"/><circle cx="12" cy="12" r="2.4"/><circle cx="16.5" cy="12" r="2.4"/></svg>',
-  adrenaline: '<svg viewBox="0 0 24 24"><path d="M3 13h4l2-6 4 12 2-6h6"/><path d="M8 5.7c1.8-2 5.2-2 7 0"/></svg>',
-  energyShield: '<svg viewBox="0 0 24 24"><path d="M12 3.2 19 6v5.2c0 4.8-2.8 7.8-7 9.6-4.2-1.8-7-4.8-7-9.6V6l7-2.8Z"/><path d="M12 7v10.6"/></svg>',
-  stasisAura: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><path d="M7.8 8.2h8.4L13.2 12l3 3.8H7.8l3-3.8-3-3.8Z"/><path d="M3.5 12h2.3"/><path d="M18.2 12h2.3"/></svg>',
-  default: '<svg viewBox="0 0 24 24"><path d="M12 3.5 20.5 12 12 20.5 3.5 12 12 3.5Z"/></svg>'
+  barrelMultishot: '<svg viewBox="0 0 24 24"><path d="M12 21V8.8"/><path d="M12 8.8 5.4 15.4"/><path d="M12 8.8l6.6 6.6"/><path d="M8.4 6.4 12 3l3.6 3.4"/><circle cx="12" cy="8.8" r="1.6" fill="currentColor" stroke="none"/></svg>',
+  barrelDouble: '<svg viewBox="0 0 24 24"><path d="M8 3.8v12.7"/><path d="M16 3.8v12.7"/><path d="M5.8 16.4h4.4l.9 3.8H6.7l-.9-3.8Z"/><path d="M13.8 16.4h4.4l-.9 3.8h-4.4l.9-3.8Z"/><path d="M9.8 7.2h4.4"/><path d="M9.8 12h4.4"/></svg>',
+  barrelGatling: '<svg viewBox="0 0 24 24"><circle cx="12" cy="11.2" r="7.2"/><circle cx="12" cy="11.2" r="2.15"/><path d="M12 4v3.2"/><path d="m17.1 6.1-2.3 2.3"/><path d="M19.2 11.2H16"/><path d="m17.1 16.3-2.3-2.3"/><path d="M12 18.4v-3.2"/><path d="M6.9 16.3 9.2 14"/><path d="M4.8 11.2H8"/><path d="m6.9 6.1 2.3 2.3"/><path d="M8.2 20.2h7.6"/></svg>',
+  barrelShotgun: '<svg viewBox="0 0 24 24"><path d="M12 21V10.6"/><path d="M6.1 9.8 12 12l5.9-2.2"/><path d="M4.8 5.8 9 8.2"/><path d="M12 4.1v4.8"/><path d="m19.2 5.8-4.2 2.4"/><circle cx="4.8" cy="5.8" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="4.1" r="1.2" fill="currentColor" stroke="none"/><circle cx="19.2" cy="5.8" r="1.2" fill="currentColor" stroke="none"/></svg>',
+  barrelSniper: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="2.3"/><path d="M12 2.8v5.1"/><path d="M12 16.1v5.1"/><path d="M2.8 12h5.1"/><path d="M16.1 12h5.1"/><path d="m17.2 6.8 2.4-2.4"/></svg>',
+  powerShot: '<svg viewBox="0 0 24 24"><path d="M13.3 2.7 4.9 13.2h5.8l-.9 8.1 9.3-12h-6l.2-6.6Z" fill="currentColor" stroke="none"/><path d="M7.4 17.7 4.9 21"/><path d="M18.3 3l2.2-2.2"/></svg>',
+  pierceShot: '<svg viewBox="0 0 24 24"><path d="M3.5 12h16.7"/><path d="m15.6 5.9 5.3 6.1-5.3 6.1"/><path d="M6.8 7.6h4.8l2.2 4.4-2.2 4.4H6.8L4.6 12l2.2-4.4Z"/><path d="M12.8 8.8h3.6"/><path d="M12.8 15.2h3.6"/></svg>',
+  focusLens: '<svg viewBox="0 0 24 24"><path d="M12 3.2 18.8 7v7.8L12 20.8l-6.8-6V7L12 3.2Z"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="1.45" fill="currentColor" stroke="none"/><path d="M20 4.4 16.8 7"/><path d="M4 19.6l3.2-2.6"/></svg>',
+  wideBore: '<svg viewBox="0 0 24 24"><path d="M4.2 8.4h15.6v7.2H4.2z"/><path d="M7.1 6.2h9.8"/><path d="M7.1 17.8h9.8"/><circle cx="12" cy="12" r="3.4"/><path d="M8.7 12h6.6"/></svg>',
+  adrenaline: '<svg viewBox="0 0 24 24"><path d="M4.2 13.2h3.4L9.2 7l4.2 10.2 2-4h4.4"/><path d="M6.9 5.9c2-2.2 5.2-1.6 5.1 1.7.2-3.3 3.5-3.9 5.1-1.7 2.1 2.9-.5 6.3-5.1 10.1-4.6-3.8-7.2-7.2-5.1-10.1Z"/></svg>',
+  overclockCore: '<svg viewBox="0 0 24 24"><path d="M12 3.4a8.6 8.6 0 1 0 8.4 10.4"/><path d="M12 12l4.6-5.7"/><path d="M17.4 3.4h3.2v3.2"/><path d="M20.6 3.4 16 8"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>',
+  afterburnerCore: '<svg viewBox="0 0 24 24"><path d="M12 2.9 16.5 13h-3l-1.5 7.1L10.5 13h-3L12 2.9Z"/><path d="M7.3 16.2 4.8 21"/><path d="M12 16.2 12 22"/><path d="m16.7 16.2 2.5 4.8"/></svg>',
+  energyShield: '<svg viewBox="0 0 24 24"><path d="M12 3.1 19.4 6v5.8c0 4.6-2.9 7.4-7.4 9.1-4.5-1.7-7.4-4.5-7.4-9.1V6L12 3.1Z"/><path d="M8.1 10.7 12 7.8l3.9 2.9-1.5 4.6H9.6l-1.5-4.6Z"/><path d="M12 7.8v7.5"/></svg>',
+  repairNanites: '<svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/><path d="M9.4 8.1h5.2v7.8H9.4z"/><circle cx="5.4" cy="5.4" r="1.25" fill="currentColor" stroke="none"/><circle cx="18.6" cy="5.4" r="1.25" fill="currentColor" stroke="none"/><circle cx="5.4" cy="18.6" r="1.25" fill="currentColor" stroke="none"/><circle cx="18.6" cy="18.6" r="1.25" fill="currentColor" stroke="none"/></svg>',
+  phaseVeil: '<svg viewBox="0 0 24 24"><path d="M4.1 12c2.3-4.4 4.9-6.6 7.9-6.6s5.6 2.2 7.9 6.6c-2.3 4.4-4.9 6.6-7.9 6.6s-5.6-2.2-7.9-6.6Z"/><path d="M8.7 9.1c2.4 1.1 4.6 3.1 6.6 6"/><path d="M15.3 9.1c-2.4 1.1-4.6 3.1-6.6 6"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>',
+  stasisAura: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.6"/><path d="M8.2 6.4h7.6l-2.5 5.6 2.5 5.6H8.2l2.5-5.6-2.5-5.6Z"/><path d="M6.2 3.8 4.1 6"/><path d="m17.8 20.2 2.1-2.2"/></svg>',
+  xpSiphon: '<svg viewBox="0 0 24 24"><path d="M5.2 7.6c4.4-4.3 11.8-2.5 13.7 3.4"/><path d="m18.9 11 1.4-4.1"/><path d="M18.8 16.4C14.4 20.7 7 18.9 5.1 13"/><path d="m5.1 13-1.4 4.1"/><path d="M8.5 9.6 12 12l-3.5 2.4"/><path d="m15.5 9.6-3.5 2.4 3.5 2.4"/></svg>',
+  targetBeacon: '<svg viewBox="0 0 24 24"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="M12 6.2 17.8 12 12 17.8 6.2 12 12 6.2Z"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>',
+  default: '<svg viewBox="0 0 24 24"><path d="M12 3.2 20.8 12 12 20.8 3.2 12 12 3.2Z"/><path d="M12 7.2v9.6"/><path d="M7.2 12h9.6"/></svg>'
 };
-const SPECIAL_SLOT_LABELS = {
-  barrelMultishot: 'マルチ',
-  barrelDouble: 'ダブル',
-  barrelGatling: 'ガト',
-  barrelShotgun: '散弾',
-  barrelSniper: '狙撃',
-  powerShot: '火力弾',
-  pierceShot: '貫通',
-  adrenaline: '低HP',
-  energyShield: 'シールド',
-  stasisAura: '減速'
-};
-
 const SHIP_DEFS = [
   { id:'nu_arc', name:'NU-3D アーク', role:'標準ロールフレーム', cost:0, color:'#8eefff', partPower:1.00, slots:{barrel:1, innerFrame:1, drone:0}, mult:{hp:.90, defense:.94, damage:.82, fireRate:.70, speed:.96} },
   { id:'vx_razor', name:'VX-03 レイザー', role:'強襲バレル機', cost:650, color:'#ff5d7e', partPower:1.15, slots:{barrel:2, innerFrame:1, drone:0}, mult:{hp:.94, defense:.98, damage:1.05, fireRate:1.08, speed:1.02} },
@@ -416,6 +440,8 @@ const state = {
   input: 0,
   keyboard: 0,
   pointer: 0,
+  turnHoldDir: 0,
+  turnHoldTime: 0,
   firing: 0,
   spawnTimer: 0,
   bossAlive: false,
@@ -434,6 +460,7 @@ const state = {
   bestWave: 1,
   garage: freshGarageState(),
   cosmetics: freshCosmeticState(),
+  settings: freshSettingsState(),
   lastGacha: null,
   nextHudAt: 0,
   storeCategory: 'ship',
@@ -447,6 +474,7 @@ state.tokens = save.tokens;
 state.homeUpgrades = {...freshHomeUpgradeMap(), ...save.homeUpgrades};
 state.garage = save.garage;
 state.cosmetics = save.cosmetics;
+state.settings = save.settings;
 state.storePreviewShipId = state.garage?.selectedShipId || DEFAULT_SHIP_ID;
 
 let renderQualityScale = 1;
@@ -541,6 +569,16 @@ const homeShipDrag = {
   pitch: HOME_PREVIEW_REST_PITCH,
   velocity: .10
 };
+const touchStick = {
+  active: false,
+  pointer: null,
+  startX: 0,
+  startY: 0,
+  currentX: 0,
+  currentY: 0,
+  knobX: 0,
+  knobY: 0
+};
 const homePreviewMotion = {
   initialized: false,
   mode: 'home',
@@ -618,6 +656,8 @@ var previewPartVisualKey = '';
 let homeShipPartsDirty = true;
 const renderSize = {w:0, h:0, dpr:0};
 const hudCache = {};
+const specialIconMarkupCache = new Map();
+const specialSlotsMarkupCache = {signature:null, html:''};
 
 applyCosmetics();
 const ui = createUi();
@@ -639,7 +679,7 @@ function applyUiPreviewMode(){
   }else if(preview === 'special'){
     state.mode = 'levelup';
     state.skillPoints = Math.max(state.skillPoints, 1);
-    state.upgradeOptions = SPECIAL_UPGRADE_DEFS.slice(0, 3).map(def => def.id);
+    state.upgradeOptions = ['barrelDouble', 'focusLens', 'repairNanites'];
   }else if(preview === 'homeUpgrade'){
     state.mode = 'homeUpgrade';
     state.tokens = Math.max(state.tokens, 1800);
@@ -804,10 +844,25 @@ function normalizeCosmeticState(raw){
   return {owned, equipped};
 }
 
+function freshSettingsState(){
+  return {
+    controlMode: CONTROL_MODE_DEFAULT
+  };
+}
+
+function normalizeSettingsState(raw){
+  const base = freshSettingsState();
+  const controlMode = CONTROL_MODES[raw?.controlMode] ? raw.controlMode : base.controlMode;
+  return {
+    ...base,
+    controlMode
+  };
+}
+
 function loadSave(){
   try{
     const raw = localStorage.getItem(SAVE_KEY);
-    if(!raw) return {highScore:0,bestWave:1,tokens:START_TOKENS,homeUpgrades:freshHomeUpgradeMap(),garage:freshGarageState(),cosmetics:freshCosmeticState()};
+    if(!raw) return {highScore:0,bestWave:1,tokens:START_TOKENS,homeUpgrades:freshHomeUpgradeMap(),garage:freshGarageState(),cosmetics:freshCosmeticState(),settings:freshSettingsState()};
     const parsed = JSON.parse(raw);
     return {
       highScore: Math.max(0, Number(parsed.highScore) || 0),
@@ -815,10 +870,11 @@ function loadSave(){
       tokens: Math.max(0, parsed.tokens == null ? START_TOKENS : Number(parsed.tokens) || 0),
       homeUpgrades: {...freshHomeUpgradeMap(), ...(parsed.homeUpgrades || {})},
       garage: normalizeGarageState(parsed.garage),
-      cosmetics: normalizeCosmeticState(parsed.cosmetics)
+      cosmetics: normalizeCosmeticState(parsed.cosmetics),
+      settings: normalizeSettingsState(parsed.settings)
     };
   }catch{
-    return {highScore:0,bestWave:1,tokens:START_TOKENS,homeUpgrades:freshHomeUpgradeMap(),garage:freshGarageState(),cosmetics:freshCosmeticState()};
+    return {highScore:0,bestWave:1,tokens:START_TOKENS,homeUpgrades:freshHomeUpgradeMap(),garage:freshGarageState(),cosmetics:freshCosmeticState(),settings:freshSettingsState()};
   }
 }
 
@@ -829,7 +885,8 @@ function saveProgress(){
     tokens: state.tokens,
     homeUpgrades: state.homeUpgrades,
     garage: state.garage,
-    cosmetics: state.cosmetics
+    cosmetics: state.cosmetics,
+    settings: state.settings
   }));
 }
 
@@ -845,6 +902,57 @@ function saveRun(){
     wave: state.wave
   });
   saveProgress();
+}
+
+function controlMode(){
+  return CONTROL_MODES[state.settings?.controlMode] ? state.settings.controlMode : CONTROL_MODE_DEFAULT;
+}
+
+function controlModeDef(){
+  return CONTROL_MODES[controlMode()] || CONTROL_MODES[CONTROL_MODE_DEFAULT];
+}
+
+function setControlMode(mode){
+  if(!CONTROL_MODES[mode]) return;
+  if(!state.settings) state.settings = freshSettingsState();
+  if(state.settings.controlMode === mode) return;
+  state.settings.controlMode = mode;
+  state.pointer = 0;
+  resetTurnHold();
+  resetTouchStick();
+  saveProgress();
+  renderUi2();
+}
+
+function resetTurnHold(){
+  state.turnHoldDir = 0;
+  state.turnHoldTime = 0;
+}
+
+function heldTurnControl(dt){
+  const input = Number(state.input) || 0;
+  const amount = Math.abs(input);
+  if(amount < CONTROL_HOLD_DEADZONE){
+    resetTurnHold();
+    return {turn:1, response:1};
+  }
+
+  const dir = input > 0 ? 1 : -1;
+  if(state.turnHoldDir === dir){
+    state.turnHoldTime = Math.min(CONTROL_HOLD_RAMP_DELAY + CONTROL_HOLD_RAMP_TIME, (state.turnHoldTime || 0) + dt);
+  }else{
+    state.turnHoldDir = dir;
+    state.turnHoldTime = dt;
+  }
+
+  const held = Math.max(0, (state.turnHoldTime || 0) - CONTROL_HOLD_RAMP_DELAY);
+  const ramp = smoothstep(clamp(held / CONTROL_HOLD_RAMP_TIME, 0, 1));
+  const inputWeight = clamp((amount - CONTROL_HOLD_DEADZONE) / (1 - CONTROL_HOLD_DEADZONE), 0, 1);
+  const boost = ramp * (.50 + inputWeight * .50);
+  return {
+    turn: 1 + CONTROL_HOLD_TURN_BOOST_MAX * boost,
+    response: 1 + CONTROL_HOLD_RESPONSE_BOOST_MAX * boost
+  };
 }
 
 function statDef(id){
@@ -918,13 +1026,14 @@ function selectedSpecialSlotDefs(){
   return SPECIAL_UPGRADE_DEFS.filter(def => specialUpgradeLevel(def.id) > 0);
 }
 
-function specialSlotLabel(def){
-  return SPECIAL_SLOT_LABELS[def?.id] || def?.name || '---';
-}
-
 function specialUpgradeIcon(def, className = 'special-icon'){
-  const svg = SPECIAL_ICON_SVG[def?.id] || SPECIAL_ICON_SVG.default;
-  return `<span class="${className}" aria-hidden="true">${svg}</span>`;
+  const id = def?.id || 'default';
+  const cacheKey = `${id}|${className}`;
+  if(specialIconMarkupCache.has(cacheKey)) return specialIconMarkupCache.get(cacheKey);
+  const svg = SPECIAL_ICON_SVG[id] || SPECIAL_ICON_SVG.default;
+  const markup = `<span class="${className}" aria-hidden="true">${svg}</span>`;
+  specialIconMarkupCache.set(cacheKey, markup);
+  return markup;
 }
 
 function canOfferSpecialUpgrade(id){
@@ -946,20 +1055,27 @@ function runUpgradeLevel(id){
 }
 
 function barrelFireBoost(){
-  if(specialUpgradeLevel('barrelGatling') > 0) return 3.15;
-  if(specialUpgradeLevel('barrelSniper') > 0) return .42;
-  if(specialUpgradeLevel('barrelShotgun') > 0) return .74;
-  if(specialUpgradeLevel('barrelMultishot') > 0) return .90;
-  if(specialUpgradeLevel('barrelDouble') > 0) return .96;
+  if(specialUpgradeLevel('barrelGatling') > 0) return 2.35;
+  if(specialUpgradeLevel('barrelSniper') > 0) return .50;
+  if(specialUpgradeLevel('barrelShotgun') > 0) return .66;
+  if(specialUpgradeLevel('barrelMultishot') > 0) return .86;
+  if(specialUpgradeLevel('barrelDouble') > 0) return .90;
   return 1;
 }
 
+function specialFireRateMultiplier(){
+  return 1 + specialUpgradeLevel('overclockCore') * .08;
+}
+
 function specialDamageMultiplier(){
-  let mult = 1 + specialUpgradeLevel('powerShot') * .18;
+  let mult = 1 + specialUpgradeLevel('powerShot') * .13;
+  mult *= 1 + specialUpgradeLevel('focusLens') * .075;
+  mult *= Math.max(.84, 1 - specialUpgradeLevel('wideBore') * .045);
+  mult *= Math.max(.88, 1 - specialUpgradeLevel('pierceShot') * .035);
   const adrenaline = specialUpgradeLevel('adrenaline');
   if(adrenaline > 0){
     const missingHp = 1 - Math.max(0, Math.min(1, visibleHp() / visibleHpMax()));
-    mult *= 1 + adrenaline * .22 * missingHp;
+    mult *= 1 + adrenaline * .18 * missingHp;
   }
   return mult;
 }
@@ -968,8 +1084,43 @@ function bulletPierceCount(){
   return specialUpgradeLevel('pierceShot');
 }
 
+function specialBulletSpeedMultiplier(){
+  return 1 + specialUpgradeLevel('focusLens') * .10;
+}
+
+function specialRangeMultiplier(){
+  return 1 + specialUpgradeLevel('focusLens') * .07;
+}
+
+function specialBulletRadiusMultiplier(){
+  return 1 + specialUpgradeLevel('wideBore') * .13;
+}
+
 function specialDefenseMultiplier(){
-  return Math.max(.58, 1 - specialUpgradeLevel('energyShield') * .09);
+  return Math.max(.64, 1 - specialUpgradeLevel('energyShield') * .075);
+}
+
+function specialRegenPerSecond(){
+  return specialUpgradeLevel('repairNanites') * .34;
+}
+
+function specialSpeedMultiplier(){
+  return 1 + specialUpgradeLevel('afterburnerCore') * .09;
+}
+
+function specialEvasionBonus(){
+  return specialUpgradeLevel('phaseVeil') * .04 + specialUpgradeLevel('afterburnerCore') * .025;
+}
+
+function specialXpMultiplier(){
+  return 1 + specialUpgradeLevel('xpSiphon') * .075;
+}
+
+function specialTargetDamageMultiplier(enemy){
+  const level = specialUpgradeLevel('targetBeacon');
+  if(level <= 0 || !enemy) return 1;
+  const angleGap = Math.abs(signedAngleDelta(enemy.angle ?? 0, state.roll));
+  return angleGap < (.18 + level * .025) ? 1 + level * .06 : 1;
 }
 
 function currentShip(){
@@ -1107,11 +1258,11 @@ function bossHpInfo(){
 }
 
 function regenPerSecond(){
-  return statLevel('regen') * .45;
+  return statLevel('regen') * .45 + specialRegenPerSecond();
 }
 
 function evasionChance(){
-  return Math.min(.62, 1 - Math.pow(.96, statLevel('evasion')) + loadoutBuff('evasion'));
+  return Math.min(.64, 1 - Math.pow(.96, statLevel('evasion')) + loadoutBuff('evasion') + specialEvasionBonus());
 }
 
 function defenseMultiplier(){
@@ -1175,7 +1326,7 @@ function calculateTokenReward(){
 
 function grantXp(amount){
   grantBasicPoints(amount);
-  const gain = Math.max(1, Math.ceil(amount * statMult('xpMult', .10) * (1 + cosmeticBuff('xp') + loadoutBuff('xp')) * shipMult('xp')));
+  const gain = Math.max(1, Math.ceil(amount * statMult('xpMult', .10) * (1 + cosmeticBuff('xp') + loadoutBuff('xp')) * shipMult('xp') * specialXpMultiplier()));
   state.xp += gain;
   let leveled = false;
   while(state.xp >= xpThreshold()){
@@ -1195,16 +1346,43 @@ function grantBasicPoints(amount){
   }
 }
 
+function randomArrayItem(items){
+  if(!items?.length) return null;
+  return items[Math.floor(Math.random() * items.length)];
+}
+
 function rollUpgradeOptions(){
-  const candidates = SPECIAL_UPGRADE_DEFS
-    .filter(def => canOfferSpecialUpgrade(def.id))
-    .map(def => def.id);
+  const byFamily = new Map();
+  for(const def of SPECIAL_UPGRADE_DEFS){
+    if(!canOfferSpecialUpgrade(def.id)) continue;
+    if(!byFamily.has(def.family)) byFamily.set(def.family, []);
+    byFamily.get(def.family).push(def.id);
+  }
   const options = [];
-  while(options.length < 3 && candidates.length){
-    const index = Math.floor(Math.random() * candidates.length);
-    options.push(candidates[index]);
-    candidates[index] = candidates[candidates.length - 1];
-    candidates.pop();
+  const usedFamilies = new Set();
+  const pushFromFamily = family => {
+    if(options.length >= 3 || usedFamilies.has(family)) return false;
+    const ids = byFamily.get(family);
+    if(!ids?.length) return false;
+    const id = randomArrayItem(ids);
+    options.push(id);
+    usedFamilies.add(family);
+    return true;
+  };
+
+  if(!selectedSpecialInFamily('barrel')) pushFromFamily('barrel');
+
+  const needsSupport = !selectedSpecialInFamily('guard') && !selectedSpecialInFamily('field');
+  if(needsSupport){
+    const supportFamily = randomArrayItem(['guard', 'field'].filter(family => byFamily.has(family) && !usedFamilies.has(family)));
+    if(supportFamily) pushFromFamily(supportFamily);
+  }
+
+  let families = SPECIAL_FAMILY_ORDER.filter(family => byFamily.has(family) && !usedFamilies.has(family));
+  while(options.length < 3 && families.length){
+    const family = randomArrayItem(families);
+    pushFromFamily(family);
+    families = families.filter(item => item !== family);
   }
   return options;
 }
@@ -1213,6 +1391,8 @@ function openLevelUp(){
   if(activePointer !== null) canvas.releasePointerCapture?.(activePointer);
   activePointer = null;
   state.pointer = 0;
+  resetTurnHold();
+  resetTouchStick();
   state.rollVel *= .35;
   state.upgradeOptions = rollUpgradeOptions();
   if(!state.upgradeOptions.length) return;
@@ -1660,8 +1840,8 @@ function makeSharedAssets(){
     shot: new THREE.MeshBasicMaterial({ color:0xf4fbff, fog:false }),
     bulletGlow: new THREE.MeshBasicMaterial({ color:0x1ed6ff, transparent:true, opacity:.58, depthWrite:false, depthTest:false, blending:THREE.AdditiveBlending, fog:false }),
     shotGlow: new THREE.MeshBasicMaterial({ color:0x1ed6ff, transparent:true, opacity:.32 }),
-    bossAttackGlow: new THREE.MeshBasicMaterial({ color:0xff7a3d, transparent:true, opacity:.86, depthWrite:false, depthTest:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, fog:false }),
-    bossAttackLine: new THREE.LineBasicMaterial({ color:0xfff0b8, transparent:true, opacity:1.0, depthWrite:false, depthTest:false, fog:false }),
+    bossAttackGlow: new THREE.MeshBasicMaterial({ color:0xff3b62, transparent:true, opacity:.58, depthWrite:false, depthTest:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, fog:false }),
+    bossAttackLine: new THREE.LineBasicMaterial({ color:0x8df5ff, transparent:true, opacity:.86, depthWrite:false, depthTest:false, fog:false }),
     hitGlow: new THREE.MeshBasicMaterial({ color:0xffd36a, transparent:true, opacity:.70, depthWrite:false, depthTest:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, fog:false }),
     hitLine: new THREE.LineBasicMaterial({ color:0xf4fbff, transparent:true, opacity:.95, depthWrite:false, depthTest:false, fog:false }),
     particle: new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.58, depthWrite:false, fog:false, vertexColors:true }),
@@ -24145,6 +24325,8 @@ function createUi(){
     #barrage-ui .game-hud .hit-confirm{
       z-index:7 !important;
       top:45% !important;
+      display:none !important;
+      opacity:0 !important;
     }
     #barrage-ui .game-hud.leveling .game-top,
     #barrage-ui .game-hud.leveling .game-bottom,
@@ -24827,6 +25009,188 @@ function createUi(){
         width:96px !important;
         min-width:96px !important;
         max-width:96px !important;
+      }
+    }
+    /* Combat lower stack v13: WAVE and special slots sit directly above HP. */
+    #barrage-ui .game-hud.on .game-bottom{
+      height:176px !important;
+      min-height:176px !important;
+      max-height:176px !important;
+      display:grid !important;
+      grid-template-columns:112px minmax(0,1fr) !important;
+      grid-template-rows:42px 40px 58px !important;
+      grid-template-areas:
+        "wave specials"
+        "hp hp"
+        "console console" !important;
+      gap:8px !important;
+      padding:10px !important;
+      align-items:stretch !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave{
+      grid-area:wave !important;
+      position:relative !important;
+      inset:auto !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      width:112px !important;
+      min-width:112px !important;
+      max-width:112px !important;
+      height:42px !important;
+      min-height:42px !important;
+      max-height:42px !important;
+      margin:0 !important;
+      padding:6px 8px 6px 10px !important;
+      display:grid !important;
+      grid-template-columns:auto 1fr !important;
+      grid-template-rows:9px 17px 5px !important;
+      column-gap:6px !important;
+      row-gap:3px !important;
+      align-self:stretch !important;
+      justify-self:start !important;
+      transform:none !important;
+      z-index:1 !important;
+      border-left:4px solid var(--combat-cyan) !important;
+    }
+    #barrage-ui .game-hud.has-boss.on .game-bottom > .game-wave{
+      top:auto !important;
+      transform:none !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave b{
+      grid-column:1 / 3 !important;
+      font-size:7px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave span{
+      font-size:18px !important;
+      line-height:.9 !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave small{
+      font-size:8px !important;
+      line-height:1 !important;
+      align-self:center !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave .game-wave-track{
+      height:5px !important;
+      min-height:5px !important;
+      max-height:5px !important;
+      align-self:end !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-special-slots{
+      grid-area:specials !important;
+      position:relative !important;
+      inset:auto !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:none !important;
+      height:42px !important;
+      min-height:42px !important;
+      max-height:42px !important;
+      margin:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(5,minmax(0,38px)) !important;
+      justify-content:end !important;
+      align-content:center !important;
+      align-items:center !important;
+      gap:5px !important;
+      transform:none !important;
+      z-index:1 !important;
+      pointer-events:none !important;
+      overflow:visible !important;
+    }
+    #barrage-ui .game-hud.has-boss.on .game-bottom > .game-special-slots{
+      top:auto !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot{
+      width:38px !important;
+      min-width:38px !important;
+      max-width:38px !important;
+      height:38px !important;
+      min-height:38px !important;
+      max-height:38px !important;
+      margin:0 !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot b .special-icon{
+      width:22px !important;
+      height:22px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-bars{
+      grid-area:hp !important;
+      height:40px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-console{
+      grid-area:console !important;
+      height:58px !important;
+      min-height:58px !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud.on .game-bottom{
+        height:156px !important;
+        min-height:156px !important;
+        max-height:156px !important;
+        grid-template-columns:100px minmax(0,1fr) !important;
+        grid-template-rows:36px 38px 54px !important;
+        gap:6px !important;
+        padding:8px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-wave{
+        width:100px !important;
+        min-width:100px !important;
+        max-width:100px !important;
+        height:36px !important;
+        min-height:36px !important;
+        max-height:36px !important;
+        padding:5px 7px 5px 9px !important;
+        grid-template-rows:8px 15px 5px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-wave span{
+        font-size:16px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-wave small{
+        font-size:7px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-special-slots{
+        height:36px !important;
+        min-height:36px !important;
+        max-height:36px !important;
+        grid-template-columns:repeat(5,minmax(0,32px)) !important;
+        gap:4px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot{
+        width:32px !important;
+        min-width:32px !important;
+        max-width:32px !important;
+        height:32px !important;
+        min-height:32px !important;
+        max-height:32px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot b{
+        font-size:13px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot b .special-icon{
+        width:19px !important;
+        height:19px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot small{
+        right:2px !important;
+        bottom:1px !important;
+        min-width:11px !important;
+        height:11px !important;
+        font-size:7px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-bars{
+        height:38px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-console{
+        height:54px !important;
+        min-height:54px !important;
       }
     }
     @media (prefers-reduced-motion: reduce){
@@ -25878,6 +26242,339 @@ function createUi(){
         min-height:28px !important;
       }
     }
+    /* Control mode selector and virtual stick feedback. */
+    #barrage-ui .control-mode-row{
+      min-height:142px !important;
+      padding-bottom:14px !important;
+    }
+    #barrage-ui .settings-segment{
+      margin-top:12px !important;
+      display:grid !important;
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      gap:8px !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui .settings-segment button{
+      height:44px !important;
+      min-height:44px !important;
+      padding:0 10px !important;
+      display:grid !important;
+      grid-template-rows:auto auto !important;
+      place-items:center !important;
+      gap:3px !important;
+      border-color:rgba(238,247,255,.20) !important;
+      border-top:2px solid rgba(141,245,255,.34) !important;
+      background:linear-gradient(180deg,rgba(18,36,42,.96),rgba(5,10,12,.94)) !important;
+      color:#f7fbff !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.84) !important;
+    }
+    #barrage-ui .settings-segment button b,
+    #barrage-ui .settings-segment button small{
+      margin:0 !important;
+      width:100% !important;
+      display:block !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+      line-height:1 !important;
+      text-align:center !important;
+    }
+    #barrage-ui .settings-segment button b{
+      color:#f7fbff !important;
+      font-size:12px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .settings-segment button small{
+      color:rgba(238,247,255,.58) !important;
+      font-size:8px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .settings-segment button.active,
+    #barrage-ui .settings-segment button:disabled{
+      color:#021012 !important;
+      border-color:transparent !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,#8df5ff)) !important;
+      box-shadow:0 0 18px color-mix(in srgb,var(--accent,#8df5ff) 24%,transparent),inset 0 1px 0 rgba(255,255,255,.62) !important;
+      opacity:1 !important;
+    }
+    #barrage-ui .settings-segment button.active b,
+    #barrage-ui .settings-segment button.active small,
+    #barrage-ui .settings-segment button:disabled b,
+    #barrage-ui .settings-segment button:disabled small{
+      color:#021012 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .touch-stick{
+      position:absolute !important;
+      z-index:8 !important;
+      left:var(--stick-left,-200px) !important;
+      top:var(--stick-top,-200px) !important;
+      width:112px !important;
+      height:112px !important;
+      margin:-56px 0 0 -56px !important;
+      pointer-events:none !important;
+      opacity:0 !important;
+      transform:scale(.92) !important;
+      transition:opacity .10s ease-out,transform .10s ease-out !important;
+    }
+    #barrage-ui .touch-stick.on{
+      opacity:0 !important;
+      transform:scale(1) !important;
+    }
+    #barrage-ui .touch-stick i,
+    #barrage-ui .touch-stick b{
+      position:absolute !important;
+      left:50% !important;
+      top:50% !important;
+      display:block !important;
+      border-radius:50% !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .touch-stick i{
+      width:112px !important;
+      height:112px !important;
+      margin:-56px 0 0 -56px !important;
+      border:1px solid rgba(238,247,255,.26) !important;
+      background:
+        radial-gradient(circle at 50% 50%,rgba(141,245,255,.18),rgba(141,245,255,.04) 45%,rgba(2,5,6,.26) 70%,transparent 71%),
+        linear-gradient(180deg,rgba(11,27,31,.42),rgba(2,5,7,.22)) !important;
+      box-shadow:0 0 24px rgba(141,245,255,.18),inset 0 0 24px rgba(141,245,255,.12) !important;
+    }
+    #barrage-ui .touch-stick i::before,
+    #barrage-ui .touch-stick i::after{
+      content:"" !important;
+      position:absolute !important;
+      left:50% !important;
+      top:50% !important;
+      background:rgba(238,247,255,.28) !important;
+      transform:translate(-50%,-50%) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .touch-stick i::before{width:74px !important;height:1px !important}
+    #barrage-ui .touch-stick i::after{width:1px !important;height:74px !important}
+    #barrage-ui .touch-stick b{
+      width:38px !important;
+      height:38px !important;
+      margin:-19px 0 0 -19px !important;
+      transform:translate(var(--stick-knob-x,0px),var(--stick-knob-y,0px)) !important;
+      border:2px solid rgba(247,255,255,.82) !important;
+      background:linear-gradient(180deg,#f7ffff,#8df5ff) !important;
+      box-shadow:0 0 18px rgba(141,245,255,.48),0 6px 16px rgba(0,0,0,.34) !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .control-mode-row{
+        min-height:132px !important;
+      }
+      #barrage-ui .settings-segment button{
+        height:40px !important;
+        min-height:40px !important;
+      }
+    }
+    #barrage-ui .settings-screen .page-title{
+      min-height:86px !important;
+      display:grid !important;
+      grid-template-rows:auto auto !important;
+      align-content:center !important;
+      gap:8px !important;
+      padding-top:14px !important;
+      padding-bottom:13px !important;
+    }
+    #barrage-ui .settings-screen .page-title h1,
+    #barrage-ui .settings-screen .page-title p{
+      position:static !important;
+      margin:0 !important;
+      transform:none !important;
+      translate:0 0 !important;
+    }
+    #barrage-ui .settings-screen .page-title h1{
+      line-height:1 !important;
+    }
+    #barrage-ui .settings-screen .page-title p{
+      line-height:1.15 !important;
+      white-space:normal !important;
+    }
+    /* Special effect icon pass: keep glyphs visible in HUD slots and upgrade cards. */
+    #barrage-ui .special-icon{
+      display:grid !important;
+      place-items:center !important;
+      width:24px !important;
+      height:24px !important;
+      min-width:0 !important;
+      min-height:0 !important;
+      color:currentColor !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .special-icon svg{
+      display:block !important;
+      width:100% !important;
+      height:100% !important;
+      overflow:visible !important;
+    }
+    #barrage-ui .special-icon svg :is(path,line,circle,rect,polygon,polyline){
+      fill:none;
+      stroke:currentColor;
+      stroke-width:2.15;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+      vector-effect:non-scaling-stroke;
+    }
+    #barrage-ui .special-icon svg [fill="currentColor"]{
+      fill:currentColor;
+      stroke:none;
+    }
+    #barrage-ui .special-slot{
+      position:relative !important;
+      isolation:isolate !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .special-slot.filled{
+      border-color:color-mix(in srgb,var(--accent,#8eefff) 48%,rgba(244,251,255,.20)) !important;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.42),0 6px 14px rgba(0,0,0,.28),0 0 14px color-mix(in srgb,var(--accent,#8eefff) 22%,transparent) !important;
+    }
+    #barrage-ui .special-slot.filled::before{
+      content:"" !important;
+      position:absolute !important;
+      inset:5px !important;
+      z-index:-1 !important;
+      border:1px solid color-mix(in srgb,var(--accent,#8eefff) 36%,transparent) !important;
+      background:
+        radial-gradient(circle at 50% 45%,color-mix(in srgb,var(--accent,#8eefff) 28%,transparent),transparent 62%),
+        linear-gradient(135deg,rgba(255,255,255,.10),transparent 28%) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .special-slot .special-slot-icon{
+      display:grid !important;
+      place-items:center !important;
+      width:29px !important;
+      height:29px !important;
+      min-width:0 !important;
+      min-height:0 !important;
+      color:#061014 !important;
+      background:
+        linear-gradient(135deg,rgba(255,255,255,.72) 0 24%,transparent 24%),
+        linear-gradient(90deg,#f7ffff,var(--accent,#8eefff)) !important;
+      border:1px solid rgba(255,255,255,.62) !important;
+      box-shadow:0 0 10px color-mix(in srgb,var(--accent,#8eefff) 42%,transparent),inset 0 -5px 8px rgba(0,0,0,.18) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      overflow:visible !important;
+    }
+    #barrage-ui .game-special-slots .special-slot .special-slot-icon,
+    #barrage-ui .level-special-slots .special-slot .special-slot-icon{
+      display:grid !important;
+      place-items:center !important;
+    }
+    #barrage-ui .special-slot .special-slot-icon .special-icon{
+      display:grid !important;
+      place-items:center !important;
+      grid-area:auto !important;
+      width:21px !important;
+      height:21px !important;
+      color:#061014 !important;
+      filter:drop-shadow(0 1px 0 rgba(255,255,255,.42)) !important;
+    }
+    #barrage-ui .special-slot .special-slot-icon .special-icon svg{
+      width:21px !important;
+      height:21px !important;
+      min-width:21px !important;
+      min-height:21px !important;
+    }
+    #barrage-ui .game-special-slots .special-slot .special-slot-icon .special-icon{
+      width:20px !important;
+      height:20px !important;
+    }
+    #barrage-ui .game-special-slots .special-slot .special-slot-icon .special-icon svg{
+      width:20px !important;
+      height:20px !important;
+      min-width:20px !important;
+      min-height:20px !important;
+    }
+    #barrage-ui .level-special-slots .special-slot .special-slot-icon .special-icon{
+      width:21px !important;
+      height:21px !important;
+    }
+    #barrage-ui .special-slot small{
+      display:block !important;
+      position:absolute !important;
+      right:3px !important;
+      top:2px !important;
+      bottom:auto !important;
+      width:auto !important;
+      max-width:30px !important;
+      padding:1px 3px !important;
+      color:#071013 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,#8eefff)) !important;
+      border-radius:2px !important;
+      font-size:7px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      text-align:center !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:clip !important;
+      box-shadow:0 2px 6px rgba(0,0,0,.26) !important;
+    }
+    #barrage-ui .special-slot.empty .special-slot-placeholder{
+      display:grid !important;
+      place-items:center !important;
+      width:20px !important;
+      height:20px !important;
+      color:rgba(244,251,255,.45) !important;
+      font-size:0 !important;
+      line-height:0 !important;
+      border:1px solid rgba(244,251,255,.22) !important;
+      background:rgba(244,251,255,.045) !important;
+      clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px) !important;
+    }
+    #barrage-ui .special-slot.empty .special-slot-placeholder::before,
+    #barrage-ui .special-slot.empty .special-slot-placeholder::after{
+      content:"" !important;
+      position:absolute !important;
+      background:currentColor !important;
+      opacity:.78 !important;
+    }
+    #barrage-ui .special-slot.empty .special-slot-placeholder::before{
+      width:10px !important;
+      height:1px !important;
+    }
+    #barrage-ui .special-slot.empty .special-slot-placeholder::after{
+      width:1px !important;
+      height:10px !important;
+    }
+    #barrage-ui .special-slot.empty small{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon{
+      display:grid !important;
+      place-items:center !important;
+      grid-area:auto !important;
+      justify-self:center !important;
+      align-self:center !important;
+      width:clamp(66px,10.8vh,82px) !important;
+      height:clamp(66px,10.8vh,82px) !important;
+      min-height:0 !important;
+      color:#061014 !important;
+      white-space:normal !important;
+      overflow:visible !important;
+      text-overflow:clip !important;
+      -webkit-line-clamp:unset !important;
+      -webkit-box-orient:initial !important;
+      filter:drop-shadow(0 2px 0 rgba(255,255,255,.48)) drop-shadow(0 9px 12px rgba(0,0,0,.30)) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon svg :is(path,line,circle,rect,polygon,polyline){
+      stroke-width:2.55 !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .special-slot .special-slot-icon .special-icon{
+        width:21px !important;
+        height:21px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon{
+        width:56px !important;
+        height:56px !important;
+      }
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
       #barrage-ui .brand-lockup,
@@ -26127,17 +26824,12 @@ function renderUi2(){
     <div class="hud game-hud ${state.mode==='play'||state.mode==='levelup'||state.mode==='basicUpgrade'?'on':''} ${state.mode==='levelup'||state.mode==='basicUpgrade'?'leveling':''} ${visibleHp() / visibleHpMax() < .30 ? 'critical' : ''} ${state.basicPoints > 0 ? 'has-bp' : ''} ${bossHud.visible ? 'has-boss' : ''}" data-ref="hud">
       <div class="damage-vignette" data-ref="damageVignette" aria-hidden="true"></div>
       <div class="hit-confirm" data-ref="hitConfirm" aria-hidden="true"><span data-ref="hitConfirmText">${state.hitConfirmText || 'HIT'}</span></div>
+      <div class="touch-stick" data-ref="touchStick" aria-hidden="true"><i></i><b></b></div>
       <div class="boss-hp ${bossHud.visible ? 'on' : ''}" data-ref="bossHpPanel" aria-hidden="${bossHud.visible ? 'false' : 'true'}">
         <div class="boss-hp-head"><b data-ref="bossName">${bossHud.name}</b><span data-ref="bossHpText">${bossHud.hp}/${bossHud.max}</span></div>
         <div class="boss-hp-track"><i data-ref="bossHp" style="width:${bossHud.percent}%"></i></div>
       </div>
       <div class="game-top">
-        <div class="game-top-card game-wave">
-          <b>WAVE</b>
-          <span data-ref="wave">${state.wave}</span>
-          <small>残り <i data-ref="time">${waveSeconds()}秒</i></small>
-          <div class="game-wave-track"><i data-ref="waveProgress" style="width:${Math.min(100, state.waveTime / waveDuration() * 100)}%"></i></div>
-        </div>
         <div class="game-top-card game-score">
           <b>SCORE</b>
           <span data-ref="score">${formatNumber(state.score)}</span>
@@ -26150,10 +26842,16 @@ function renderUi2(){
           <span class="game-xp-count" data-ref="xpText">${Math.floor(state.xp)}/${xpThreshold()}</span>
         </div>
       </div>
-      <div class="game-special-slots" data-ref="specialSlots">
-        ${renderSpecialSlotsHud()}
-      </div>
       <div class="game-bottom">
+        <div class="game-top-card game-wave">
+          <b>WAVE</b>
+          <span data-ref="wave">${state.wave}</span>
+          <small>残り <i data-ref="time">${waveSeconds()}秒</i></small>
+          <div class="game-wave-track"><i data-ref="waveProgress" style="width:${Math.min(100, state.waveTime / waveDuration() * 100)}%"></i></div>
+        </div>
+        <div class="game-special-slots" data-ref="specialSlots">
+          ${renderSpecialSlotsHud()}
+        </div>
         <div class="game-bars">
           <div class="game-meter is-hp" style="--meter-a:#ff3b62;--meter-b:#ffc3ce">
             <b>HP</b>
@@ -26177,7 +26875,7 @@ function renderUi2(){
         <div class="level-head">
           <div>
             <div class="level-title">特殊強化</div>
-            <div class="level-note">武装・弾種・防御・領域から選択</div>
+            <div class="level-note">武装・弾種・コア・防御・領域から選択</div>
           </div>
           <div class="level-sp">SP ${state.skillPoints}</div>
         </div>
@@ -26262,8 +26960,10 @@ function renderSettingsPanel(){
   const motion = Math.round(CONTROL_TURN_SPEED / 1.78 * 100);
   const parts = equippedPartCount();
   const cosmeticCount = Object.keys(state.cosmetics.owned || {}).reduce((sum, id) => sum + (Number(state.cosmetics.owned[id]) || 0), 0);
+  const currentControl = controlModeDef();
   const rows = [
     {label:'ステージ', value:'WIDE PIPE', sub:`R ${PIPE_RADIUS.toFixed(1)} / ARC ${Math.round(PIPE_ARC / Math.PI * 180)}deg`, color:'#1ed6ff'},
+    {label:'操作方式', value:currentControl.label, sub:currentControl.sub, color:'#8df5ff', control:true},
     {label:'機動設定', value:`SLOW ${motion}%`, sub:'ROLL CONTROL', color:'#b8a7ff'},
     {label:'機体', value:ship.name, sub:`${parts}/${PART_TYPES.reduce((sum, type) => sum + shipSlotCount(type, ship), 0)} PARTS`, color:ship.color},
     {label:'ガチャ', value:`${cosmeticCount} ITEM`, sub:`${Object.keys(state.cosmetics.equipped || {}).length} EQUIPPED`, color:'#36f39b'},
@@ -26274,18 +26974,37 @@ function renderSettingsPanel(){
       <div>
         <b>SYSTEM STATUS</b>
         <span>${escapeHtml(ship.name)}</span>
-        <small>${parts} PARTS / BEST WAVE ${state.bestWave}</small>
+        <small>${parts} PARTS / ${currentControl.label} CONTROL</small>
       </div>
       <strong>${motion}%</strong>
     </div>
   `;
-  return summary + rows.map(row => `
+  return summary + rows.map(row => row.control ? renderControlModeRow(row) : `
     <div class="settings-row" style="--accent:${row.color}">
       <b>${row.label}</b>
       <span>${escapeHtml(row.value)}</span>
       <small>${escapeHtml(row.sub)}</small>
     </div>
   `).join('');
+}
+
+function renderControlModeRow(row){
+  const active = controlMode();
+  return `
+    <div class="settings-row control-mode-row" style="--accent:${row.color}">
+      <b>${row.label}</b>
+      <span>${escapeHtml(row.value)}</span>
+      <small>${escapeHtml(row.sub)}</small>
+      <div class="settings-segment" aria-label="操作方式">
+        ${Object.entries(CONTROL_MODES).map(([id, def]) => `
+          <button class="${id === active ? 'active' : ''}" ${id === active ? 'disabled' : ''} data-action="setControlMode:${id}">
+            <b>${escapeHtml(def.label)}</b>
+            <small>${id === 'direct' ? 'POSITION' : 'STICK'}</small>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function equippedPartCount(){
@@ -26845,27 +27564,30 @@ function renderHomeUpgradeCard(def, path = null){
 }
 
 function renderSpecialSlotsHud(){
+  const signature = SPECIAL_UPGRADE_DEFS.map(def => specialUpgradeLevel(def.id)).join('|');
+  if(specialSlotsMarkupCache.signature === signature) return specialSlotsMarkupCache.html;
   const selected = selectedSpecialSlotDefs();
-  return Array.from({length:SPECIAL_SLOT_LIMIT}, (_, index) => {
+  const html = Array.from({length:SPECIAL_SLOT_LIMIT}, (_, index) => {
     const def = selected[index];
     if(!def){
       return `
-        <div class="special-slot empty" style="--accent:#d8e2ea">
-          <b>${index + 1}</b>
-          <span>EMPTY</span>
+        <div class="special-slot empty" style="--accent:#d8e2ea" aria-label="特殊強化スロット ${index + 1} 空き">
+          <span class="special-slot-placeholder">${index + 1}</span>
           <small></small>
         </div>
       `;
     }
     const lv = specialUpgradeLevel(def.id);
     return `
-      <div class="special-slot filled" style="--accent:${colorCss(def.color)}" title="${escapeHtml(def.name)}">
-        <b>${specialUpgradeIcon(def)}</b>
-        <span>${specialSlotLabel(def)}</span>
-        <small>${lv}</small>
+      <div class="special-slot filled" style="--accent:${colorCss(def.color)}" title="${escapeHtml(def.name)}" aria-label="${escapeHtml(def.name)} Lv.${lv}">
+        <span class="special-slot-icon">${specialUpgradeIcon(def, 'special-icon special-slot-glyph')}</span>
+        <small>Lv.${lv}</small>
       </div>
     `;
   }).join('');
+  specialSlotsMarkupCache.signature = signature;
+  specialSlotsMarkupCache.html = html;
+  return html;
 }
 
 function renderSpecialUpgradeCard(id){
@@ -26879,7 +27601,7 @@ function renderSpecialUpgradeCard(id){
       <b>${d.tag || d.family.toUpperCase()} / Lv.${lv}/${d.max}</b>
       <span>${d.name}</span>
       <small>${d.text}</small>
-      <em>${d.family === 'barrel' ? '武装型は1系統だけ選択' : '基礎値とは別枠で発動'}</em>
+      <em>${d.family === 'barrel' ? '武装型は1系統だけ選択' : `${d.tag || d.family.toUpperCase()}枠は1系統だけ選択`}</em>
       <strong>${buttonLabel}</strong>
     </button>
   `;
@@ -27178,35 +27900,19 @@ function updateDamageHudEffect(){
 function updateHitConfirmHud(){
   const hud = ui.refs?.hud;
   if(!hud) return;
-  const alpha = state.mode === 'play' ? clamp(state.hitConfirm || 0, 0, 1) : 0;
   const marker = ui.refs?.hitConfirm || hud.querySelector('.hit-confirm');
-  const displayAlpha = alpha > .02 ? Math.min(1, .12 + alpha * 1.12) : 0;
-  const alphaText = displayAlpha.toFixed(3);
-  const rgb = state.hitConfirmRgb || '255,211,106';
-  if(hudCache.hitAlpha !== alphaText){
-    hudCache.hitAlpha = alphaText;
-    hud.style.setProperty('--hit-alpha', alphaText);
-    hud.style.setProperty('--hit-scale', (1 + (1 - alpha) * .22).toFixed(3));
-    if(marker) marker.style.setProperty('opacity', alphaText, 'important');
+  if(hudCache.hitAlpha !== '0.000'){
+    hudCache.hitAlpha = '0.000';
+    hud.style.setProperty('--hit-alpha', '0.000');
+    if(marker) marker.style.setProperty('opacity', '0', 'important');
   }
-  if(hudCache.hitColor !== rgb){
-    hudCache.hitColor = rgb;
-    hud.style.setProperty('--hit-color', rgb);
+  if(hudCache.hitActive !== false || hud.classList.contains('is-hit-confirm')){
+    hudCache.hitActive = false;
+    hud.classList.remove('is-hit-confirm');
   }
-  const active = displayAlpha > .02;
-  if(hudCache.hitActive !== active || hud.classList.contains('is-hit-confirm') !== active){
-    hudCache.hitActive = active;
-    hud.classList.toggle('is-hit-confirm', active);
-  }
-  const crit = active && !!state.hitConfirmCrit;
-  if(hudCache.hitCrit !== crit || hud.classList.contains('is-hit-crit') !== crit){
-    hudCache.hitCrit = crit;
-    hud.classList.toggle('is-hit-crit', crit);
-  }
-  const label = state.hitConfirmText || 'HIT';
-  if(ui.refs?.hitConfirmText && hudCache.hitConfirmText !== label){
-    hudCache.hitConfirmText = label;
-    ui.refs.hitConfirmText.textContent = label;
+  if(hudCache.hitCrit !== false || hud.classList.contains('is-hit-crit')){
+    hudCache.hitCrit = false;
+    hud.classList.remove('is-hit-crit');
   }
 }
 
@@ -27234,6 +27940,7 @@ function handleAction(action){
   else if(action === 'ranking') setMode('ranking');
   else if(action === 'gacha') setMode('gacha');
   else if(action === 'settings') setMode('settings');
+  else if(action.startsWith('setControlMode:')) setControlMode(action.slice(15));
   else if(action === 'rollGacha') rollGacha();
   else if(action.startsWith('setStoreCategory:')) setStoreCategory(action.slice(17));
   else if(action.startsWith('previewShip:')) previewStoreShip(action.slice(12));
@@ -27310,6 +28017,12 @@ function setMode(mode){
   if(previousMode !== mode && (previousMode === 'store' || mode === 'store')){
     markHomeShipPartsDirty();
   }
+  if(mode !== 'play'){
+    activePointer = null;
+    state.pointer = 0;
+    resetTurnHold();
+    resetTouchStick();
+  }
   uiDirty = true;
   renderUi2();
   syncCanvasVisibility();
@@ -27320,6 +28033,10 @@ function setMode(mode){
 function startRun(){
   homeShipDrag.pointer = null;
   homeShipDrag.velocity = 0;
+  activePointer = null;
+  state.pointer = 0;
+  resetTurnHold();
+  resetTouchStick();
   clearRunObjects();
   state.mode = 'play';
   applySceneVisualMode('play');
@@ -27343,6 +28060,7 @@ function startRun(){
   state.roll = 0;
   state.prevRoll = 0;
   state.rollVel = 0;
+  resetTurnHold();
   state.shake = 0;
   state.hurtFlash = 0;
   state.hurtEvade = false;
@@ -27398,7 +28116,7 @@ function bindInput(){
     if(state.mode !== 'play') return;
     activePointer = e.pointerId;
     canvas.setPointerCapture?.(e.pointerId);
-    updatePointerControl(e);
+    beginPointerControl(e);
     e.preventDefault();
   });
   canvas.addEventListener('pointermove', e => {
@@ -27418,6 +28136,8 @@ function bindInput(){
     if(activePointer === e.pointerId){
       activePointer = null;
       state.pointer = 0;
+      if(!state.keyboard) resetTurnHold();
+      resetTouchStick();
       canvas.releasePointerCapture?.(e.pointerId);
     }
   };
@@ -27457,9 +28177,90 @@ function endHomeShipDrag(e){
 }
 
 function updatePointerControl(e){
+  if(controlMode() === 'stick'){
+    updateStickControl(e);
+    return;
+  }
+  resetTouchStick();
+  updateDirectPointerControl(e);
+}
+
+function beginPointerControl(e){
+  if(controlMode() === 'stick'){
+    beginStickControl(e);
+    return;
+  }
+  resetTouchStick();
+  updateDirectPointerControl(e);
+}
+
+function updateDirectPointerControl(e){
   const rect = canvasBoundsCache.width > 0 ? canvasBoundsCache : canvas.getBoundingClientRect();
   const x = (e.clientX - rect.left) / Math.max(1, rect.width);
   state.pointer = clamp((x - .5) / CONTROL_POINTER_RANGE, -1, 1);
+}
+
+function controlStickRange(){
+  const width = canvasBoundsCache.width || W;
+  return clamp(width * CONTROL_STICK_RANGE_RATIO, CONTROL_STICK_RANGE_MIN, CONTROL_STICK_RANGE_MAX);
+}
+
+function beginStickControl(e){
+  touchStick.active = true;
+  touchStick.pointer = e.pointerId;
+  touchStick.startX = e.clientX;
+  touchStick.startY = e.clientY;
+  touchStick.currentX = e.clientX;
+  touchStick.currentY = e.clientY;
+  touchStick.knobX = 0;
+  touchStick.knobY = 0;
+  state.pointer = 0;
+  syncTouchStickHud();
+}
+
+function updateStickControl(e){
+  if(!touchStick.active || touchStick.pointer !== e.pointerId){
+    beginStickControl(e);
+    return;
+  }
+  touchStick.currentX = e.clientX;
+  touchStick.currentY = e.clientY;
+  const range = controlStickRange();
+  const dx = e.clientX - touchStick.startX;
+  const dy = e.clientY - touchStick.startY;
+  const length = Math.hypot(dx, dy);
+  const limited = length > range && length > 0 ? range / length : 1;
+  touchStick.knobX = dx * limited;
+  touchStick.knobY = dy * limited;
+  const rawInput = clamp(dx / range, -1, 1);
+  state.pointer = Math.abs(rawInput) < CONTROL_STICK_DEADZONE ? 0 : rawInput;
+  syncTouchStickHud();
+}
+
+function resetTouchStick(){
+  if(!touchStick.active && !touchStick.pointer && touchStick.knobX === 0 && touchStick.knobY === 0){
+    syncTouchStickHud();
+    return;
+  }
+  touchStick.active = false;
+  touchStick.pointer = null;
+  touchStick.knobX = 0;
+  touchStick.knobY = 0;
+  syncTouchStickHud();
+}
+
+function syncTouchStickHud(){
+  const stick = ui.refs?.touchStick;
+  if(!stick) return;
+  const active = state.mode === 'play' && controlMode() === 'stick' && touchStick.active;
+  stick.classList.toggle('on', active);
+  if(!active) return;
+  const left = touchStick.startX - (canvasBoundsCache.left || 0);
+  const top = touchStick.startY - (canvasBoundsCache.top || 0);
+  stick.style.setProperty('--stick-left', `${left}px`);
+  stick.style.setProperty('--stick-top', `${top}px`);
+  stick.style.setProperty('--stick-knob-x', `${touchStick.knobX}px`);
+  stick.style.setProperty('--stick-knob-y', `${touchStick.knobY}px`);
 }
 
 function resize(){
@@ -27637,9 +28438,11 @@ function update(dt, t){
 function updatePlay(dt, t){
   const speedLevel = statLevel('speed');
   const moveMult = loadoutMult('speed');
-  const targetVel = state.input * CONTROL_TURN_SPEED * (1 + speedLevel * .035) * moveMult;
+  const specialMove = specialSpeedMultiplier();
+  const holdControl = heldTurnControl(dt);
+  const targetVel = state.input * CONTROL_TURN_SPEED * holdControl.turn * (1 + speedLevel * .035) * moveMult * specialMove;
   state.prevRoll = state.roll;
-  state.rollVel += (targetVel - state.rollVel) * Math.min(1, dt * CONTROL_RESPONSE * (1 + speedLevel * .02 + loadoutBuff('speed') * .55));
+  state.rollVel += (targetVel - state.rollVel) * Math.min(1, dt * CONTROL_RESPONSE * holdControl.response * (1 + speedLevel * .02 + loadoutBuff('speed') * .55 + (specialMove - 1) * .42));
   state.roll += state.rollVel * dt;
   state.waveTime += dt;
   state.runTime += dt;
@@ -27664,7 +28467,7 @@ function updatePlay(dt, t){
 
   state.firing -= dt;
   if(state.firing <= 0){
-    const fireBoost = (1 + statLevel('fireRate') * FIRE_RATE_STAT_STEP) * barrelFireBoost() * loadoutMult('fireRate');
+    const fireBoost = (1 + statLevel('fireRate') * FIRE_RATE_STAT_STEP) * barrelFireBoost() * specialFireRateMultiplier() * loadoutMult('fireRate');
     const waveReduction = Math.min(FIRE_INTERVAL_WAVE_REDUCTION_MAX, state.wave * FIRE_INTERVAL_WAVE_REDUCTION);
     const fireInterval = Math.max(FIRE_INTERVAL_MIN, (FIRE_INTERVAL_BASE - waveReduction) / fireBoost);
     let volleys = 0;
@@ -27919,10 +28722,12 @@ function updateBullets(dt){
     b.prevAngle = b.angle;
     b.prevRadial = b.radial ?? BULLET_TARGET_RADIAL;
     b.prevVisualRadial = b.visualRadial ?? b.muzzleRadial ?? PLAYER_RADIAL;
+    b.prevVisualZ = b.visualZ ?? b.z;
     b.z -= b.speed * dt;
     b.life -= dt;
     b.radial = b.targetRadial ?? BULLET_TARGET_RADIAL;
     b.visualRadial = b.prevVisualRadial + (b.radial - b.prevVisualRadial) * Math.min(1, dt * BULLET_VISUAL_RADIAL_SETTLE);
+    b.visualZ = b.prevVisualZ + (b.z - b.prevVisualZ) * Math.min(1, dt * BULLET_VISUAL_Z_SETTLE);
     if(b.angleVelocity){
       const nextAngle = normalizeAngle(b.angle + b.angleVelocity * dt);
       const spread = signedAngleDelta(nextAngle, b.originAngle ?? b.angle);
@@ -27950,8 +28755,8 @@ function updateEnemies(dt, t, syncVisuals = true){
     e.prevZ = e.z;
     e.prevAngle = e.angle;
     const approachDistance = angleDistance(e.angle, state.roll);
-    const stasisSlow = stasisLevel > 0 && e.z > -72 && approachDistance < (.30 + stasisLevel * .045)
-      ? Math.max(.52, 1 - stasisLevel * .10)
+    const stasisSlow = stasisLevel > 0 && e.z > -72 && approachDistance < (.30 + stasisLevel * .038)
+      ? Math.max(.62, 1 - stasisLevel * .075)
       : 1;
     if(e.boss){
       e.z += (e.targetZ - e.z) * Math.min(1, dt * .55 * stasisSlow);
@@ -28027,9 +28832,10 @@ function hitEnemyWithBullets(enemy, enemyIndex){
     if(b.hitEnemies?.has(enemy)) continue;
     const impact = bulletEnemyImpact(enemy, b);
     if(!impact) continue;
-    enemy.hp -= b.damage;
+    const hitDamage = Math.max(1, Math.ceil(b.damage * specialTargetDamageMultiplier(enemy)));
+    enemy.hp -= hitDamage;
     if(enemy.boss) state.nextHudAt = 0;
-    enemy.recoilVel = Math.max(enemy.recoilVel || 0, enemy.boss ? 2.2 : Math.min(8.2, 4.8 + b.damage * .022));
+    enemy.recoilVel = Math.max(enemy.recoilVel || 0, enemy.boss ? 2.2 : Math.min(8.2, 4.8 + hitDamage * .022));
     triggerEnemyHit(enemy, b.crit ? 0xffd36a : enemy.type.color, b.crit ? 2 : 1, {
       angle: impact.angle,
       z: impact.z,
@@ -28057,7 +28863,8 @@ function bulletEnemyImpact(enemy, bullet){
   const enemyStartAngle = enemy.prevAngle ?? enemy.angle;
   const enemyRadial = enemy.radial ?? (enemy.boss ? .68 : .88);
   const hitRadius = enemyCollisionRadius(enemy) + bulletCollisionRadius(bullet);
-  if(!zRangesOverlap(bulletStartZ, bullet.z, enemyStartZ, enemy.z, hitRadius + .24)) return null;
+  const coarseZPad = enemy.boss ? Math.max(hitRadius + .24, enemyHitZWindow(enemy) + .42) : hitRadius + .24;
+  if(!zRangesOverlap(bulletStartZ, bullet.z, enemyStartZ, enemy.z, coarseZPad)) return null;
 
   const bulletEndRadial = bulletCollisionPathRadial(bullet.radial);
   const bx0 = pipeX(bulletStartAngle, bulletStartRadial);
@@ -28078,7 +28885,9 @@ function bulletEnemyImpact(enemy, bullet){
     ex0, ey0, ez0, ex1, ey1, ez1,
     hitRadius
   );
-  if(!impact) return null;
+  if(!impact){
+    return enemy.boss ? bossBulletLaneImpact(enemy, bullet) : null;
+  }
 
   const bulletZ = bulletStartZ + (bullet.z - bulletStartZ) * impact.t;
   const enemyZ = enemyStartZ + (enemy.z - enemyStartZ) * impact.t;
@@ -28088,6 +28897,43 @@ function bulletEnemyImpact(enemy, bullet){
     angle: pipeAngleFromXY(hitX, hitY),
     z: (bulletZ + enemyZ) * .5,
     t: impact.t
+  };
+}
+
+function bossBulletLaneImpact(enemy, bullet){
+  const bulletStartZ = bullet.prevZ ?? bullet.z;
+  const enemyStartZ = enemy.prevZ ?? enemy.z;
+  const zPad = enemyHitZWindow(enemy) + bulletCollisionRadius(bullet) * .75;
+  if(!zRangesOverlap(bulletStartZ, bullet.z, enemyStartZ, enemy.z, zPad)) return null;
+
+  const relativeStart = bulletStartZ - enemyStartZ;
+  const relativeEnd = bullet.z - enemy.z;
+  const relativeDelta = relativeEnd - relativeStart;
+  const t = Math.abs(relativeDelta) > HIT_SWEEP_EPSILON
+    ? clamp(-relativeStart / relativeDelta, 0, 1)
+    : 0;
+  const bulletZ = bulletStartZ + (bullet.z - bulletStartZ) * t;
+  const enemyZ = enemyStartZ + (enemy.z - enemyStartZ) * t;
+  if(Math.abs(bulletZ - enemyZ) > zPad) return null;
+
+  const bulletAngle = interpolateAngle(bullet.prevAngle ?? bullet.angle, bullet.angle, t);
+  const enemyAngle = interpolateAngle(enemy.prevAngle ?? enemy.angle, enemy.angle, t);
+  const angleGap = Math.abs(signedAngleDelta(bulletAngle, enemyAngle));
+  const angleAllowance = enemyHitAngleWindow(enemy) + bulletCollisionRadius(bullet) / PIPE_RADIUS * .75;
+  if(angleGap > angleAllowance) return null;
+
+  const bulletStartRadial = bulletCollisionPathRadial(bullet.prevRadial ?? bullet.radial);
+  const bulletEndRadial = bulletCollisionPathRadial(bullet.radial);
+  const bulletRadial = bulletStartRadial + (bulletEndRadial - bulletStartRadial) * t;
+  const enemyRadial = enemy.radial ?? .68;
+  const radialGap = Math.abs(bulletRadial - enemyRadial) * PIPE_RADIUS;
+  const radialAllowance = enemyCollisionRadius(enemy) + bulletCollisionRadius(bullet) + 2.15;
+  if(radialGap > radialAllowance) return null;
+
+  return {
+    angle: bulletAngle,
+    z: (bulletZ + enemyZ) * .5,
+    t
   };
 }
 
@@ -28146,7 +28992,7 @@ function enemyCollisionRadius(enemy){
 }
 
 function bulletCollisionRadius(bullet){
-  return BULLET_COLLISION_RADIUS * (bullet.crit ? 1.15 : 1) * (bullet.pierce > 0 ? 1.06 : 1);
+  return BULLET_COLLISION_RADIUS * (bullet.crit ? 1.15 : 1) * (bullet.pierce > 0 ? 1.06 : 1) * specialBulletRadiusMultiplier();
 }
 
 function bulletCollisionPathRadial(radial){
@@ -28182,11 +29028,13 @@ function enemyPlayerImpact(enemy){
 
 function enemyPlayerZWindow(enemy){
   if(enemy.boss) return 1.35;
+  if(enemy.bossShard) return BOSS_ATTACK_PLAYER_Z_WINDOW;
   return clamp(.48 + (enemy.radius || 1) * .18, .58, .92);
 }
 
 function enemyPlayerAngleWindow(enemy){
   if(enemy.boss) return .34;
+  if(enemy.bossShard) return BOSS_ATTACK_PLAYER_ANGLE_WINDOW;
   return clamp(.125 + (enemy.radius || 1) * .045, .17, .27);
 }
 
@@ -28258,8 +29106,8 @@ function spawnPlayerDamageBurst(angle, z, color, evaded = false){
 
 function fireShot(){
   const baseDamage = (7 + state.wave * .45) * statMult('damage', .10) * bulletSpeedDamageMult() * (1 + cosmeticBuff('damage') + loadoutBuff('damage')) * shipMult('damage') * specialDamageMultiplier();
-  const speed = 45 * (1 + statLevel('bulletSpeed') * .045 + cosmeticBuff('bulletSpeed') + loadoutBuff('bulletSpeed'));
-  const life = (3 + statLevel('range') * .13 + statLevel('bulletSpeed') * .035) * (1 + loadoutBuff('range'));
+  const speed = 45 * (1 + statLevel('bulletSpeed') * .045 + cosmeticBuff('bulletSpeed') + loadoutBuff('bulletSpeed')) * specialBulletSpeedMultiplier();
+  const life = (3 + statLevel('range') * .13 + statLevel('bulletSpeed') * .035) * (1 + loadoutBuff('range')) * specialRangeMultiplier();
   const shotgun = specialUpgradeLevel('barrelShotgun');
   const sniper = specialUpgradeLevel('barrelSniper');
   const multishot = specialUpgradeLevel('barrelMultishot');
@@ -28267,16 +29115,17 @@ function fireShot(){
   const gatling = specialUpgradeLevel('barrelGatling');
 
   if(shotgun > 0){
-    for(const offset of SHOTGUN_OFFSETS) pushBullet(offset, baseDamage, speed, life, .86, .82, .42);
+    for(const offset of SHOTGUN_OFFSETS) pushBullet(offset, baseDamage, speed, life, .70, .84, .46);
   }else if(sniper > 0){
-    pushBullet(0, baseDamage, speed, life, 3.25, 1.72, 1.55);
+    pushBullet(0, baseDamage, speed, life, 2.65, 1.55, 1.46);
   }else if(multishot > 0){
-    for(const spread of MULTISHOT_SPREADS) pushBullet(0, baseDamage, speed, life, .74, 1, .96, PLAYER_RADIAL, spread, MULTISHOT_SPREAD_LIMIT);
+    for(const spread of MULTISHOT_SPREADS) pushBullet(0, baseDamage, speed, life, .58, 1, .96, PLAYER_RADIAL, spread, MULTISHOT_SPREAD_LIMIT);
   }else if(doubleBarrel > 0){
     const offsets = DOUBLE_BARREL_OFFSETS[Math.min(2, doubleBarrel - 1)] || DOUBLE_BARREL_OFFSETS[0];
-    for(const offset of offsets) pushBullet(offset, baseDamage, speed, life, .82, 1.03, 1);
+    const damageMult = Math.max(.56, .72 - (doubleBarrel - 1) * .08);
+    for(const offset of offsets) pushBullet(offset, baseDamage, speed, life, damageMult, 1.03, 1);
   }else if(gatling > 0){
-    pushBullet(0, baseDamage, speed, life, .66, 1.10, .92);
+    pushBullet(0, baseDamage, speed, life, .58, 1.10, .92);
   }else{
     pushBullet(0, baseDamage, speed, life);
   }
@@ -28285,9 +29134,13 @@ function fireShot(){
 
 function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedMult = 1, lifeMult = 1, radial = PLAYER_RADIAL, angleVelocity = 0, spreadLimit = 0){
   if(!reserveBulletSlot()) return;
-  const angle = normalizeAngle(state.roll + angleOffset);
+  const muzzleDrift = playerMuzzleAngleDrift(radial);
+  const angle = normalizeAngle(state.roll + angleOffset + muzzleDrift);
   const crit = Math.random() < (critChance() + cosmeticBuff('crit'));
   const pierce = bulletPierceCount();
+  const boreVisual = 1 + specialUpgradeLevel('wideBore') * .09;
+  const focusTrail = 1 + specialUpgradeLevel('focusLens') * .035;
+  const spawnZ = BULLET_MUZZLE_Z;
   bullets.push({
     angle,
     originAngle: angle,
@@ -28296,8 +29149,11 @@ function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedM
     spreadLimit,
     sin: Math.sin(angle),
     cos: Math.cos(angle),
-    z: PLAYER_Z - .72,
-    prevZ: PLAYER_Z - .72,
+    z: spawnZ,
+    prevZ: spawnZ,
+    visualZ: spawnZ,
+    prevVisualZ: spawnZ,
+    muzzleZ: spawnZ,
     radial: BULLET_TARGET_RADIAL,
     prevRadial: BULLET_TARGET_RADIAL,
     visualRadial: radial,
@@ -28307,12 +29163,46 @@ function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedM
     speed: speed * speedMult,
     damage: Math.ceil(baseDamage * damageMult * (crit ? critDamageMult() : 1)),
     crit,
-    visualSize: (crit ? 1.18 : 1) * (damageMult > 2 ? 1.25 : damageMult < .75 ? .98 : 1) * (pierce > 0 ? 1.08 : 1),
-    trailScale: (speedMult > 1.25 ? 1.20 : 1) * (lifeMult > 1.35 ? 1.18 : 1) * (angleVelocity ? .92 : 1),
+    visualSize: (crit ? 1.18 : 1) * (damageMult > 2 ? 1.25 : damageMult < .75 ? .98 : 1) * (pierce > 0 ? 1.08 : 1) * boreVisual,
+    trailScale: (speedMult > 1.25 ? 1.20 : 1) * (lifeMult > 1.35 ? 1.18 : 1) * (angleVelocity ? .92 : 1) * focusTrail,
     life: life * lifeMult,
     pierce,
     hitEnemies: pierce > 0 ? new Set() : null
   });
+  spawnMuzzleFlash(angle, spawnZ, radial, crit);
+}
+
+function playerMuzzleAngleDrift(radial = PLAYER_RADIAL){
+  const shipX = player?.root?.position?.x ?? 0;
+  const targetX = (Number(state.input) || 0) * PLAYER_DRIFT_SCALE;
+  const visualX = shipX + (targetX - shipX) * .55;
+  return clamp(visualX / Math.max(1, PIPE_RADIUS * Math.max(.16, radial)), -.045, .045);
+}
+
+function spawnMuzzleFlash(angle, z, radial, crit = false){
+  const count = Math.min(MAX_PARTICLES - particles.length, VISUAL_LOW_POWER ? 1 : 2);
+  if(count <= 0) return;
+  const colors = crit ? [0xfff0b8, 0xffd36a] : [0xf4fbff, 0x1ed6ff];
+  for(let i=0;i<count;i++){
+    const particleAngle = normalizeAngle(angle + (Math.random() - .5) * .026);
+    const life = .10 + Math.random() * .055;
+    particles.push({
+      color: colors[i % colors.length],
+      angle: particleAngle,
+      sin: Math.sin(particleAngle),
+      cos: Math.cos(particleAngle),
+      z: z + (Math.random() - .5) * .16,
+      radial: radial + .018 + Math.random() * .035,
+      va: (Math.random() - .5) * .22,
+      vz: -6.5 - Math.random() * 5.5,
+      vr: .34 + Math.random() * .28,
+      life,
+      maxLife: life,
+      size: (crit ? 1.04 : .82) + Math.random() * .22,
+      minScale: .06
+    });
+  }
+  particlesDirty = true;
 }
 
 function reserveBulletSlot(){
@@ -28427,9 +29317,10 @@ function spawnBossShard(boss){
       hp: Math.ceil((8 + state.wave * .6) * BOSS_SHARD_HP_MULT),
       damage: Math.ceil(18 + state.wave * .4),
       speed: 22.5 + Math.min(7.2, state.wave * .075),
-      radius:.46 * ENEMY_HITBOX_MULT,
+      radius:BOSS_ATTACK_HIT_RADIUS,
       radial:.88,
-      baseScale:1.82 * ENEMY_SIZE_BOOST,
+      baseScale:BOSS_ATTACK_VISUAL_SCALE,
+      attackLane:i,
       phase:Math.random() * TAU,
       drift:.018,
       wobble:.58,
@@ -28452,27 +29343,27 @@ function spawnBossShard(boss){
 }
 
 function spawnBossAttackCue(angle, startZ, laneIndex = 0){
-  const count = VISUAL_LOW_POWER ? 4 : 6;
+  const count = VISUAL_LOW_POWER ? 5 : 7;
   const available = Math.max(0, Math.min(MAX_PARTICLES - particles.length, count));
   const cueAngle = normalizeAngle(angle);
-  const colors = [0xffd36a, 0xf4fbff, 0xff3b62, 0xff7a3d];
+  const colors = [0x8df5ff, 0xf4fbff, 0xff3b62, 0xffd36a];
   for(let i=0;i<available;i++){
     const laneT = (i + 1) / (count + 1);
-    const life = .78 + laneT * .34;
-    const particleAngle = cueAngle + (Math.random() - .5) * .026;
+    const life = .62 + laneT * .26;
+    const particleAngle = cueAngle + (Math.random() - .5) * .018;
     particles.push({
       color: colors[(i + laneIndex + 3) % colors.length],
       angle: particleAngle,
       sin: Math.sin(particleAngle),
       cos: Math.cos(particleAngle),
       z: startZ + (PLAYER_Z - startZ) * laneT,
-      radial: .84 + laneT * .105,
-      va: (Math.random() - .5) * .12,
-      vz: 3.2 + laneT * 3.0,
-      vr: .012 + laneT * .020,
+      radial: .82 + laneT * .075,
+      va: (Math.random() - .5) * .075,
+      vz: 2.8 + laneT * 2.2,
+      vr: .006 + laneT * .014,
       life,
       maxLife: life,
-      size: 2.35 - laneT * .42,
+      size: 1.32 - laneT * .24,
       minScale: .18
     });
   }
@@ -28640,32 +29531,41 @@ function addEnemyHitCue(root, boss = false){
 }
 
 function addBossAttackCue(root){
-  const ring = new THREE.Line(makeRingCircleGeometry(1.22, SMALL_SCREEN ? 64 : 52), shared.materials.bossAttackLine);
-  ring.visible = false;
-  ring.renderOrder = 13;
-  ring.userData.attackRole = 'ring';
-  const outer = new THREE.Line(makeRingCircleGeometry(1.72, SMALL_SCREEN ? 64 : 52), shared.materials.bossAttackLine);
-  outer.visible = false;
-  outer.renderOrder = 13;
-  outer.userData.attackRole = 'outer';
-  const halo = new THREE.Mesh(new THREE.RingGeometry(.56, 1.54, SMALL_SCREEN ? 64 : 52, 1), shared.materials.bossAttackGlow);
+  const segments = SMALL_SCREEN ? 58 : 46;
+  const halo = new THREE.Mesh(new THREE.RingGeometry(.24, .54, segments, 1), shared.materials.bossAttackGlow);
   halo.visible = false;
   halo.renderOrder = 12;
   halo.userData.attackRole = 'halo';
-  const band = new THREE.Mesh(new THREE.RingGeometry(1.10, 1.32, SMALL_SCREEN ? 64 : 52, 1), shared.materials.bossAttackGlow);
+  const blade = new THREE.Mesh(new THREE.PlaneGeometry(.24, 2.34), shared.materials.bossAttackGlow);
+  blade.visible = false;
+  blade.renderOrder = 14;
+  blade.userData.attackRole = 'blade';
+  const band = new THREE.Mesh(new THREE.RingGeometry(.44, .55, segments, 1), shared.materials.bossAttackGlow);
   band.visible = false;
   band.renderOrder = 14;
   band.userData.attackRole = 'band';
-  const outerBand = new THREE.Mesh(new THREE.RingGeometry(1.58, 1.84, SMALL_SCREEN ? 64 : 52, 1), shared.materials.bossAttackGlow);
+  const ring = new THREE.Line(makeRingCircleGeometry(.62, segments), shared.materials.bossAttackLine);
+  ring.visible = false;
+  ring.renderOrder = 13;
+  ring.userData.attackRole = 'ring';
+  const outerBand = new THREE.Mesh(new THREE.RingGeometry(.70, .80, segments, 1), shared.materials.bossAttackGlow);
   outerBand.visible = false;
-  outerBand.renderOrder = 14;
+  outerBand.renderOrder = 13;
   outerBand.userData.attackRole = 'outerBand';
-  const core = new THREE.Mesh(new THREE.SphereGeometry(.22, SMALL_SCREEN ? 14 : 10, SMALL_SCREEN ? 8 : 6), shared.materials.bossAttackGlow);
+  const outer = new THREE.Line(makeRingCircleGeometry(.86, segments), shared.materials.bossAttackLine);
+  outer.visible = false;
+  outer.renderOrder = 13;
+  outer.userData.attackRole = 'outer';
+  const needle = new THREE.Mesh(new THREE.PlaneGeometry(.075, 2.78), shared.materials.bossAttackLine);
+  needle.visible = false;
+  needle.renderOrder = 15;
+  needle.userData.attackRole = 'needle';
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.16, SMALL_SCREEN ? 14 : 10, SMALL_SCREEN ? 8 : 6), shared.materials.bossAttackGlow);
   core.visible = false;
-  core.renderOrder = 14;
+  core.renderOrder = 16;
   core.userData.attackRole = 'core';
-  root.userData.attackParts = [halo, band, ring, outerBand, outer, core];
-  root.add(halo, band, ring, outerBand, outer, core);
+  root.userData.attackParts = [halo, blade, band, ring, outerBand, outer, needle, core];
+  root.add(halo, blade, band, ring, outerBand, outer, needle, core);
 }
 
 function triggerEnemyHit(enemy, color, amount = 1, impact = null){
@@ -28681,12 +29581,8 @@ function triggerEnemyHit(enemy, color, amount = 1, impact = null){
 }
 
 function triggerHitConfirm(enemy, bullet, color){
-  const crit = !!bullet?.crit;
-  const hitColor = crit ? 0xffd36a : blendHex(color, 0xf4fbff, enemy?.boss ? .44 : .32);
-  state.hitConfirm = Math.max(state.hitConfirm || 0, crit ? 1.15 : .96);
-  state.hitConfirmRgb = colorRgbCss(hitColor);
-  state.hitConfirmCrit = crit;
-  state.hitConfirmText = crit ? 'CRIT' : 'HIT';
+  state.hitConfirm = 0;
+  state.hitConfirmCrit = false;
 }
 
 function spawnBulletImpact(enemy, bullet, angle, z, color, amount = 1){
@@ -28945,14 +29841,15 @@ function syncBulletInstances(){
   for(let i=0;i<count;i++){
     const b = bullets[i];
     const renderRadial = b.visualRadial ?? b.muzzleRadial ?? b.radial;
-    const distanceBoost = 1 + clamp((PLAYER_Z - b.z) / 132, 0, 1) * .58;
+    const renderZ = b.visualZ ?? b.z;
+    const distanceBoost = 1 + clamp((PLAYER_Z - renderZ) / 132, 0, 1) * .58;
     const coreScale = (b.visualSize || 1) * distanceBoost;
     const trailScale = b.trailScale || 1;
     bulletMatrix.makeScale(.92 * coreScale, .92 * coreScale, 1.62 * coreScale * trailScale);
     bulletMatrix.setPosition(
       b.sin * PIPE_RADIUS * renderRadial,
       -b.cos * PIPE_RADIUS * renderRadial,
-      b.z
+      renderZ
     );
     bulletMesh.setMatrixAt(i, bulletMatrix);
     const glowScale = coreScale * (b.crit ? 1.34 : 1);
@@ -28960,7 +29857,7 @@ function syncBulletInstances(){
     bulletGlowMatrix.setPosition(
       b.sin * PIPE_RADIUS * renderRadial,
       -b.cos * PIPE_RADIUS * renderRadial,
-      b.z + .10
+      renderZ + .10
     );
     bulletGlowMesh.setMatrixAt(i, bulletGlowMatrix);
   }
@@ -29135,52 +30032,65 @@ function syncBossAttackVisual(enemy, t, presence){
   data.attackCueActive = true;
   const danger = clamp((enemy.z - (BOSS_TARGET_Z - 6)) / Math.max(1, PLAYER_Z - (BOSS_TARGET_Z - 6)), 0, 1);
   const pulse = .5 + .5 * Math.sin(t * 18 + enemy.phase);
+  const lane = Number(enemy.attackLane) || 0;
   for(const part of parts){
     part.visible = true;
     const role = part.userData?.attackRole || '';
-    let colorMix = pulse > .54 ? 0xff3b62 : 0xffd36a;
-    if(role === 'halo') colorMix = pulse > .44 ? 0xff3b62 : 0xff7a3d;
-    else if(role === 'band') colorMix = pulse > .52 ? 0xfff0b8 : 0xffd36a;
-    else if(role === 'outerBand') colorMix = pulse > .46 ? 0xff7a3d : 0xff3b62;
+    const hot = lane === 0 ? 0xff3b62 : 0xffd36a;
+    let colorMix = pulse > .54 ? hot : 0x8df5ff;
+    if(role === 'halo') colorMix = pulse > .44 ? hot : 0x8df5ff;
+    else if(role === 'blade' || role === 'needle') colorMix = pulse > .40 ? 0xf4fbff : 0x8df5ff;
+    else if(role === 'band') colorMix = pulse > .52 ? 0xfff0b8 : hot;
+    else if(role === 'outerBand') colorMix = pulse > .46 ? 0x8df5ff : hot;
     else if(role === 'core') colorMix = pulse > .38 ? 0xf4fbff : 0xfff0b8;
-    else if(role === 'outer') colorMix = pulse > .48 ? 0xffd36a : 0xff3b62;
+    else if(role === 'outer') colorMix = pulse > .48 ? 0x8df5ff : 0xffd36a;
     const material = part.material;
     if(material?.color) material.color.setHex(colorMix);
     if(material?.opacity !== undefined){
       const base = material.userData?.baseOpacity ?? 1;
-      const roleBoost = role === 'core' ? 1.34 : role === 'band' || role === 'outerBand' ? 1.18 : 1.0;
-      material.opacity = Math.min(1, base * roleBoost * Math.max(.60, presence) * (.86 + danger * .52 + pulse * .34));
+      const roleBoost = role === 'core' ? 1.54 : role === 'blade' || role === 'needle' ? 1.48 : role === 'band' ? .82 : role === 'outerBand' ? .48 : .38;
+      material.opacity = Math.min(1, base * roleBoost * Math.max(.58, presence) * (.56 + danger * .34 + pulse * .22));
       material.needsUpdate = true;
     }
   }
   const halo = parts.find(part => part.userData?.attackRole === 'halo') || parts[0];
+  const blade = parts.find(part => part.userData?.attackRole === 'blade');
   const band = parts.find(part => part.userData?.attackRole === 'band');
   const ring = parts.find(part => part.userData?.attackRole === 'ring') || parts[1];
   const outerBand = parts.find(part => part.userData?.attackRole === 'outerBand');
   const outer = parts.find(part => part.userData?.attackRole === 'outer') || parts[2];
+  const needle = parts.find(part => part.userData?.attackRole === 'needle');
   const core = parts.find(part => part.userData?.attackRole === 'core') || parts[3];
   if(halo){
-    halo.scale.setScalar(1.28 + danger * .58 + pulse * .14);
-    halo.rotation.z = -t * 3.4 + enemy.phase;
+    halo.scale.setScalar(.92 + danger * .24 + pulse * .05);
+    halo.rotation.z = -t * 2.2 + enemy.phase;
+  }
+  if(blade){
+    blade.scale.set(.74 + danger * .18, 1.04 + danger * .44 + pulse * .10, 1);
+    blade.rotation.z = enemy.phase * .25 + Math.sin(t * 5.2 + enemy.phase) * .08;
   }
   if(band){
-    band.scale.setScalar(1.30 + danger * .70 + pulse * .16);
-    band.rotation.z = t * 4.7 - enemy.phase;
+    band.scale.setScalar(.98 + danger * .27 + pulse * .07);
+    band.rotation.z = t * 3.4 - enemy.phase;
   }
   if(ring){
-    ring.scale.setScalar(1.36 + danger * .74 + pulse * .20);
-    ring.rotation.z = t * 5.0 + enemy.phase;
+    ring.scale.setScalar(1.00 + danger * .23 + pulse * .08);
+    ring.rotation.z = t * 4.0 + enemy.phase;
   }
   if(outerBand){
-    outerBand.scale.setScalar(1.06 + danger * .46 + pulse * .13);
-    outerBand.rotation.z = -t * 2.5 + enemy.phase * .5;
+    outerBand.scale.setScalar(.90 + danger * .18 + pulse * .05);
+    outerBand.rotation.z = -t * 1.8 + enemy.phase * .5;
   }
   if(outer){
-    outer.scale.setScalar(1.05 + danger * .42 + pulse * .12);
-    outer.rotation.z = -t * 2.2 - enemy.phase;
+    outer.scale.setScalar(.90 + danger * .16 + pulse * .05);
+    outer.rotation.z = -t * 1.7 - enemy.phase;
+  }
+  if(needle){
+    needle.scale.set(.86 + pulse * .08, 1.12 + danger * .58 + pulse * .16, 1);
+    needle.rotation.z = blade?.rotation.z ?? enemy.phase;
   }
   if(core){
-    core.scale.setScalar(1.4 + danger * .65 + pulse * .32);
+    core.scale.setScalar(1.02 + danger * .30 + pulse * .22);
   }
 }
 
