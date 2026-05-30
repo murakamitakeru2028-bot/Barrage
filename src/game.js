@@ -97,6 +97,12 @@ const BOSS_ATTACK_VISUAL_SCALE = 1.22 * ENEMY_SIZE_BOOST;
 const BOSS_ATTACK_LANE_SPACING = .68;
 const BOSS_ATTACK_LANE_JITTER = .022;
 const BOSS_ATTACK_FIRE_INTERVAL = 1.90;
+const BOSS_ATTACK_FIRE_INTERVAL_JITTER = .32;
+const BOSS_ATTACK_AIM_JITTER = .115;
+const BOSS_ATTACK_SPACING_JITTER = .085;
+const BOSS_ATTACK_SPEED_JITTER = 2.1;
+const BOSS_ATTACK_Z_JITTER = 1.55;
+const BOSS_ATTACK_DRIFT_MAX = .036;
 const BOSS_CHASE_TURN_SPEED = .42;
 const BOSS_CHASE_CATCHUP_TURN = .48;
 const BOSS_CHASE_LEAD_TIME = .22;
@@ -32295,7 +32301,7 @@ function updateEnemies(dt, t, syncVisuals = true){
       updateBossChase(e, dt, t, stasisSlow);
       e.fire -= dt;
       if(e.fire <= 0){
-        e.fire = Math.max(.95, BOSS_ATTACK_FIRE_INTERVAL - state.wave * .004);
+        e.fire = nextBossFireInterval();
         spawnBossShard(e);
       }
     }else{
@@ -32374,6 +32380,12 @@ function updateBossChase(boss, dt, t, stasisSlow = 1){
   const wobble = Math.sin(t * .55 + boss.phase) * dt * BOSS_CHASE_WOBBLE * wobbleFade;
   boss.angle = normalizeAngle(boss.angle + chaseStep + wobble);
   boss.chaseGap = gap;
+}
+
+function nextBossFireInterval(){
+  const base = Math.max(1.42, BOSS_ATTACK_FIRE_INTERVAL - state.wave * .004);
+  const jitter = (Math.random() - .35) * BOSS_ATTACK_FIRE_INTERVAL_JITTER;
+  return Math.max(1.36, base + jitter);
 }
 
 function hitEnemyWithBullets(enemy, enemyIndex){
@@ -33015,7 +33027,7 @@ function spawnBoss(){
     baseScale:BOSS_VISUAL_SCALE,
     speed:0,
     phase:Math.random() * TAU,
-    fire:1.4,
+    fire:.95 + Math.random() * .65,
     chaseGap:0,
     spinX:.30,
     spinY:.48,
@@ -33035,32 +33047,41 @@ function spawnBoss(){
 }
 
 function spawnBossShard(boss){
-  for(let i=-1;i<=1;i++){
+  const patternRoll = Math.random();
+  const lanes = patternRoll < .18 ? [-.56, .56] : patternRoll < .34 ? [-1.12, .08, 1.04] : [-1, 0, 1];
+  const spacing = BOSS_ATTACK_LANE_SPACING + (Math.random() - .5) * BOSS_ATTACK_SPACING_JITTER;
+  const centerOffset = (Math.random() - .5) * BOSS_ATTACK_AIM_JITTER;
+  const speedBase = 19.5 + Math.min(5.4, state.wave * .055);
+  for(const lane of lanes){
     if(enemies.length >= MAX_ENEMIES) return;
-    const type = {...ENEMY_TYPES[0], color:i === 0 ? 0xfff0b8 : 0xffd36a, radius:.64};
+    const centered = Math.abs(lane) < .12;
+    const laneSide = Math.sign(lane) || 0;
+    const type = {...ENEMY_TYPES[0], color:centered ? 0xfff0b8 : 0xffd36a, radius:.64};
     const root = acquireEnemyObject(ENEMY_TYPES[0], false);
     tintEnemyObject(root, type.color, 0xff7a3d, 1.55);
     const shardHp = Math.ceil((8 + state.wave * .6) * BOSS_SHARD_HP_MULT);
+    const shardAngle = boss.angle + centerOffset + lane * spacing + (Math.random() - .5) * BOSS_ATTACK_LANE_JITTER;
+    const shardSpeed = speedBase + (Math.random() - .5) * BOSS_ATTACK_SPEED_JITTER;
     const shard = {
       root,
       type,
       boss:false,
       bossShard:true,
-      angle: boss.angle + i * BOSS_ATTACK_LANE_SPACING + (Math.random() - .5) * BOSS_ATTACK_LANE_JITTER,
-      z: boss.z + 2.6,
+      angle: shardAngle,
+      z: boss.z + 2.6 + (Math.random() - .5) * BOSS_ATTACK_Z_JITTER,
       hp: shardHp,
       maxHp: shardHp,
       initialHp: shardHp,
       damage: Math.ceil(18 + state.wave * .4),
-      speed: 19.5 + Math.min(5.4, state.wave * .055),
+      speed: Math.max(16.4, shardSpeed),
       radius:BOSS_ATTACK_HIT_RADIUS * .92,
       radial:.88,
       baseRadial:.88,
       baseScale:BOSS_ATTACK_VISUAL_SCALE * 1.62,
-      attackLane:i,
+      attackLane:lane,
       phase:Math.random() * TAU,
-      drift:0,
-      wobble:0,
+      drift:(Math.random() - .5) * BOSS_ATTACK_DRIFT_MAX + laneSide * .006,
+      wobble:.85 + Math.random() * 1.35,
       spinX:.28,
       spinY:.18,
       spinZ:.62
@@ -33075,7 +33096,7 @@ function spawnBossShard(boss){
     enemyRoot.add(root);
     setPipePositionFromTrig(root, shard.sin, shard.cos, shard.z, shard.radial);
     applyEnemyVisual(shard, 0);
-    spawnBossAttackCue(shard.angle, shard.z, i);
+    spawnBossAttackCue(shard.angle, shard.z, lane);
   }
   state.shake = Math.max(state.shake, .045);
 }
