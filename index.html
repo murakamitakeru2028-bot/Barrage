@@ -32,11 +32,24 @@
       height: min(100vh, calc(100vw * 700 / 390));
       touch-action:none;
     }
+    @media (orientation: portrait) and (max-width: 520px) {
+      body { align-items:stretch; }
+      #canvas {
+        width:100vw;
+        height:100vh;
+      }
+    }
     @supports (height:1dvh){
       body { min-height:100dvh; }
       #canvas {
         width:  min(100vw, calc(100dvh * 390 / 700));
         height: min(100dvh, calc(100vw * 700 / 390));
+      }
+      @media (orientation: portrait) and (max-width: 520px) {
+        #canvas {
+          width:100vw;
+          height:100dvh;
+        }
       }
     }
   </style>

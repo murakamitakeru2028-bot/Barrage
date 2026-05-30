@@ -52,6 +52,15 @@ const ENEMY_DETAIL_Z = VISUAL_LOW_POWER ? -74 : -92;
 const BULLET_HIT_Z_PAD = .22;
 const BULLET_HIT_ANGLE_PAD = .020;
 const HIT_SWEEP_EPSILON = 0.0001;
+const COMBAT_STEP_MAX = 1 / 120;
+const FIRE_INTERVAL_BASE = .28;
+const FIRE_INTERVAL_MIN = .09;
+const FIRE_INTERVAL_WAVE_REDUCTION = .0011;
+const FIRE_INTERVAL_WAVE_REDUCTION_MAX = .06;
+const FIRE_RATE_STAT_STEP = .065;
+const BULLET_TARGET_RADIAL = .86;
+const BULLET_VISUAL_RADIAL_SETTLE = 10;
+const BULLET_COLLISION_RADIUS = .42;
 const ENEMY_SIZE_BOOST = 2.05;
 const ENEMY_SIZE_MULT = 1.62 * ENEMY_SIZE_BOOST;
 const ENEMY_HITBOX_MULT = 1.20 * ENEMY_SIZE_BOOST;
@@ -209,7 +218,7 @@ const SPECIAL_SLOT_LABELS = {
 };
 
 const SHIP_DEFS = [
-  { id:'nu_arc', name:'NU-3D アーク', role:'標準ロールフレーム', cost:0, color:'#8eefff', partPower:1.35, slots:{barrel:1, innerFrame:1, drone:0}, mult:{hp:1, defense:1, damage:1, fireRate:1, speed:1} },
+  { id:'nu_arc', name:'NU-3D アーク', role:'標準ロールフレーム', cost:0, color:'#8eefff', partPower:1.00, slots:{barrel:1, innerFrame:1, drone:0}, mult:{hp:.90, defense:.94, damage:.82, fireRate:.70, speed:.96} },
   { id:'vx_razor', name:'VX-03 レイザー', role:'強襲バレル機', cost:650, color:'#ff5d7e', partPower:1.15, slots:{barrel:2, innerFrame:1, drone:0}, mult:{hp:.94, defense:.98, damage:1.05, fireRate:1.08, speed:1.02} },
   { id:'bg_bulwark', name:'BG-12 バルワーク', role:'重装インナーフレーム機', cost:1100, color:'#d8e2ea', partPower:1.12, slots:{barrel:1, innerFrame:3, drone:0}, mult:{hp:1.16, defense:1.10, damage:.96, fireRate:.94, speed:.92} },
   { id:'dr_hive', name:'DR-07 ハイヴ', role:'ドローン管制機', cost:1650, color:'#9dffd9', partPower:1.06, slots:{barrel:1, innerFrame:1, drone:3}, mult:{hp:1.02, defense:1.02, damage:.98, fireRate:1, speed:.98, xp:1.04, token:1.03} },
@@ -224,7 +233,7 @@ const PART_TYPE_LABELS = {
   drone: 'ドローン'
 };
 const PART_DEFS = [
-  { id:'barrel_pulse', type:'barrel', name:'パルスバレル', rarity:'標準', cost:0, starter:true, color:COLORS.cyan, text:'連射性能を少し上げる', buff:{fireRate:.035} },
+  { id:'barrel_pulse', type:'barrel', name:'パルスバレル', rarity:'標準', cost:0, starter:true, color:COLORS.cyan, text:'連射性能を少し上げる', buff:{fireRate:.015} },
   { id:'barrel_lance', type:'barrel', name:'ランスバレル', rarity:'火力', cost:360, color:COLORS.rose, text:'弾丸ダメージを少し上げる', buff:{damage:.030} },
   { id:'barrel_vector', type:'barrel', name:'ベクターバレル', rarity:'制御', cost:420, color:COLORS.violet, text:'弾速と射程を少し上げる', buff:{bulletSpeed:.025, range:.020} },
   { id:'frame_vital', type:'innerFrame', name:'バイタルフレーム', rarity:'耐久', cost:0, starter:true, color:0xff6b93, text:'最大HPを上げる', buff:{hp:.045} },
@@ -471,6 +480,9 @@ const HOME_PREVIEW_REST_PITCH = -.18;
 const HOME_PREVIEW_PITCH_MIN = -.48;
 const HOME_PREVIEW_PITCH_MAX = .22;
 const HOME_PREVIEW_FACE_ROTATION_OFFSET = Math.PI / 2;
+const HOME_PREVIEW_POSE_SPEED = 3.6;
+const HOME_PREVIEW_CAMERA_SPEED = 3.2;
+const HOME_PREVIEW_TARGET_SPEED = 4.0;
 const homeShipDrag = {
   pointer: null,
   lastX: 0,
@@ -478,6 +490,79 @@ const homeShipDrag = {
   yaw: .22,
   pitch: HOME_PREVIEW_REST_PITCH,
   velocity: .10
+};
+const homePreviewMotion = {
+  initialized: false,
+  mode: 'home',
+  transition: 0,
+  direction: 1,
+  shipX: 0,
+  shipY: 0,
+  shipZ: 0,
+  shipPitch: 0,
+  shipYaw: 0,
+  shipRoll: 0,
+  shipScale: 1,
+  cameraX: 0,
+  cameraY: 0,
+  cameraZ: 0,
+  targetX: 0,
+  targetY: 0,
+  targetZ: 0
+};
+const HOME_PREVIEW_SHIP_KEYS = ['shipX','shipY','shipZ','shipPitch','shipYaw','shipRoll','shipScale'];
+const HOME_PREVIEW_CAMERA_KEYS = ['cameraX','cameraY','cameraZ'];
+const HOME_PREVIEW_TARGET_KEYS = ['targetX','targetY','targetZ'];
+const HOME_PREVIEW_ORDER = {home:0, store:1, garage:2};
+const HOME_PREVIEW_POSES = {
+  home: {
+    key: 'home',
+    shipX: 1.04,
+    shipY: 3.12,
+    shipZ: -8.42,
+    shipPitch: -.92,
+    shipYaw: .06,
+    shipRoll: -.01,
+    shipScale: 1.98,
+    cameraX: -.36,
+    cameraY: CAMERA_BASE_Y + 2.35,
+    cameraZ: 9.72,
+    targetX: .25,
+    targetY: .02,
+    targetZ: -8.42
+  },
+  store: {
+    key: 'store',
+    shipX: 2.06,
+    shipY: 4.60,
+    shipZ: -8.58,
+    shipPitch: -.88,
+    shipYaw: .24,
+    shipRoll: -.10,
+    shipScale: 1.86,
+    cameraX: -.42,
+    cameraY: CAMERA_BASE_Y + 1.70,
+    cameraZ: 9.92,
+    targetX: .34,
+    targetY: .12,
+    targetZ: -8.55
+  },
+  garage: {
+    key: 'garage',
+    shipX: .42,
+    shipY: 5.58,
+    shipZ: -8.70,
+    shipPitch: -.86,
+    shipYaw: .18,
+    shipRoll: -.06,
+    shipScale: 2.08,
+    cameraX: -.30,
+    cameraY: CAMERA_BASE_Y + 1.86,
+    cameraZ: 9.86,
+    targetX: .10,
+    targetY: .70,
+    targetZ: -8.62
+  }
 };
 var previewPartVisualKey = '';
 let homeShipPartsDirty = true;
@@ -771,7 +856,7 @@ function specialDamageMultiplier(){
   let mult = 1 + specialUpgradeLevel('powerShot') * .18;
   const adrenaline = specialUpgradeLevel('adrenaline');
   if(adrenaline > 0){
-    const missingHp = 1 - Math.max(0, Math.min(1, state.hp / Math.max(1, state.maxHp)));
+    const missingHp = 1 - Math.max(0, Math.min(1, visibleHp() / visibleHpMax()));
     mult *= 1 + adrenaline * .22 * missingHp;
   }
   return mult;
@@ -845,8 +930,8 @@ function loadoutMult(key){
 }
 
 function refreshLoadoutVitals(){
-  const before = state.maxHp || 100;
-  const next = hpMax();
+  const before = visibleHpMax();
+  const next = safeHpMax();
   state.maxHp = next;
   if(state.mode === 'play'){
     state.hp = Math.min(next, state.hp + Math.max(0, next - before));
@@ -879,6 +964,26 @@ function statMult(id, step = .08){
 
 function hpMax(){
   return Math.round((100 + statLevel('hp') * 18) * (1 + cosmeticBuff('hp')) * loadoutMult('hp'));
+}
+
+function safeHpMax(){
+  const value = hpMax();
+  return Number.isFinite(value) && value > 0 ? value : 100;
+}
+
+function visibleHpMax(){
+  const value = Number(state.maxHp);
+  return Number.isFinite(value) && value > 0 ? value : 100;
+}
+
+function visibleHp(){
+  const max = visibleHpMax();
+  const value = Number(state.hp);
+  return Number.isFinite(value) ? Math.max(0, Math.min(max, value)) : max;
+}
+
+function hpFillPercent(){
+  return visibleHp() / visibleHpMax() * 100;
 }
 
 function regenPerSecond(){
@@ -1017,12 +1122,12 @@ function buyRunBasicUpgrade(id){
   if(!BASIC_SKILL_DEFS_BY_ID[id] || !isRunBasicUnlocked(id) || isRunBasicMaxed(id)) return;
   const cost = runBasicUpgradeCost(id);
   if(!Number.isFinite(cost) || state.basicPoints < cost) return;
-  const beforeMax = state.maxHp;
+  const beforeMax = visibleHpMax();
   state.basicPoints -= cost;
   state.statLevels[id] = runBasicLevel(id) + 1;
   invalidateStatCache();
   if(id === 'hp'){
-    state.maxHp = hpMax();
+    state.maxHp = safeHpMax();
     state.hp = Math.min(state.maxHp, state.hp + Math.max(0, state.maxHp - beforeMax) + 18);
   }
   renderUi2();
@@ -1035,7 +1140,7 @@ function buyHomeUpgrade(id){
   state.tokens -= cost;
   state.homeUpgrades[id] = homeUpgradeLevel(id) + 1;
   invalidateStatCache();
-  state.maxHp = hpMax();
+  state.maxHp = safeHpMax();
   state.hp = Math.min(state.maxHp, state.hp || state.maxHp);
   saveProgress();
   renderUi2();
@@ -1261,6 +1366,11 @@ function syncHomeShipParts(force = false){
   previewPartVisualKey = key;
   homeShipPartsDirty = false;
   applyHomeShipFrameAccent(ship);
+  if(homeShip.variantVisuals){
+    for(const [id, group] of Object.entries(homeShip.variantVisuals)){
+      group.visible = id === ship.id;
+    }
+  }
   for(const type of PART_TYPES){
     const equipped = state.garage?.equippedParts?.[type] || [];
     const slots = shipSlotCount(type, ship);
@@ -1287,6 +1397,33 @@ function syncHomeShipParts(force = false){
   }
 }
 
+function syncPlayerShipVariant(){
+  if(!player?.variantVisuals) return;
+  const ship = currentShip();
+  const accent = colorHexValue(ship.color);
+  const profiles = {
+    nu_arc: {body:[1,1,1], wing:[1,1,1], nose:[1,1,1], aura:1},
+    vx_razor: {body:[.72,1,1.20], wing:[1.34,1,.78], nose:[.74,1,1.34], aura:.90},
+    bg_bulwark: {body:[1.22,1,.96], wing:[1.22,1,1.12], nose:[1.08,1,.92], aura:1.04},
+    dr_hive: {body:[.92,1,.92], wing:[.88,1,.78], nose:[.88,1,.92], aura:.96},
+    om_ultima: {body:[1.04,1,1.12], wing:[1.48,1,1.08], nose:[.88,1,1.24], aura:1.12}
+  };
+  const profile = profiles[ship.id] || profiles[DEFAULT_SHIP_ID];
+  applyColor(shared.materials.playerCore, accent);
+  applyColor(shared.materials.playerGlass, accent);
+  applyLineColor(shared.materials.playerEdge, accent);
+  applyLineColor(shared.materials.playerRoseLine, accent);
+  if(shared.materials.playerGlass?.emissive) shared.materials.playerGlass.emissive.setHex(accent);
+  player.body?.scale.set(...profile.body);
+  player.wings?.scale.set(...profile.wing);
+  player.rightWing?.scale.set(...profile.wing);
+  player.nose?.scale.set(...profile.nose);
+  player.aura?.scale.setScalar(profile.aura);
+  for(const [id, group] of Object.entries(player.variantVisuals)){
+    group.visible = id === DEFAULT_SHIP_ID || id === ship.id;
+  }
+}
+
 function makeSharedAssets(){
   const materials = {
     pipe: new THREE.MeshBasicMaterial({ color:0x07111f, side:THREE.DoubleSide, transparent:true, opacity:.86, depthWrite:false }),
@@ -1298,13 +1435,13 @@ function makeSharedAssets(){
     shot: new THREE.MeshBasicMaterial({ color:0x9cf5ff }),
     shotGlow: new THREE.MeshBasicMaterial({ color:0x1ed6ff, transparent:true, opacity:.32 }),
     particle: new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.58, depthWrite:false, fog:false, vertexColors:true }),
-    player: new THREE.MeshStandardMaterial({ color:0x06111d, metalness:.82, roughness:.21, emissive:0x073247, emissiveIntensity:.74 }),
-    playerEngine: new THREE.MeshStandardMaterial({ color:0x04101a, metalness:.82, roughness:.24, emissive:0x041923, emissiveIntensity:.24 }),
-    playerPlate: new THREE.MeshStandardMaterial({ color:0xf6f9fa, metalness:.66, roughness:.15, emissive:0x1a3440, emissiveIntensity:.48 }),
-    playerPanel: new THREE.MeshStandardMaterial({ color:0x102436, metalness:.74, roughness:.19, emissive:0x0b5165, emissiveIntensity:.48 }),
-    playerGlass: new THREE.MeshStandardMaterial({ color:0x9cf5ff, metalness:.18, roughness:.08, emissive:0x1ed6ff, emissiveIntensity:1.38, transparent:true, opacity:.82 }),
+    player: new THREE.MeshStandardMaterial({ color:0x06111d, metalness:.82, roughness:.21, emissive:0x073247, emissiveIntensity:.74, side:THREE.DoubleSide }),
+    playerEngine: new THREE.MeshStandardMaterial({ color:0x04101a, metalness:.82, roughness:.24, emissive:0x041923, emissiveIntensity:.24, side:THREE.DoubleSide }),
+    playerPlate: new THREE.MeshStandardMaterial({ color:0xf6f9fa, metalness:.66, roughness:.15, emissive:0x1a3440, emissiveIntensity:.48, side:THREE.DoubleSide }),
+    playerPanel: new THREE.MeshStandardMaterial({ color:0x102436, metalness:.74, roughness:.19, emissive:0x0b5165, emissiveIntensity:.48, side:THREE.DoubleSide }),
+    playerGlass: new THREE.MeshStandardMaterial({ color:0x9cf5ff, metalness:.18, roughness:.08, emissive:0x1ed6ff, emissiveIntensity:1.38, transparent:true, opacity:.82, side:THREE.DoubleSide }),
     playerCore: new THREE.MeshBasicMaterial({ color:0x1ed6ff }),
-    playerWing: new THREE.MeshStandardMaterial({ color:0x0c1a2b, metalness:.70, roughness:.21, emissive:0x0b5068, emissiveIntensity:.58 }),
+    playerWing: new THREE.MeshStandardMaterial({ color:0x0c1a2b, metalness:.70, roughness:.21, emissive:0x0b5068, emissiveIntensity:.58, side:THREE.DoubleSide }),
     playerGold: new THREE.MeshBasicMaterial({ color:0xd8e2ea, transparent:true, opacity:.90 }),
     playerRose: new THREE.MeshBasicMaterial({ color:0x8eefff, transparent:true, opacity:.82 }),
     playerEdge: new THREE.LineBasicMaterial({ color:0x82d7ff, transparent:true, opacity:.72 }),
@@ -1529,10 +1666,12 @@ function makePlayer(){
   root.position.set(0, PLAYER_Y, PLAYER_Z);
   root.rotation.x = -.13;
   root.scale.setScalar(PLAYER_VISUAL_SCALE);
+  const bodyRoot = new THREE.Group();
+  root.add(bodyRoot);
 
   const mirrorPoints = points => points.map(([x, z]) => [-x, z]).reverse();
 
-  const mainBody = addShipPlate(root, [
+  const mainBody = addShipPlate(bodyRoot, [
     [0, -1.64], [.14, -1.34], [.26, -.58], [.29, .18],
     [.18, .86], [0, 1.20], [-.18, .86], [-.29, .18],
     [-.26, -.58], [-.14, -1.34]
@@ -1541,124 +1680,125 @@ function makePlayer(){
   const wingPoints = [
     [.15, -.48], [.88, -.20], [1.10, .10], [.86, .31], [.52, .36], [.28, .84], [.08, .61]
   ];
-  const leftWing = addShipPlate(root, wingPoints, shared.materials.playerWing, .11);
-  const rightWing = addShipPlate(root, mirrorPoints(wingPoints), shared.materials.playerWing, .11);
+  const leftWing = addShipPlate(bodyRoot, wingPoints, shared.materials.playerWing, .11);
+  const rightWing = addShipPlate(bodyRoot, mirrorPoints(wingPoints), shared.materials.playerWing, .11);
 
   const wingCap = [[.34,-.15],[.80,.02],[.70,.22],[.41,.25]];
-  const leftWingCap = addShipPlate(root, wingCap, shared.materials.playerPlate, .040, shared.materials.playerGoldLine);
-  const rightWingCap = addShipPlate(root, mirrorPoints(wingCap), shared.materials.playerPlate, .040, shared.materials.playerGoldLine);
+  const leftWingCap = addShipPlate(bodyRoot, wingCap, shared.materials.playerPlate, .040, shared.materials.playerGoldLine);
+  const rightWingCap = addShipPlate(bodyRoot, mirrorPoints(wingCap), shared.materials.playerPlate, .040, shared.materials.playerGoldLine);
   leftWingCap.position.y = .082;
   rightWingCap.position.y = .082;
 
   const outerWinglet = [[.58,.08],[1.15,.25],[.96,.53],[.58,.45]];
-  const leftOuterWinglet = addShipPlate(root, outerWinglet, shared.materials.playerPanel, .052, shared.materials.playerEdge);
-  const rightOuterWinglet = addShipPlate(root, mirrorPoints(outerWinglet), shared.materials.playerPanel, .052, shared.materials.playerEdge);
+  const leftOuterWinglet = addShipPlate(bodyRoot, outerWinglet, shared.materials.playerPanel, .052, shared.materials.playerEdge);
+  const rightOuterWinglet = addShipPlate(bodyRoot, mirrorPoints(outerWinglet), shared.materials.playerPanel, .052, shared.materials.playerEdge);
   leftOuterWinglet.position.y = .066;
   rightOuterWinglet.position.y = .066;
 
   const intakePoints = [[.18,-.66],[.49,-.47],[.40,-.15],[.14,-.25]];
-  const leftIntake = addShipPlate(root, intakePoints, shared.materials.playerPanel, .044, shared.materials.playerRoseLine);
-  const rightIntake = addShipPlate(root, mirrorPoints(intakePoints), shared.materials.playerPanel, .044, shared.materials.playerRoseLine);
+  const leftIntake = addShipPlate(bodyRoot, intakePoints, shared.materials.playerPanel, .044, shared.materials.playerRoseLine);
+  const rightIntake = addShipPlate(bodyRoot, mirrorPoints(intakePoints), shared.materials.playerPanel, .044, shared.materials.playerRoseLine);
   leftIntake.position.y = .126;
   rightIntake.position.y = .126;
 
-  const nose = addShipPlate(root, [
+  const nose = addShipPlate(bodyRoot, [
     [0, -1.84], [.088, -1.36], [.066, -.86], [0, -.65], [-.066, -.86], [-.088, -1.36]
   ], shared.materials.playerPlate, .080, shared.materials.playerGoldLine);
   nose.position.y = .070;
 
-  const topArmor = addShipPlate(root, [
+  const topArmor = addShipPlate(bodyRoot, [
     [0, -1.08], [.126, -.68], [.176, .20], [.086, .74],
     [0, .90], [-.086, .74], [-.176, .20], [-.126, -.68]
   ], shared.materials.playerPlate, .065, shared.materials.playerEdge);
   topArmor.position.y = .090;
 
-  const canopy = addShipPlate(root, [
+  const canopy = addShipPlate(bodyRoot, [
     [0, -.61], [.096, -.35], [.080, .05], [0, .29], [-.080, .05], [-.096, -.35]
   ], shared.materials.playerGlass, .050, shared.materials.playerEdge);
   canopy.position.y = .150;
 
-  const canopyGlow = addShipPlate(root, [
+  const canopyGlow = addShipPlate(bodyRoot, [
     [0, -.52], [.055, -.28], [.045, -.04], [0, .12], [-.045, -.04], [-.055, -.28]
   ], shared.materials.playerCore, .026, shared.materials.playerEdge);
   canopyGlow.position.y = .190;
 
   const shoulderPoints = [[.15,.30],[.36,.42],[.28,.78],[.08,.66]];
-  const leftShoulder = addShipPlate(root, shoulderPoints, shared.materials.playerPanel, .048, shared.materials.playerRoseLine);
-  const rightShoulder = addShipPlate(root, mirrorPoints(shoulderPoints), shared.materials.playerPanel, .048, shared.materials.playerRoseLine);
+  const leftShoulder = addShipPlate(bodyRoot, shoulderPoints, shared.materials.playerPanel, .048, shared.materials.playerRoseLine);
+  const rightShoulder = addShipPlate(bodyRoot, mirrorPoints(shoulderPoints), shared.materials.playerPanel, .048, shared.materials.playerRoseLine);
   leftShoulder.position.y = .125;
   rightShoulder.position.y = .125;
 
   const tailFinPoints = [[.20,.70],[.52,1.16],[.24,1.08],[.07,.85]];
-  const leftTailFin = addShipPlate(root, tailFinPoints, shared.materials.playerPlate, .052, shared.materials.playerGoldLine);
-  const rightTailFin = addShipPlate(root, mirrorPoints(tailFinPoints), shared.materials.playerPlate, .052, shared.materials.playerGoldLine);
+  const leftTailFin = addShipPlate(bodyRoot, tailFinPoints, shared.materials.playerPlate, .052, shared.materials.playerGoldLine);
+  const rightTailFin = addShipPlate(bodyRoot, mirrorPoints(tailFinPoints), shared.materials.playerPlate, .052, shared.materials.playerGoldLine);
   leftTailFin.position.y = .066;
   rightTailFin.position.y = .066;
 
-  root.add(makeShipLine([[0,-1.75],[0,-.66],[0,.90]], shared.materials.playerRoseLine, .18));
-  root.add(makeShipLine([[.11,-.94],[.20,-.38],[.17,.60]], shared.materials.playerGoldLine, .16));
-  root.add(makeShipLine([[-.11,-.94],[-.20,-.38],[-.17,.60]], shared.materials.playerGoldLine, .16));
-  root.add(makeShipLine([[.28,-.20],[.70,.02],[.93,.24],[.60,.43]], shared.materials.playerEdge, .145));
-  root.add(makeShipLine([[-.28,-.20],[-.70,.02],[-.93,.24],[-.60,.43]], shared.materials.playerEdge, .145));
-  root.add(makeShipLine([[.19,-.58],[.45,-.39],[.36,-.17]], shared.materials.playerRoseLine, .170));
-  root.add(makeShipLine([[-.19,-.58],[-.45,-.39],[-.36,-.17]], shared.materials.playerRoseLine, .170));
-  root.add(makeShipLine([[.28,.70],[.48,1.06]], shared.materials.playerGoldLine, .145));
-  root.add(makeShipLine([[-.28,.70],[-.48,1.06]], shared.materials.playerGoldLine, .145));
+  bodyRoot.add(makeShipLine([[0,-1.75],[0,-.66],[0,.90]], shared.materials.playerRoseLine, .18));
+  bodyRoot.add(makeShipLine([[.11,-.94],[.20,-.38],[.17,.60]], shared.materials.playerGoldLine, .16));
+  bodyRoot.add(makeShipLine([[-.11,-.94],[-.20,-.38],[-.17,.60]], shared.materials.playerGoldLine, .16));
+  bodyRoot.add(makeShipLine([[.28,-.20],[.70,.02],[.93,.24],[.60,.43]], shared.materials.playerEdge, .145));
+  bodyRoot.add(makeShipLine([[-.28,-.20],[-.70,.02],[-.93,.24],[-.60,.43]], shared.materials.playerEdge, .145));
+  bodyRoot.add(makeShipLine([[.19,-.58],[.45,-.39],[.36,-.17]], shared.materials.playerRoseLine, .170));
+  bodyRoot.add(makeShipLine([[-.19,-.58],[-.45,-.39],[-.36,-.17]], shared.materials.playerRoseLine, .170));
+  bodyRoot.add(makeShipLine([[.28,.70],[.48,1.06]], shared.materials.playerGoldLine, .145));
+  bodyRoot.add(makeShipLine([[-.28,.70],[-.48,1.06]], shared.materials.playerGoldLine, .145));
 
   const trimWidth = SMALL_SCREEN ? .056 : .042;
-  addShipRail(root, [0, -1.54], [0, .76], trimWidth, shared.materials.playerGold, .214, .018);
-  addShipRail(root, [.15, -.92], [.20, .58], trimWidth * .72, shared.materials.playerRose, .202, .016);
-  addShipRail(root, [-.15, -.92], [-.20, .58], trimWidth * .72, shared.materials.playerRose, .202, .016);
-  addShipRail(root, [.34, -.20], [.88, .18], trimWidth * .92, shared.materials.playerGold, .188, .016);
-  addShipRail(root, [-.34, -.20], [-.88, .18], trimWidth * .92, shared.materials.playerGold, .188, .016);
+  addShipRail(bodyRoot, [0, -1.54], [0, .76], trimWidth, shared.materials.playerGold, .214, .018);
+  addShipRail(bodyRoot, [.15, -.92], [.20, .58], trimWidth * .72, shared.materials.playerRose, .202, .016);
+  addShipRail(bodyRoot, [-.15, -.92], [-.20, .58], trimWidth * .72, shared.materials.playerRose, .202, .016);
+  addShipRail(bodyRoot, [.34, -.20], [.88, .18], trimWidth * .92, shared.materials.playerGold, .188, .016);
+  addShipRail(bodyRoot, [-.34, -.20], [-.88, .18], trimWidth * .92, shared.materials.playerGold, .188, .016);
 
   const core = new THREE.Mesh(new THREE.SphereGeometry(.145, SMALL_SCREEN ? 24 : 18, SMALL_SCREEN ? 14 : 10), shared.materials.playerCore);
   core.position.set(0, .225, -.18);
-  root.add(core);
+  bodyRoot.add(core);
+  const animatedCoreVisuals = [core];
 
   const reactorHalo = new THREE.Line(makeRingCircleGeometry(.30, SMALL_SCREEN ? 56 : VISUAL_LOW_POWER ? 40 : 46), shared.materials.playerGoldLine);
   reactorHalo.rotation.x = Math.PI / 2;
   reactorHalo.position.set(0, .230, -.18);
-  root.add(reactorHalo);
+  bodyRoot.add(reactorHalo);
 
   const coreRing = new THREE.Line(makeRingCircleGeometry(.220, SMALL_SCREEN ? 56 : 40), shared.materials.playerEdge);
   coreRing.rotation.x = Math.PI / 2;
   coreRing.position.set(0, .238, -.18);
-  root.add(coreRing);
+  bodyRoot.add(coreRing);
 
   const spine = new THREE.Mesh(new THREE.BoxGeometry(.055, .040, 1.42), shared.materials.playerGold);
   spine.position.set(0, .172, -.12);
-  root.add(spine);
+  bodyRoot.add(spine);
 
   const engineSegments = SMALL_SCREEN ? 20 : 14;
   const engineGeo = new THREE.CylinderGeometry(.078, .122, .38, engineSegments, 1);
   const engineNozzleGeo = new THREE.CylinderGeometry(.104, .070, .15, engineSegments, 1);
   const cowlPoints = [[.18,.42],[.45,.58],[.41,1.03],[.22,1.18],[.07,.86]];
-  addShipPlate(root, cowlPoints, shared.materials.player, .070, shared.materials.playerEdge);
-  addShipPlate(root, mirrorPoints(cowlPoints), shared.materials.player, .070, shared.materials.playerEdge);
+  addShipPlate(bodyRoot, cowlPoints, shared.materials.player, .070, shared.materials.playerEdge);
+  addShipPlate(bodyRoot, mirrorPoints(cowlPoints), shared.materials.player, .070, shared.materials.playerEdge);
   for(const x of [-.33,.33]){
     const engine = new THREE.Mesh(engineGeo, shared.materials.playerEngine);
     engine.rotation.x = Math.PI / 2;
     engine.position.set(x, -.035, .86);
-    root.add(engine);
+    bodyRoot.add(engine);
     const nozzle = new THREE.Mesh(engineNozzleGeo, shared.materials.playerEngine);
     nozzle.rotation.x = Math.PI / 2;
     nozzle.position.set(x, -.035, 1.08);
-    root.add(nozzle);
+    bodyRoot.add(nozzle);
     const flare = new THREE.Mesh(shared.geometries.engineFlare, shared.materials.shotGlow);
     flare.position.set(x, -.035, 1.23);
     flare.scale.set(.58, .58, 1.04);
-    root.add(flare);
+    bodyRoot.add(flare);
   }
 
   for(const x of [-1.06, 1.06]){
     const tipLight = new THREE.Mesh(new THREE.SphereGeometry(.042, 10, 6), shared.materials.playerCore);
     tipLight.position.set(x, .154, .25);
-    root.add(tipLight);
+    bodyRoot.add(tipLight);
     const tipGlow = new THREE.Mesh(new THREE.SphereGeometry(.082, 10, 6), shared.materials.shotGlow);
     tipGlow.position.set(x, .148, .25);
     tipGlow.scale.set(1, .65, 1);
-    root.add(tipGlow);
+    bodyRoot.add(tipGlow);
   }
 
   const aura = new THREE.Line(makeRingCircleGeometry(.72, 56), shared.materials.railCyan);
@@ -1666,12 +1806,119 @@ function makePlayer(){
   aura.position.z = .18;
   root.add(aura);
 
-  return {root, body:mainBody, wings:leftWing, rightWing, core, aura, nose};
+  const variantVisuals = {[DEFAULT_SHIP_ID]: bodyRoot};
+  const makeVariant = id => {
+    const group = new THREE.Group();
+    group.visible = false;
+    root.add(group);
+    variantVisuals[id] = group;
+    return group;
+  };
+  const addVariantLine = (group, points, material = shared.materials.playerEdge, y = .15) => {
+    group.add(makeShipLine(points, material, y));
+  };
+  const addVariantSymPlate = (group, points, material, thickness = .08, edgeMaterial = shared.materials.playerEdge, y = 0) => {
+    const left = addShipPlate(group, points, material, thickness, edgeMaterial);
+    const right = addShipPlate(group, mirrorPoints(points), material, thickness, edgeMaterial);
+    left.position.y = y;
+    right.position.y = y;
+  };
+  const addVariantCore = (group, x = 0, z = -.18, radius = .14, y = .225) => {
+    const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(radius, SMALL_SCREEN ? 24 : 18, SMALL_SCREEN ? 14 : 10), shared.materials.playerCore);
+    coreMesh.position.set(x, y, z);
+    group.add(coreMesh);
+    animatedCoreVisuals.push(coreMesh);
+    const ring = new THREE.Line(makeRingCircleGeometry(radius * 2.0, SMALL_SCREEN ? 48 : 38), shared.materials.playerEdge);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(x, y + .006, z);
+    group.add(ring);
+  };
+  const addVariantEngine = (group, x, z, radius = .08, length = .36, y = -.035, flareScale = 1) => {
+    const engine = new THREE.Mesh(new THREE.CylinderGeometry(radius * .72, radius, length, engineSegments, 1), shared.materials.playerEngine);
+    engine.rotation.x = Math.PI / 2;
+    engine.position.set(x, y, z);
+    group.add(engine);
+    const flare = new THREE.Mesh(shared.geometries.engineFlare, shared.materials.shotGlow);
+    flare.position.set(x, y, z + length * .55);
+    flare.scale.set(radius * 5.6 * flareScale, radius * 5.6 * flareScale, .90);
+    group.add(flare);
+  };
+
+  const razor = makeVariant('vx_razor');
+  addShipPlate(razor, [[0,-2.04],[.11,-1.50],[.16,-.46],[.12,.62],[0,1.30],[-.12,.62],[-.16,-.46],[-.11,-1.50]], shared.materials.player, .135);
+  addVariantSymPlate(razor, [[.08,-.60],[1.18,-.40],[1.48,-.12],[.86,.12],[.26,.05]], shared.materials.playerWing, .070, shared.materials.playerEdge, .012);
+  addVariantSymPlate(razor, [[.24,.18],[1.20,.44],[1.00,.72],[.38,.52]], shared.materials.playerPanel, .046, shared.materials.playerRoseLine, .072);
+  addShipPlate(razor, [[0,-2.24],[.050,-1.44],[.034,-.78],[0,-.56],[-.034,-.78],[-.050,-1.44]], shared.materials.playerPlate, .074, shared.materials.playerGoldLine).position.y = .070;
+  addShipPlate(razor, [[0,-.72],[.060,-.42],[.050,-.10],[0,.06],[-.050,-.10],[-.060,-.42]], shared.materials.playerGlass, .044).position.y = .145;
+  addVariantLine(razor, [[0,-2.14],[0,1.14]], shared.materials.playerRoseLine, .180);
+  addVariantLine(razor, [[.36,-.46],[1.24,-.16]], shared.materials.playerEdge, .132);
+  addVariantLine(razor, [[-.36,-.46],[-1.24,-.16]], shared.materials.playerEdge, .132);
+  addVariantCore(razor, 0, -.26, .122, .225);
+  addVariantEngine(razor, -.20, 1.02, .064, .44, -.030, .88);
+  addVariantEngine(razor, .20, 1.02, .064, .44, -.030, .88);
+
+  const bulwark = makeVariant('bg_bulwark');
+  addShipPlate(bulwark, [[0,-1.36],[.34,-1.02],[.46,-.34],[.42,.72],[.22,1.26],[0,1.44],[-.22,1.26],[-.42,.72],[-.46,-.34],[-.34,-1.02]], shared.materials.player, .215);
+  addVariantSymPlate(bulwark, [[.32,-.48],[1.18,-.40],[1.38,.48],[.82,.82],[.48,.42]], shared.materials.playerWing, .150, shared.materials.playerEdge, -.008);
+  addVariantSymPlate(bulwark, [[.42,-.18],[1.00,-.06],[1.04,.40],[.52,.38]], shared.materials.playerPlate, .066, shared.materials.playerGoldLine, .088);
+  addShipPlate(bulwark, [[0,-1.50],[.17,-1.06],[.17,-.52],[0,-.32],[-.17,-.52],[-.17,-1.06]], shared.materials.playerPlate, .106, shared.materials.playerGoldLine).position.y = .100;
+  addShipPlate(bulwark, [[0,-.58],[.15,-.30],[.16,.18],[0,.40],[-.16,.18],[-.15,-.30]], shared.materials.playerGlass, .055).position.y = .150;
+  addVariantLine(bulwark, [[-.34,-.90],[-.34,.90]], shared.materials.playerGoldLine, .165);
+  addVariantLine(bulwark, [[.34,-.90],[.34,.90]], shared.materials.playerGoldLine, .165);
+  addVariantCore(bulwark, 0, -.02, .170, .232);
+  addVariantEngine(bulwark, -.60, .94, .115, .40, -.045, 1.15);
+  addVariantEngine(bulwark, .60, .94, .115, .40, -.045, 1.15);
+  addVariantEngine(bulwark, -1.00, .64, .090, .32, -.040, 1.0);
+  addVariantEngine(bulwark, 1.00, .64, .090, .32, -.040, 1.0);
+
+  const hive = makeVariant('dr_hive');
+  addShipPlate(hive, [[0,-1.46],[.22,-1.14],[.34,-.42],[.30,.54],[.15,1.02],[0,1.20],[-.15,1.02],[-.30,.54],[-.34,-.42],[-.22,-1.14]], shared.materials.player, .155);
+  addVariantSymPlate(hive, [[.18,-.30],[.76,-.20],[.94,.12],[.74,.36],[.28,.24]], shared.materials.playerWing, .066, shared.materials.playerEdge, .024);
+  addVariantSymPlate(hive, [[.36,.32],[.86,.62],[.58,.88],[.20,.56]], shared.materials.playerPanel, .046, shared.materials.playerRoseLine, .076);
+  addShipPlate(hive, [[0,-.88],[.12,-.60],[.10,-.22],[0,-.04],[-.10,-.22],[-.12,-.60]], shared.materials.playerGlass, .048).position.y = .145;
+  addVariantCore(hive, 0, -.16, .155, .232);
+  for(const [x, z, s] of [[-.78,-.24,1.06],[.78,-.24,1.06],[-.68,.60,.92],[.68,.60,.92],[0,1.02,.84]]){
+    const pod = new THREE.Mesh(new THREE.SphereGeometry(.092, 12, 7), shared.materials.playerPanel);
+    pod.position.set(x, .160, z);
+    pod.scale.set(s, .58, s * 1.18);
+    pod.add(new THREE.LineSegments(new THREE.EdgesGeometry(pod.geometry, 16), shared.materials.playerEdge));
+    hive.add(pod);
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(.028, 8, 6), shared.materials.playerCore);
+    dot.position.set(x, .215, z - .02);
+    hive.add(dot);
+  }
+  addVariantLine(hive, [[-.78,-.24],[-.20,-.06],[0,-.16],[.20,-.06],[.78,-.24]], shared.materials.playerGoldLine, .185);
+  addVariantLine(hive, [[-.68,.60],[-.20,.32],[0,.18],[.20,.32],[.68,.60]], shared.materials.playerEdge, .170);
+  addVariantEngine(hive, -.23, .92, .066, .32, -.040, .88);
+  addVariantEngine(hive, .23, .92, .066, .32, -.040, .88);
+
+  const ultima = makeVariant('om_ultima');
+  addShipPlate(ultima, [[0,-1.86],[.18,-1.34],[.29,-.48],[.26,.42],[.12,1.22],[0,1.50],[-.12,1.22],[-.26,.42],[-.29,-.48],[-.18,-1.34]], shared.materials.player, .170);
+  addVariantSymPlate(ultima, [[.14,-.58],[1.00,-.40],[1.48,.06],[1.12,.34],[.44,.20]], shared.materials.playerWing, .088, shared.materials.playerEdge, .018);
+  addVariantSymPlate(ultima, [[.30,.04],[1.30,.44],[1.06,.80],[.38,.56]], shared.materials.playerPlate, .058, shared.materials.playerGoldLine, .092);
+  addVariantSymPlate(ultima, [[.18,.62],[.74,1.34],[.36,1.24],[.06,.88]], shared.materials.playerPanel, .052, shared.materials.playerRoseLine, .070);
+  addShipPlate(ultima, [[0,-2.02],[.066,-1.38],[.054,-.78],[0,-.54],[-.054,-.78],[-.066,-1.38]], shared.materials.playerPlate, .080, shared.materials.playerGoldLine).position.y = .082;
+  addShipPlate(ultima, [[0,-.70],[.11,-.40],[.10,.10],[0,.34],[-.10,.10],[-.11,-.40]], shared.materials.playerGlass, .054).position.y = .150;
+  addVariantCore(ultima, 0, -.20, .170, .238);
+  const crown = new THREE.Line(makeRingCircleGeometry(.50, SMALL_SCREEN ? 54 : 42), shared.materials.playerGoldLine);
+  crown.rotation.x = Math.PI / 2;
+  crown.position.set(0, .246, -.19);
+  ultima.add(crown);
+  addVariantLine(ultima, [[0,-1.96],[0,1.38]], shared.materials.playerGoldLine, .180);
+  addVariantLine(ultima, [[.34,-.50],[1.34,.08]], shared.materials.playerEdge, .150);
+  addVariantLine(ultima, [[-.34,-.50],[-1.34,.08]], shared.materials.playerEdge, .150);
+  addVariantEngine(ultima, -.32, 1.00, .082, .40, -.036, .98);
+  addVariantEngine(ultima, .32, 1.00, .082, .40, -.036, .98);
+  addVariantEngine(ultima, 0, 1.16, .068, .34, -.034, .90);
+
+  return {root, body:mainBody, wings:leftWing, rightWing, core, aura, nose, variantVisuals, animatedCoreVisuals};
 }
 
 function makeHomePreviewShip(){
   const root = new THREE.Group();
   root.visible = false;
+  const bodyRoot = new THREE.Group();
+  root.add(bodyRoot);
   const mirrorPoints = points => points.map(([x, z]) => [-x, z]).reverse();
 
   const materials = {
@@ -1694,12 +1941,12 @@ function makeHomePreviewShip(){
   };
   const addPreviewPlate = (points, material, thickness = .10) => {
     const mesh = new THREE.Mesh(makePlateGeometry(points, thickness), material);
-    root.add(addEdges(mesh));
+    bodyRoot.add(addEdges(mesh));
     return mesh;
   };
   const addPreviewLine = (points, material = materials.edge, y = .16) => {
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points.map(([x, z]) => new THREE.Vector3(x, y, z))), material);
-    root.add(line);
+    bodyRoot.add(line);
     return line;
   };
 
@@ -1765,16 +2012,17 @@ function makeHomePreviewShip(){
 
   const core = new THREE.Mesh(new THREE.SphereGeometry(.155, 18, 10), materials.core);
   core.position.set(0, .255, -.18);
-  root.add(core);
+  bodyRoot.add(core);
+  const animatedCoreVisuals = [core];
   const coreRing = new THREE.Line(makeRingCircleGeometry(.30, VISUAL_LOW_POWER ? 32 : 46), materials.goldLine);
   coreRing.rotation.x = Math.PI / 2;
   coreRing.position.set(0, .260, -.18);
-  root.add(coreRing);
+  bodyRoot.add(coreRing);
 
   const spine = new THREE.Mesh(new THREE.BoxGeometry(.060, .040, 1.44), materials.core);
   spine.position.set(0, .185, -.12);
   spine.scale.y = .60;
-  root.add(spine);
+  bodyRoot.add(spine);
 
   const cowlPoints = [[.18,.42],[.45,.58],[.41,1.03],[.22,1.18],[.07,.86]];
   addPreviewPlate(cowlPoints, materials.hull, .078).position.y = -.01;
@@ -1786,32 +2034,168 @@ function makeHomePreviewShip(){
     const engine = new THREE.Mesh(engineGeo, materials.engine);
     engine.rotation.x = Math.PI / 2;
     engine.position.set(x, -.045, .88);
-    root.add(engine);
+    bodyRoot.add(engine);
     const nozzle = new THREE.Mesh(nozzleGeo, materials.engine);
     nozzle.rotation.x = Math.PI / 2;
     nozzle.position.set(x, -.045, 1.10);
-    root.add(nozzle);
+    bodyRoot.add(nozzle);
     const glowMat = materials.core.clone();
     glowMat.transparent = true;
     glowMat.opacity = .72;
     const glow = new THREE.Mesh(shared.geometries.engineFlare, glowMat);
     glow.position.set(x, -.045, 1.24);
     glow.scale.set(.42, .42, .82);
-    root.add(glow);
+    bodyRoot.add(glow);
   }
 
   for(const x of [-1.06, 1.06]){
     const tipLight = new THREE.Mesh(new THREE.SphereGeometry(.046, 10, 6), materials.core);
     tipLight.position.set(x, .172, .25);
-    root.add(tipLight);
+    bodyRoot.add(tipLight);
     const tipGlowMat = materials.core.clone();
     tipGlowMat.transparent = true;
     tipGlowMat.opacity = .30;
     const tipGlow = new THREE.Mesh(new THREE.SphereGeometry(.090, 10, 6), tipGlowMat);
     tipGlow.position.set(x, .160, .25);
     tipGlow.scale.set(1, .58, 1);
-    root.add(tipGlow);
+    bodyRoot.add(tipGlow);
   }
+
+  const variantVisuals = {[DEFAULT_SHIP_ID]: bodyRoot};
+  const addVariantPlate = (group, points, material, thickness = .10, edgeMaterial = materials.edge, y = 0) => {
+    const mesh = new THREE.Mesh(makePlateGeometry(points, thickness), material);
+    mesh.position.y = y;
+    group.add(addEdges(mesh, edgeMaterial));
+    return mesh;
+  };
+  const addVariantLine = (group, points, material = materials.edge, y = .16) => {
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(points.map(([x, z]) => new THREE.Vector3(x, y, z))),
+      material
+    );
+    group.add(line);
+    return line;
+  };
+  const addVariantSymPlate = (group, points, material, thickness = .10, edgeMaterial = materials.edge, y = 0) => {
+    addVariantPlate(group, points, material, thickness, edgeMaterial, y);
+    addVariantPlate(group, mirrorPoints(points), material, thickness, edgeMaterial, y);
+  };
+  const addVariantEngine = (group, x, z, radius = .10, length = .42, y = -.045, scale = 1) => {
+    const engine = new THREE.Mesh(new THREE.CylinderGeometry(radius * .72, radius, length, 16, 1), materials.engine);
+    engine.rotation.x = Math.PI / 2;
+    engine.position.set(x, y, z);
+    engine.scale.set(scale, scale, 1);
+    group.add(engine);
+    const glowMat = materials.core.clone();
+    glowMat.transparent = true;
+    glowMat.opacity = .62;
+    const glow = new THREE.Mesh(shared.geometries.engineFlare, glowMat);
+    glow.position.set(x, y, z + length * .54);
+    glow.scale.set(radius * 4.3 * scale, radius * 4.3 * scale, .82);
+    group.add(glow);
+  };
+  const addVariantCore = (group, x = 0, z = -.18, radius = .15, y = .255) => {
+    const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 18, 10), materials.core);
+    coreMesh.position.set(x, y, z);
+    group.add(coreMesh);
+    animatedCoreVisuals.push(coreMesh);
+    const ring = new THREE.Line(makeRingCircleGeometry(radius * 1.95, VISUAL_LOW_POWER ? 32 : 46), materials.goldLine);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(x, y + .006, z);
+    group.add(ring);
+    return coreMesh;
+  };
+  const makeVariant = id => {
+    const group = new THREE.Group();
+    group.visible = false;
+    root.add(group);
+    variantVisuals[id] = group;
+    return group;
+  };
+
+  const razor = makeVariant('vx_razor');
+  addVariantPlate(razor, [
+    [0,-2.05],[.11,-1.64],[.17,-.72],[.15,.42],
+    [.08,1.04],[0,1.34],[-.08,1.04],[-.15,.42],
+    [-.17,-.72],[-.11,-1.64]
+  ], materials.hull, .145);
+  addVariantSymPlate(razor, [[.09,-.70],[1.18,-.46],[1.48,-.21],[.92,.06],[.30,.10]], materials.wing, .075, materials.edge, .018);
+  addVariantSymPlate(razor, [[.24,.12],[1.32,.40],[1.10,.78],[.44,.58]], materials.panel, .050, materials.roseLine, .086);
+  addVariantSymPlate(razor, [[.12,.62],[.54,1.34],[.26,1.22],[.06,.88]], materials.plate, .048, materials.goldLine, .064);
+  addVariantPlate(razor, [[0,-2.30],[.052,-1.46],[.030,-.78],[0,-.58],[-.030,-.78],[-.052,-1.46]], materials.plate, .080, materials.goldLine, .070);
+  addVariantPlate(razor, [[0,-.82],[.064,-.50],[.052,-.12],[0,.08],[-.052,-.12],[-.064,-.50]], materials.glass, .045, materials.edge, .158);
+  addVariantCore(razor, 0, -.30, .128, .242);
+  addVariantLine(razor, [[0,-2.20],[0,1.16]], materials.roseLine, .185);
+  addVariantLine(razor, [[.36,-.48],[1.28,-.22]], materials.edge, .132);
+  addVariantLine(razor, [[-.36,-.48],[-1.28,-.22]], materials.edge, .132);
+  addVariantEngine(razor, -.22, 1.03, .070, .48, -.035, .85);
+  addVariantEngine(razor, .22, 1.03, .070, .48, -.035, .85);
+
+  const bulwark = makeVariant('bg_bulwark');
+  addVariantPlate(bulwark, [
+    [0,-1.42],[.34,-1.06],[.46,-.36],[.44,.74],
+    [.24,1.22],[0,1.42],[-.24,1.22],[-.44,.74],
+    [-.46,-.36],[-.34,-1.06]
+  ], materials.hull, .230);
+  addVariantSymPlate(bulwark, [[.34,-.52],[1.24,-.44],[1.42,.54],[.84,.86],[.48,.46]], materials.wing, .165, materials.edge, -.012);
+  addVariantSymPlate(bulwark, [[.42,-.20],[1.05,-.08],[1.08,.44],[.52,.40]], materials.plate, .070, materials.goldLine, .100);
+  addVariantPlate(bulwark, [[0,-1.55],[.18,-1.10],[.18,-.54],[0,-.34],[-.18,-.54],[-.18,-1.10]], materials.plate, .120, materials.goldLine, .120);
+  addVariantPlate(bulwark, [[0,-.64],[.16,-.34],[.18,.18],[0,.42],[-.18,.18],[-.16,-.34]], materials.glass, .060, materials.edge, .192);
+  addVariantCore(bulwark, 0, -.02, .185, .270);
+  addVariantLine(bulwark, [[-.35,-.94],[-.35,.92]], materials.goldLine, .190);
+  addVariantLine(bulwark, [[.35,-.94],[.35,.92]], materials.goldLine, .190);
+  for(const x of [-.62, .62]) addVariantEngine(bulwark, x, .96, .130, .42, -.060, 1.18);
+  for(const x of [-1.04, 1.04]) addVariantEngine(bulwark, x, .66, .105, .34, -.050, 1.05);
+
+  const hive = makeVariant('dr_hive');
+  addVariantPlate(hive, [
+    [0,-1.50],[.22,-1.18],[.36,-.44],[.32,.54],
+    [.16,1.02],[0,1.22],[-.16,1.02],[-.32,.54],
+    [-.36,-.44],[-.22,-1.18]
+  ], materials.hull, .160);
+  addVariantSymPlate(hive, [[.18,-.34],[.78,-.24],[.98,.10],[.78,.36],[.28,.26]], materials.wing, .072, materials.edge, .028);
+  addVariantSymPlate(hive, [[.38,.30],[.92,.64],[.60,.92],[.20,.58]], materials.panel, .052, materials.roseLine, .088);
+  addVariantPlate(hive, [[0,-.96],[.13,-.66],[.11,-.24],[0,-.06],[-.11,-.24],[-.13,-.66]], materials.glass, .052, materials.edge, .162);
+  addVariantCore(hive, 0, -.18, .170, .264);
+  const dronePodGeo = new THREE.SphereGeometry(.105, 14, 8);
+  for(const [x, z, s] of [[-.82,-.28,1.10],[.82,-.28,1.10],[-.70,.62,.96],[.70,.62,.96],[0,1.04,.88]]){
+    const pod = new THREE.Mesh(dronePodGeo, materials.panel);
+    pod.position.set(x, .178, z);
+    pod.scale.set(s, .58, s * 1.22);
+    hive.add(addEdges(pod));
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(.034, 8, 6), materials.core);
+    dot.position.set(x, .244, z - .02);
+    hive.add(dot);
+  }
+  addVariantLine(hive, [[-.82,-.28],[-.20,-.08],[0,-.18],[.20,-.08],[.82,-.28]], materials.goldLine, .210);
+  addVariantLine(hive, [[-.70,.62],[-.20,.34],[0,.18],[.20,.34],[.70,.62]], materials.edge, .192);
+  addVariantEngine(hive, -.24, .94, .075, .34, -.050, .90);
+  addVariantEngine(hive, .24, .94, .075, .34, -.050, .90);
+
+  const ultima = makeVariant('om_ultima');
+  addVariantPlate(ultima, [
+    [0,-1.92],[.18,-1.38],[.30,-.50],[.28,.42],
+    [.12,1.24],[0,1.54],[-.12,1.24],[-.28,.42],
+    [-.30,-.50],[-.18,-1.38]
+  ], materials.hull, .180);
+  addVariantSymPlate(ultima, [[.14,-.62],[1.06,-.42],[1.56,.08],[1.18,.36],[.46,.22]], materials.wing, .095, materials.edge, .020);
+  addVariantSymPlate(ultima, [[.30,.02],[1.38,.46],[1.12,.86],[.38,.58]], materials.plate, .064, materials.goldLine, .105);
+  addVariantSymPlate(ultima, [[.18,.62],[.78,1.40],[.38,1.30],[.06,.90]], materials.panel, .058, materials.roseLine, .082);
+  addVariantPlate(ultima, [[0,-2.10],[.074,-1.44],[.060,-.82],[0,-.56],[-.060,-.82],[-.074,-1.44]], materials.plate, .090, materials.goldLine, .092);
+  addVariantPlate(ultima, [[0,-.76],[.12,-.42],[.11,.12],[0,.38],[-.11,.12],[-.12,-.42]], materials.glass, .060, materials.edge, .170);
+  addVariantCore(ultima, 0, -.22, .182, .270);
+  const crown = new THREE.Line(makeRingCircleGeometry(.54, VISUAL_LOW_POWER ? 36 : 54), materials.goldLine);
+  crown.rotation.x = Math.PI / 2;
+  crown.position.set(0, .275, -.20);
+  ultima.add(crown);
+  addVariantLine(ultima, [[0,-2.04],[0,1.42]], materials.goldLine, .205);
+  addVariantLine(ultima, [[.34,-.52],[1.42,.10]], materials.edge, .170);
+  addVariantLine(ultima, [[-.34,-.52],[-1.42,.10]], materials.edge, .170);
+  addVariantLine(ultima, [[.34,.18],[1.10,.74]], materials.goldLine, .185);
+  addVariantLine(ultima, [[-.34,.18],[-1.10,.74]], materials.goldLine, .185);
+  addVariantEngine(ultima, -.34, 1.02, .090, .44, -.045, 1.0);
+  addVariantEngine(ultima, .34, 1.02, .090, .44, -.045, 1.0);
+  addVariantEngine(ultima, 0, 1.18, .075, .38, -.040, .90);
 
   const partVisuals = {};
   const makePartMaterial = () => new THREE.MeshStandardMaterial({
@@ -1909,9 +2293,9 @@ function makeHomePreviewShip(){
   underGlow.rotation.x = -Math.PI / 2;
   underGlow.position.set(0, -.18, .10);
   underGlow.scale.set(1.25, .58, 1);
-  root.add(underGlow);
+  bodyRoot.add(underGlow);
 
-  return {root, core, materials, partVisuals};
+  return {root, core, materials, partVisuals, variantVisuals, animatedCoreVisuals};
 }
 
 function makeRingCircleGeometry(radius, steps){
@@ -11315,7 +11699,7 @@ function createUi(){
       color:#000 !important;
       box-shadow:0 0 18px rgba(255,255,255,.24),0 8px 18px rgba(0,0,0,.36),inset -2px -2px 0 rgba(0,0,0,.34) !important;
     }
-    #barrage-ui .game-hud .game-pause{
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back){
       background-color:var(--hud-white) !important;
       background-image:
         linear-gradient(135deg,transparent 0 8px,var(--hud-white) 8px) !important;
@@ -18325,6 +18709,216 @@ function createUi(){
         font-size:9px !important;
       }
     }
+    /* Garage focus pass: keep the upper field open and concentrate equipment UI near the bottom. */
+    #barrage-ui .garage-screen .page-header,
+    #barrage-ui .garage-screen .showroom-v2 .showroom-copy,
+    #barrage-ui .garage-screen .showroom-part-stack,
+    #barrage-ui .garage-screen .showroom-mode,
+    #barrage-ui .garage-screen .showroom-v2 .showroom-tabs,
+    #barrage-ui .garage-screen .garage-v2 .garage-quick-actions{
+      display:none !important;
+    }
+    #barrage-ui .garage-screen .showroom-stage{
+      overflow:hidden !important;
+    }
+    #barrage-ui .garage-screen .ship-showroom-ui.showroom-v2{
+      left:0 !important;
+      right:0 !important;
+      top:0 !important;
+      width:100% !important;
+      height:392px !important;
+      border:0 !important;
+      background:transparent !important;
+      box-shadow:none !important;
+      clip-path:none !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .garage-screen .ship-showroom-ui.showroom-v2::before{
+      display:none !important;
+    }
+    #barrage-ui .garage-screen .ship-showroom-ui.showroom-v2::after{
+      content:"" !important;
+      position:absolute !important;
+      left:26px !important;
+      right:26px !important;
+      bottom:2px !important;
+      height:2px !important;
+      background:linear-gradient(90deg,transparent,rgba(102,247,255,.62),rgba(242,251,251,.32),transparent) !important;
+      box-shadow:0 0 18px rgba(102,247,255,.22) !important;
+      opacity:.70 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .garage-screen .garage-panel{
+      left:10px !important;
+      right:10px !important;
+      top:auto !important;
+      bottom:74px !important;
+      width:auto !important;
+      height:232px !important;
+      min-height:0 !important;
+      padding:8px !important;
+      border-top:3px solid rgba(242,251,251,.78) !important;
+      background:
+        linear-gradient(118deg,rgba(102,247,255,.095) 0 15%,transparent 15% 84%,rgba(255,255,255,.055) 84% 86%,transparent 86%),
+        rgba(5,7,9,.96) !important;
+      box-shadow:0 -18px 38px rgba(0,0,0,.54),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .garage-screen .garage-v2{
+      height:100% !important;
+      display:grid !important;
+      grid-template-rows:minmax(0,1fr) 52px !important;
+      gap:7px !important;
+      min-height:0 !important;
+    }
+    #barrage-ui .garage-screen .garage-v2 .compact-section{
+      min-height:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .garage-screen .garage-v2 .compact-head{
+      height:26px !important;
+      min-height:26px !important;
+      padding-bottom:5px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:end !important;
+      gap:8px !important;
+    }
+    #barrage-ui .garage-screen .garage-v2 .compact-head b,
+    #barrage-ui .garage-screen .garage-v2 .compact-head span{
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .garage-screen .garage-v2 .compact-head b{
+      font-size:10px !important;
+    }
+    #barrage-ui .garage-screen .garage-v2 .compact-head span{
+      max-width:154px !important;
+      font-size:8px !important;
+      text-align:right !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-board{
+      height:calc(100% - 26px) !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:6px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-column{
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-rows:13px repeat(3,minmax(0,1fr)) !important;
+      gap:4px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-column > b{
+      font-size:8px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-card{
+      min-height:0 !important;
+      height:auto !important;
+      padding:5px !important;
+      display:grid !important;
+      grid-template-rows:7px 13px 9px 22px !important;
+      gap:2px !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-card b,
+    #barrage-ui .garage-screen .garage-slot-card span,
+    #barrage-ui .garage-screen .garage-slot-card small{
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-card b{
+      font-size:8px !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-card span{
+      font-size:10px !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-card small{
+      font-size:8px !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-card select{
+      height:22px !important;
+      min-height:22px !important;
+      padding:0 18px 0 6px !important;
+      font-size:8px !important;
+    }
+    #barrage-ui .garage-screen .garage-empty-slot{
+      min-height:0 !important;
+      height:100% !important;
+      font-size:9px !important;
+    }
+    #barrage-ui .garage-screen .garage-ship-rail{
+      height:26px !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-auto-flow:column !important;
+      grid-auto-columns:minmax(118px,38%) !important;
+      gap:7px !important;
+      overflow-x:auto !important;
+      overflow-y:hidden !important;
+      padding:0 18px 0 0 !important;
+      scrollbar-width:none !important;
+    }
+    #barrage-ui .garage-screen .garage-ship{
+      height:26px !important;
+      min-height:26px !important;
+      padding:0 9px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:6px !important;
+    }
+    #barrage-ui .garage-screen .garage-ship b,
+    #barrage-ui .garage-screen .garage-ship span{
+      margin:0 !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .garage-screen .commerce-bottom-dock{
+      bottom:10px !important;
+      height:52px !important;
+    }
+    #barrage-ui .garage-screen .commerce-bottom-dock button{
+      height:52px !important;
+      min-height:52px !important;
+    }
+    @media (max-height:660px){
+      #barrage-ui .garage-screen .ship-showroom-ui.showroom-v2{
+        height:366px !important;
+      }
+      #barrage-ui .garage-screen .garage-panel{
+        height:224px !important;
+        bottom:70px !important;
+      }
+      #barrage-ui .garage-screen .garage-slot-card{
+        grid-template-rows:7px 12px 8px 21px !important;
+      }
+      #barrage-ui .garage-screen .garage-slot-card select{
+        height:21px !important;
+        min-height:21px !important;
+      }
+      #barrage-ui .garage-screen .commerce-bottom-dock{
+        height:50px !important;
+        bottom:8px !important;
+      }
+      #barrage-ui .garage-screen .commerce-bottom-dock button{
+        height:50px !important;
+        min-height:50px !important;
+      }
+    }
     /* In-run upgrade pass: keep upgrade choices as bottom controls over the playfield. */
     #barrage-ui .game-hud.leveling .game-top,
     #barrage-ui .game-hud.leveling .game-special-slots,
@@ -18765,6 +19359,2100 @@ function createUi(){
         min-height:22px !important;
       }
     }
+    /* Home visual direction v2: sharper hangar geometry, higher text contrast, clearer command hierarchy. */
+    #barrage-ui .home-screen{
+      --hm-bg:#020405;
+      --hm-ink:#06090a;
+      --hm-panel:#081013;
+      --hm-panel-2:#0c1518;
+      --hm-line:rgba(238,247,255,.18);
+      --hm-text:#f7fbff;
+      --hm-muted:rgba(219,231,236,.72);
+      --hm-faint:rgba(219,231,236,.46);
+      --hm-cyan:#80f1ff;
+      --hm-amber:#ffd36a;
+      --hm-rose:#ff6f8b;
+      --hm-shadow:0 18px 42px rgba(0,0,0,.42);
+      color:var(--hm-text) !important;
+      background-color:var(--hm-bg) !important;
+      background-image:
+        linear-gradient(180deg,rgba(128,241,255,.035),transparent 31%,rgba(255,211,106,.035) 74%,transparent),
+        linear-gradient(rgba(128,241,255,.060) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(238,247,255,.036) 1px,transparent 1px) !important;
+      background-size:100% 100%,32px 32px,32px 32px !important;
+    }
+    #barrage-ui .home-screen::before{
+      display:block !important;
+      opacity:.18 !important;
+      background:
+        linear-gradient(118deg,transparent 0 35%,rgba(128,241,255,.16) 35% 35.6%,transparent 35.6% 100%),
+        linear-gradient(62deg,transparent 0 60%,rgba(255,211,106,.10) 60% 60.45%,transparent 60.45% 100%) !important;
+      background-size:100% 100% !important;
+      transform:none !important;
+    }
+    #barrage-ui .home-screen::after{
+      display:block !important;
+      inset:auto 0 0 0 !important;
+      height:224px !important;
+      background:linear-gradient(180deg,transparent,rgba(2,4,5,.86) 31%,#020405 100%) !important;
+      box-shadow:0 -1px 0 rgba(128,241,255,.14),0 -22px 48px rgba(0,0,0,.42) !important;
+    }
+    #barrage-ui .home-hub{
+      padding:0 !important;
+      isolation:isolate !important;
+      background:transparent !important;
+    }
+    #barrage-ui .home-hub::before{
+      content:"" !important;
+      position:absolute !important;
+      z-index:1 !important;
+      left:14px !important;
+      right:14px !important;
+      top:84px !important;
+      height:306px !important;
+      border:1px solid rgba(128,241,255,.22) !important;
+      background:
+        linear-gradient(180deg,rgba(238,247,255,.040),rgba(5,10,12,.18) 48%,rgba(2,4,5,.52)),
+        repeating-linear-gradient(90deg,transparent 0 43px,rgba(238,247,255,.035) 43px 44px) !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 20px),calc(100% - 20px) 100%,0 100%,0 18px) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(128,241,255,.16),0 22px 52px rgba(0,0,0,.36) !important;
+      pointer-events:none !important;
+      transform:none !important;
+    }
+    #barrage-ui .home-hub::after{
+      content:"" !important;
+      position:absolute !important;
+      z-index:2 !important;
+      left:30px !important;
+      right:30px !important;
+      top:372px !important;
+      height:2px !important;
+      background:linear-gradient(90deg,transparent,var(--hm-cyan),rgba(255,211,106,.58),transparent) !important;
+      box-shadow:0 0 18px rgba(128,241,255,.22) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .home-header{
+      position:absolute !important;
+      z-index:8 !important;
+      left:14px !important;
+      right:14px !important;
+      top:12px !important;
+      height:60px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 112px !important;
+      gap:9px !important;
+      pointer-events:none !important;
+      transform:none !important;
+    }
+    #barrage-ui .home-screen .brand-lockup,
+    #barrage-ui .home-screen .wallet-chip,
+    #barrage-ui .home-screen .record-pill,
+    #barrage-ui .home-screen .loadout-panel,
+    #barrage-ui .home-screen .action-tile,
+    #barrage-ui .home-screen .hangar-status,
+    #barrage-ui .home-screen .mission-tag{
+      border-radius:0 !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+      transform:none !important;
+      animation:none !important;
+    }
+    #barrage-ui .home-screen .brand-lockup,
+    #barrage-ui .home-screen .wallet-chip{
+      position:relative !important;
+      height:60px !important;
+      min-height:60px !important;
+      padding:10px 13px !important;
+      border:1px solid var(--hm-line) !important;
+      background:
+        linear-gradient(112deg,rgba(128,241,255,.10) 0 18%,transparent 18%),
+        linear-gradient(180deg,var(--hm-panel-2),var(--hm-panel)) !important;
+      box-shadow:var(--hm-shadow),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .home-screen .brand-lockup{
+      border-left:5px solid var(--hm-cyan) !important;
+    }
+    #barrage-ui .home-screen .brand-lockup::before{
+      content:"" !important;
+      position:absolute !important;
+      left:15px !important;
+      right:14px !important;
+      bottom:10px !important;
+      width:auto !important;
+      height:3px !important;
+      background:linear-gradient(90deg,var(--hm-cyan) 0 44%,var(--hm-amber) 44% 58%,transparent 58%) !important;
+      box-shadow:0 0 16px rgba(128,241,255,.28) !important;
+    }
+    #barrage-ui .home-screen .brand-lockup::after{
+      display:none !important;
+    }
+    #barrage-ui .home-screen .brand-lockup span{
+      display:block !important;
+      max-width:100% !important;
+      color:var(--hm-text) !important;
+      font-size:31px !important;
+      line-height:.92 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:0 0 18px rgba(128,241,255,.24) !important;
+      transform:none !important;
+    }
+    #barrage-ui .home-screen .brand-lockup small{
+      position:absolute !important;
+      right:13px !important;
+      bottom:11px !important;
+      display:block !important;
+      padding:0 !important;
+      color:var(--hm-cyan) !important;
+      background:transparent !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .home-screen .wallet-chip{
+      border-right:5px solid var(--hm-cyan) !important;
+      text-align:right !important;
+    }
+    #barrage-ui .home-screen .wallet-chip b{
+      display:block !important;
+      color:var(--hm-faint) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .home-screen .wallet-chip > .token-value{
+      display:flex !important;
+      justify-content:flex-end !important;
+      align-items:center !important;
+      gap:8px !important;
+      margin-top:7px !important;
+      color:var(--hm-text) !important;
+      font-size:18px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .home-screen .wallet-chip .token-number{
+      display:block !important;
+      margin:0 !important;
+      color:var(--hm-text) !important;
+      font-size:18px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .hangar-visual{
+      position:absolute !important;
+      z-index:3 !important;
+      left:14px !important;
+      right:14px !important;
+      top:84px !important;
+      height:306px !important;
+      border:0 !important;
+      border-radius:0 !important;
+      background:transparent !important;
+      box-shadow:none !important;
+      overflow:hidden !important;
+      pointer-events:auto !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 20px),calc(100% - 20px) 100%,0 100%,0 18px) !important;
+    }
+    #barrage-ui .home-screen .hangar-visual::before{
+      content:"" !important;
+      position:absolute !important;
+      left:36px !important;
+      right:36px !important;
+      bottom:44px !important;
+      height:46px !important;
+      opacity:.38 !important;
+      background:repeating-linear-gradient(90deg,rgba(128,241,255,.18) 0 2px,transparent 2px 18px) !important;
+      transform:perspective(190px) rotateX(62deg) !important;
+    }
+    #barrage-ui .home-screen .hangar-visual::after{
+      content:"" !important;
+      position:absolute !important;
+      left:26px !important;
+      right:26px !important;
+      bottom:28px !important;
+      height:1px !important;
+      opacity:1 !important;
+      background:linear-gradient(90deg,transparent,rgba(128,241,255,.56),transparent) !important;
+      filter:none !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .home-screen .home-dots{
+      position:absolute !important;
+      right:24px !important;
+      top:24px !important;
+      width:92px !important;
+      height:74px !important;
+      opacity:.26 !important;
+      background:radial-gradient(circle,rgba(238,247,255,.78) 0 1.4px,transparent 1.8px) !important;
+      background-size:10px 10px !important;
+      filter:none !important;
+    }
+    #barrage-ui .home-screen .hollow-tape{
+      position:absolute !important;
+      left:-10px !important;
+      right:-10px !important;
+      bottom:12px !important;
+      height:8px !important;
+      opacity:.24 !important;
+      background:repeating-linear-gradient(135deg,var(--hm-cyan) 0 9px,transparent 9px 18px) !important;
+      transform:none !important;
+      animation:none !important;
+    }
+    #barrage-ui .home-screen .hangar-rails{
+      position:absolute !important;
+      left:24px !important;
+      right:24px !important;
+      top:62px !important;
+      bottom:38px !important;
+      opacity:.78 !important;
+      border-top:1px solid rgba(128,241,255,.38) !important;
+      border-bottom:1px solid rgba(238,247,255,.12) !important;
+    }
+    #barrage-ui .home-screen .mission-tag{
+      position:absolute !important;
+      z-index:5 !important;
+      left:32px !important;
+      top:106px !important;
+      min-width:120px !important;
+      height:32px !important;
+      display:grid !important;
+      place-items:center !important;
+      padding:0 30px 0 13px !important;
+      color:var(--hm-ink) !important;
+      border:0 !important;
+      background:linear-gradient(90deg,var(--hm-text),#dffbff) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.55),0 0 18px rgba(128,241,255,.12) !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .home-screen .mission-tag::after{
+      content:"" !important;
+      position:absolute !important;
+      right:11px !important;
+      top:8px !important;
+      width:14px !important;
+      height:14px !important;
+      border-top:3px solid var(--hm-ink) !important;
+      border-right:3px solid var(--hm-ink) !important;
+      transform:rotate(45deg) !important;
+      opacity:.82 !important;
+    }
+    #barrage-ui .home-screen .record-stack{
+      position:absolute !important;
+      z-index:6 !important;
+      left:32px !important;
+      right:auto !important;
+      top:148px !important;
+      width:138px !important;
+      height:auto !important;
+      display:block !important;
+      pointer-events:none !important;
+      transform:none !important;
+    }
+    #barrage-ui .home-screen .record-pill{
+      width:138px !important;
+      height:86px !important;
+      min-height:86px !important;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      grid-template-rows:auto auto 1fr !important;
+      align-items:start !important;
+      gap:5px !important;
+      padding:12px 12px 10px !important;
+      color:var(--hm-text) !important;
+      border:1px solid rgba(238,247,255,.18) !important;
+      border-left:5px solid var(--hm-amber) !important;
+      background:linear-gradient(180deg,rgba(9,17,20,.92),rgba(4,8,10,.80)) !important;
+      box-shadow:0 14px 30px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .home-screen .record-pill b,
+    #barrage-ui .home-screen .record-pill span,
+    #barrage-ui .home-screen .record-pill small{
+      display:block !important;
+      max-width:100% !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-align:left !important;
+    }
+    #barrage-ui .home-screen .record-pill b{
+      color:var(--hm-faint) !important;
+      font-size:9px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .record-pill span{
+      color:var(--hm-cyan) !important;
+      font-size:18px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .record-pill small{
+      align-self:end !important;
+      color:var(--hm-text) !important;
+      font-size:24px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .hangar-status{
+      position:absolute !important;
+      z-index:5 !important;
+      left:30px !important;
+      right:30px !important;
+      top:auto !important;
+      bottom:30px !important;
+      width:auto !important;
+      height:36px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:10px !important;
+      padding:0 12px !important;
+      color:var(--hm-muted) !important;
+      border:1px solid rgba(128,241,255,.22) !important;
+      border-left:4px solid var(--hm-cyan) !important;
+      background:rgba(2,5,6,.70) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.045) !important;
+    }
+    #barrage-ui .home-screen .hangar-status b,
+    #barrage-ui .home-screen .hangar-status span{
+      color:var(--hm-muted) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .home-screen .hangar-status span{
+      color:var(--hm-text) !important;
+      text-align:right !important;
+    }
+    #barrage-ui .home-screen .loadout-panel{
+      position:absolute !important;
+      z-index:7 !important;
+      left:14px !important;
+      right:14px !important;
+      top:auto !important;
+      bottom:224px !important;
+      width:auto !important;
+      height:74px !important;
+      min-height:74px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 96px !important;
+      align-items:center !important;
+      gap:12px !important;
+      padding:11px 13px !important;
+      color:var(--hm-text) !important;
+      border:1px solid rgba(238,247,255,.18) !important;
+      border-top:4px solid var(--hm-cyan) !important;
+      background:linear-gradient(180deg,rgba(11,21,24,.94),rgba(5,10,12,.90)) !important;
+      box-shadow:0 16px 34px rgba(0,0,0,.40),inset 0 1px 0 rgba(255,255,255,.07) !important;
+      overflow:hidden !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .home-screen .loadout-copy{
+      min-width:0 !important;
+      display:block !important;
+    }
+    #barrage-ui .home-screen .loadout-copy b,
+    #barrage-ui .home-screen .loadout-copy h1,
+    #barrage-ui .home-screen .loadout-copy p{
+      display:block !important;
+      max-width:100% !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .home-screen .loadout-copy b{
+      color:var(--hm-cyan) !important;
+      font-size:9px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .loadout-copy h1{
+      margin:7px 0 0 !important;
+      color:var(--hm-text) !important;
+      font-size:23px !important;
+      font-weight:950 !important;
+      text-shadow:0 0 16px rgba(128,241,255,.18) !important;
+    }
+    #barrage-ui .home-screen .loadout-copy p{
+      margin:7px 0 0 !important;
+      color:var(--hm-muted) !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .base-sync{
+      min-width:0 !important;
+      display:grid !important;
+      grid-template-rows:auto 8px auto !important;
+      gap:6px !important;
+      align-content:center !important;
+      text-align:right !important;
+    }
+    #barrage-ui .home-screen .base-sync span,
+    #barrage-ui .home-screen .base-sync strong{
+      color:var(--hm-muted) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .home-screen .base-sync strong{
+      color:var(--hm-text) !important;
+    }
+    #barrage-ui .home-screen .sync-track{
+      height:8px !important;
+      border:1px solid rgba(238,247,255,.12) !important;
+      border-radius:0 !important;
+      background:rgba(238,247,255,.10) !important;
+      clip-path:polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .home-screen .sync-track i{
+      display:block !important;
+      height:100% !important;
+      border-radius:0 !important;
+      background:linear-gradient(90deg,var(--hm-cyan),var(--hm-amber)) !important;
+      box-shadow:0 0 12px rgba(128,241,255,.35) !important;
+    }
+    #barrage-ui .home-screen .home-actions{
+      position:absolute !important;
+      z-index:8 !important;
+      left:14px !important;
+      right:14px !important;
+      top:auto !important;
+      bottom:14px !important;
+      width:auto !important;
+      display:grid !important;
+      grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+      grid-auto-rows:auto !important;
+      gap:8px !important;
+      overflow:visible !important;
+      transform:none !important;
+      translate:0 0 !important;
+      scale:1 !important;
+      animation:none !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui .home-screen .action-tile{
+      position:relative !important;
+      display:grid !important;
+      grid-template-rows:auto auto !important;
+      align-content:center !important;
+      justify-items:start !important;
+      gap:6px !important;
+      width:auto !important;
+      min-width:0 !important;
+      max-width:none !important;
+      height:56px !important;
+      min-height:56px !important;
+      padding:8px 28px 8px 13px !important;
+      grid-column:span 2 !important;
+      color:var(--hm-text) !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      border-top:3px solid var(--tile-accent,var(--accent,var(--hm-cyan))) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--tile-accent,var(--accent,var(--hm-cyan))) 15%,transparent) 0 21%,transparent 21%),
+        linear-gradient(180deg,var(--hm-panel-2),var(--hm-panel)) !important;
+      box-shadow:0 12px 22px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.065) !important;
+      text-align:left !important;
+      flex:unset !important;
+      overflow:hidden !important;
+      transition:filter .14s ease,translate .12s ease,border-color .14s ease,box-shadow .14s ease !important;
+    }
+    #barrage-ui .home-screen .action-tile:nth-child(2){--tile-accent:var(--hm-amber);grid-column:span 2 !important}
+    #barrage-ui .home-screen .action-tile:nth-child(3){--tile-accent:var(--hm-cyan);grid-column:span 2 !important}
+    #barrage-ui .home-screen .action-tile:nth-child(4){--tile-accent:var(--hm-rose);grid-column:span 2 !important}
+    #barrage-ui .home-screen .action-tile:nth-child(5){--tile-accent:#aef7d0;grid-column:span 3 !important}
+    #barrage-ui .home-screen .action-tile:nth-child(6){--tile-accent:#d6deea;grid-column:span 3 !important}
+    #barrage-ui .home-screen .action-start{
+      grid-column:1 / -1 !important;
+      height:70px !important;
+      min-height:70px !important;
+      grid-template-columns:minmax(0,1fr) 34px !important;
+      grid-template-rows:auto auto !important;
+      align-items:center !important;
+      gap:5px 14px !important;
+      padding:0 18px 0 20px !important;
+      color:var(--hm-ink) !important;
+      border:0 !important;
+      border-top:4px solid #f7fbff !important;
+      border-bottom:4px solid var(--hm-cyan) !important;
+      background:
+        linear-gradient(118deg,rgba(255,255,255,.82) 0 18%,transparent 18% 68%,rgba(6,9,10,.12) 68% 72%,transparent 72%),
+        linear-gradient(90deg,#f7fbff 0%,var(--hm-cyan) 100%) !important;
+      box-shadow:7px 7px 0 rgba(0,0,0,.60),0 18px 34px rgba(0,0,0,.38),0 0 30px rgba(128,241,255,.28) !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .home-screen .action-tile::before{
+      content:"" !important;
+      position:absolute !important;
+      left:10px !important;
+      top:10px !important;
+      width:8px !important;
+      height:8px !important;
+      border:2px solid var(--tile-accent,var(--accent,var(--hm-cyan))) !important;
+      border-radius:2px !important;
+      background:transparent !important;
+      opacity:.84 !important;
+      box-shadow:0 0 10px color-mix(in srgb,var(--tile-accent,var(--accent,var(--hm-cyan))) 38%,transparent) !important;
+    }
+    #barrage-ui .home-screen .action-tile::after{
+      content:"" !important;
+      position:absolute !important;
+      right:10px !important;
+      bottom:11px !important;
+      width:20px !important;
+      height:3px !important;
+      background:var(--tile-accent,var(--accent,var(--hm-cyan))) !important;
+      opacity:.78 !important;
+      box-shadow:0 0 12px color-mix(in srgb,var(--tile-accent,var(--accent,var(--hm-cyan))) 42%,transparent) !important;
+      border:0 !important;
+      transform:none !important;
+    }
+    #barrage-ui .home-screen .action-start::before{
+      left:14px !important;
+      top:14px !important;
+      width:11px !important;
+      height:11px !important;
+      border:2px solid var(--hm-ink) !important;
+      border-radius:2px !important;
+      box-shadow:none !important;
+      opacity:.64 !important;
+    }
+    #barrage-ui .home-screen .action-start::after{
+      content:"" !important;
+      position:relative !important;
+      grid-column:2 !important;
+      grid-row:1 / span 2 !important;
+      justify-self:end !important;
+      align-self:center !important;
+      right:auto !important;
+      bottom:auto !important;
+      width:22px !important;
+      height:22px !important;
+      border-top:5px solid var(--hm-ink) !important;
+      border-right:5px solid var(--hm-ink) !important;
+      background:transparent !important;
+      box-shadow:none !important;
+      opacity:.86 !important;
+      transform:rotate(45deg) !important;
+    }
+    #barrage-ui .home-screen .action-tile b,
+    #barrage-ui .home-screen .action-tile span{
+      display:block !important;
+      max-width:100% !important;
+      min-width:0 !important;
+      margin:0 !important;
+      padding:0 !important;
+      line-height:1 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-align:left !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .home-screen .action-tile b{
+      padding-left:15px !important;
+      color:var(--hm-text) !important;
+      font-size:14px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .action-tile span{
+      color:var(--hm-muted) !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .action-start b{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      padding-left:18px !important;
+      color:var(--hm-ink) !important;
+      font-size:33px !important;
+      line-height:.95 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen .action-start span{
+      grid-column:1 !important;
+      grid-row:2 !important;
+      padding-left:18px !important;
+      color:rgba(6,9,10,.68) !important;
+      font-size:11px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .home-screen button.action-tile:hover{
+      border-color:color-mix(in srgb,var(--tile-accent,var(--accent,var(--hm-cyan))) 64%,rgba(238,247,255,.22)) !important;
+      box-shadow:0 14px 26px rgba(0,0,0,.38),0 0 22px color-mix(in srgb,var(--tile-accent,var(--accent,var(--hm-cyan))) 18%,transparent),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      filter:brightness(1.06) !important;
+      translate:0 -1px !important;
+    }
+    #barrage-ui .home-screen button.action-tile:active{
+      translate:0 1px !important;
+      filter:brightness(.96) !important;
+    }
+    @media (max-height: 660px){
+      #barrage-ui .home-screen .home-header{
+        height:54px !important;
+      }
+      #barrage-ui .home-screen .brand-lockup,
+      #barrage-ui .home-screen .wallet-chip{
+        height:54px !important;
+        min-height:54px !important;
+      }
+      #barrage-ui .home-screen .brand-lockup span{
+        font-size:27px !important;
+      }
+      #barrage-ui .home-screen .home-hub::before,
+      #barrage-ui .home-screen .hangar-visual{
+        top:78px !important;
+        height:282px !important;
+      }
+      #barrage-ui .home-screen .mission-tag{
+        top:98px !important;
+      }
+      #barrage-ui .home-screen .record-stack{
+        top:138px !important;
+      }
+      #barrage-ui .home-screen .record-pill{
+        height:74px !important;
+        min-height:74px !important;
+      }
+      #barrage-ui .home-screen .record-pill small{
+        font-size:20px !important;
+      }
+      #barrage-ui .home-screen .loadout-panel{
+        bottom:214px !important;
+        height:66px !important;
+        min-height:66px !important;
+      }
+      #barrage-ui .home-screen .loadout-copy h1{
+        font-size:20px !important;
+      }
+      #barrage-ui .home-screen .action-start{
+        height:62px !important;
+        min-height:62px !important;
+      }
+      #barrage-ui .home-screen .action-start b{
+        font-size:29px !important;
+      }
+      #barrage-ui .home-screen .action-tile{
+        height:50px !important;
+        min-height:50px !important;
+      }
+      #barrage-ui .home-screen .action-tile span{
+        display:none !important;
+      }
+    }
+    /* Home readability repair: keep dark atmosphere behind the controls, not over them. */
+    #barrage-ui .home-screen::before,
+    #barrage-ui .home-screen::after{
+      pointer-events:none !important;
+    }
+    #barrage-ui .home-screen::before{
+      z-index:0 !important;
+      opacity:.12 !important;
+    }
+    #barrage-ui .home-screen::after{
+      z-index:0 !important;
+      height:168px !important;
+      background:linear-gradient(180deg,transparent,rgba(2,4,5,.54) 42%,rgba(2,4,5,.78) 100%) !important;
+      box-shadow:0 -1px 0 rgba(128,241,255,.10) !important;
+    }
+    #barrage-ui .home-screen .home-hub{
+      z-index:1 !important;
+    }
+    #barrage-ui .home-screen .home-header,
+    #barrage-ui .home-screen .record-stack,
+    #barrage-ui .home-screen .loadout-panel,
+    #barrage-ui .home-screen .home-actions{
+      filter:drop-shadow(0 10px 18px rgba(0,0,0,.42)) !important;
+    }
+    #barrage-ui .home-screen .brand-lockup,
+    #barrage-ui .home-screen .wallet-chip,
+    #barrage-ui .home-screen .record-pill,
+    #barrage-ui .home-screen .loadout-panel,
+    #barrage-ui .home-screen .action-tile,
+    #barrage-ui .home-screen .hangar-status{
+      background:
+        linear-gradient(118deg,rgba(128,241,255,.10) 0 16%,transparent 16%),
+        linear-gradient(180deg,#0b171a,#061013) !important;
+      border-color:rgba(238,247,255,.24) !important;
+    }
+    #barrage-ui .home-screen .brand-lockup span{
+      color:#ffffff !important;
+      font-size:32px !important;
+      text-shadow:0 1px 0 #000,0 0 16px rgba(128,241,255,.34) !important;
+    }
+    #barrage-ui .home-screen .brand-lockup small,
+    #barrage-ui .home-screen .loadout-copy b,
+    #barrage-ui .home-screen .record-pill span,
+    #barrage-ui .home-screen .hangar-status span{
+      color:#92f6ff !important;
+    }
+    #barrage-ui .home-screen .wallet-chip .token-number,
+    #barrage-ui .home-screen .record-pill small,
+    #barrage-ui .home-screen .loadout-copy h1,
+    #barrage-ui .home-screen .action-tile b{
+      color:#ffffff !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.90) !important;
+    }
+    #barrage-ui .home-screen .record-stack{
+      left:28px !important;
+      top:146px !important;
+      width:158px !important;
+      z-index:16 !important;
+    }
+    #barrage-ui .home-screen .record-pill{
+      width:158px !important;
+      height:82px !important;
+      min-height:82px !important;
+      padding:11px 12px 10px !important;
+      border-left-color:#ffd36a !important;
+      background:
+        linear-gradient(118deg,rgba(255,211,106,.11) 0 18%,transparent 18%),
+        linear-gradient(180deg,rgba(9,17,20,.98),rgba(4,8,10,.94)) !important;
+    }
+    #barrage-ui .home-screen .record-pill b{
+      color:rgba(238,247,255,.78) !important;
+      font-size:8px !important;
+      overflow:visible !important;
+      text-overflow:clip !important;
+    }
+    #barrage-ui .home-screen .record-pill span{
+      font-size:17px !important;
+    }
+    #barrage-ui .home-screen .record-pill small{
+      font-size:24px !important;
+    }
+    #barrage-ui .home-screen .hangar-status{
+      height:38px !important;
+      background:rgba(3,7,8,.88) !important;
+    }
+    #barrage-ui .home-screen .hangar-status b{
+      color:rgba(238,247,255,.78) !important;
+    }
+    #barrage-ui .home-screen .loadout-panel{
+      bottom:222px !important;
+      height:78px !important;
+      min-height:78px !important;
+      z-index:22 !important;
+      background:
+        linear-gradient(118deg,rgba(128,241,255,.12) 0 14%,transparent 14%),
+        linear-gradient(180deg,#0d1b1f,#071114) !important;
+    }
+    #barrage-ui .home-screen .loadout-copy h1{
+      font-size:24px !important;
+      line-height:1.02 !important;
+    }
+    #barrage-ui .home-screen .loadout-copy p,
+    #barrage-ui .home-screen .base-sync span,
+    #barrage-ui .home-screen .base-sync strong{
+      color:rgba(238,247,255,.78) !important;
+      font-size:10px !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.85) !important;
+    }
+    #barrage-ui .home-screen .home-actions{
+      bottom:14px !important;
+      z-index:28 !important;
+    }
+    #barrage-ui .home-screen .action-start{
+      height:72px !important;
+      min-height:72px !important;
+      color:#041014 !important;
+      border-top-color:#ffffff !important;
+      border-bottom-color:#66f7ff !important;
+      background:
+        linear-gradient(118deg,rgba(255,255,255,.86) 0 18%,transparent 18% 68%,rgba(4,16,20,.12) 68% 72%,transparent 72%),
+        linear-gradient(90deg,#ffffff 0%,#73f3ff 100%) !important;
+      box-shadow:7px 7px 0 rgba(0,0,0,.58),0 18px 34px rgba(0,0,0,.42),0 0 30px rgba(102,247,255,.30) !important;
+    }
+    #barrage-ui .home-screen .action-start b{
+      color:#041014 !important;
+      font-size:34px !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .home-screen .action-start span{
+      color:rgba(4,16,20,.72) !important;
+      font-size:11px !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .home-screen .action-tile{
+      height:58px !important;
+      min-height:58px !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--tile-accent,var(--hm-cyan)) 18%,transparent) 0 22%,transparent 22%),
+        linear-gradient(180deg,#111f24,#091316) !important;
+      border-color:rgba(238,247,255,.26) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .home-screen .action-tile b{
+      font-size:15px !important;
+    }
+    #barrage-ui .home-screen .action-tile span{
+      color:rgba(238,247,255,.76) !important;
+      font-size:10px !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.85) !important;
+    }
+    @media (max-height: 660px){
+      #barrage-ui .home-screen::after{
+        height:154px !important;
+      }
+      #barrage-ui .home-screen .record-stack{
+        top:136px !important;
+      }
+      #barrage-ui .home-screen .record-pill{
+        height:74px !important;
+        min-height:74px !important;
+      }
+      #barrage-ui .home-screen .loadout-panel{
+        bottom:206px !important;
+        height:70px !important;
+        min-height:70px !important;
+      }
+      #barrage-ui .home-screen .action-start{
+        height:64px !important;
+        min-height:64px !important;
+      }
+      #barrage-ui .home-screen .action-start b{
+        font-size:30px !important;
+      }
+      #barrage-ui .home-screen .action-tile{
+        height:52px !important;
+        min-height:52px !important;
+      }
+    }
+    /* Home command readability final: prioritize readable labels over decorative padding. */
+    #barrage-ui .home-screen .home-actions{
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .home-screen .action-tile{
+      width:100% !important;
+      max-width:none !important;
+      min-width:0 !important;
+      flex:none !important;
+      grid-column:auto !important;
+      padding:8px 9px 8px 10px !important;
+      gap:5px !important;
+    }
+    #barrage-ui .home-screen .action-tile:nth-child(2),
+    #barrage-ui .home-screen .action-tile:nth-child(3),
+    #barrage-ui .home-screen .action-tile:nth-child(4),
+    #barrage-ui .home-screen .action-tile:nth-child(5),
+    #barrage-ui .home-screen .action-tile:nth-child(6){
+      width:100% !important;
+      max-width:none !important;
+      flex:none !important;
+      grid-column:auto !important;
+    }
+    #barrage-ui .home-screen .action-tile::before{
+      left:9px !important;
+      top:9px !important;
+      width:7px !important;
+      height:7px !important;
+      border-width:2px !important;
+    }
+    #barrage-ui .home-screen .action-tile::after{
+      right:8px !important;
+      bottom:9px !important;
+      width:14px !important;
+      height:3px !important;
+    }
+    #barrage-ui .home-screen .action-tile b{
+      padding-left:13px !important;
+      font-size:12px !important;
+      letter-spacing:0 !important;
+    }
+    #barrage-ui .home-screen .action-tile span{
+      font-size:9px !important;
+      letter-spacing:0 !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile{
+      grid-column:1 / -1 !important;
+      height:72px !important;
+      min-height:72px !important;
+      padding:0 56px 0 20px !important;
+      color:#041014 !important;
+      border:0 !important;
+      border-top:4px solid #ffffff !important;
+      border-bottom:4px solid #66f7ff !important;
+      background:
+        linear-gradient(118deg,rgba(255,255,255,.86) 0 18%,transparent 18% 68%,rgba(4,16,20,.12) 68% 72%,transparent 72%),
+        linear-gradient(90deg,#ffffff 0%,#73f3ff 100%) !important;
+      box-shadow:7px 7px 0 rgba(0,0,0,.58),0 18px 34px rgba(0,0,0,.42),0 0 30px rgba(102,247,255,.30) !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile::before{
+      left:14px !important;
+      top:14px !important;
+      width:11px !important;
+      height:11px !important;
+      border:2px solid #041014 !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile::after{
+      content:"" !important;
+      position:absolute !important;
+      right:19px !important;
+      top:50% !important;
+      bottom:auto !important;
+      width:22px !important;
+      height:22px !important;
+      border:0 !important;
+      border-top:5px solid #041014 !important;
+      border-right:5px solid #041014 !important;
+      background:transparent !important;
+      box-shadow:none !important;
+      transform:translateY(-50%) rotate(45deg) !important;
+      opacity:.86 !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile b{
+      padding-left:18px !important;
+      color:#041014 !important;
+      font-size:34px !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile span{
+      padding-left:18px !important;
+      color:rgba(4,16,20,.72) !important;
+      font-size:11px !important;
+      text-shadow:none !important;
+    }
+    @media (max-height: 660px){
+      #barrage-ui .home-screen .action-start.action-tile{
+        height:64px !important;
+        min-height:64px !important;
+      }
+      #barrage-ui .home-screen .action-start.action-tile b{
+        font-size:30px !important;
+      }
+    }
+    /* Home option dock: move settings to a gear and give the main commands wider lanes. */
+    #barrage-ui .home-screen .home-header{
+      right:66px !important;
+      grid-template-columns:minmax(0,1fr) minmax(84px,98px) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .home-screen .home-settings-button{
+      position:absolute !important;
+      top:12px !important;
+      right:14px !important;
+      z-index:34 !important;
+      width:44px !important;
+      height:54px !important;
+      min-width:44px !important;
+      min-height:54px !important;
+      display:grid !important;
+      place-items:center !important;
+      padding:0 !important;
+      border:1px solid rgba(238,247,255,.28) !important;
+      border-top:3px solid #92f6ff !important;
+      border-radius:0 !important;
+      background:
+        linear-gradient(135deg,rgba(146,246,255,.16),transparent 46%),
+        linear-gradient(180deg,#0d1b1f,#071114) !important;
+      color:#ffffff !important;
+      font-size:24px !important;
+      line-height:1 !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.86),0 0 14px rgba(146,246,255,.34) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .home-screen .home-settings-button::before{
+      content:"" !important;
+      position:absolute !important;
+      left:7px !important;
+      top:8px !important;
+      width:6px !important;
+      height:6px !important;
+      border:2px solid #92f6ff !important;
+      opacity:.82 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .home-screen .home-settings-button:hover,
+    #barrage-ui .home-screen .home-settings-button:focus-visible{
+      border-color:rgba(146,246,255,.68) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.46),0 0 18px rgba(146,246,255,.24),inset 0 1px 0 rgba(255,255,255,.10) !important;
+      outline:none !important;
+    }
+    #barrage-ui .home-screen .loadout-panel{
+      bottom:236px !important;
+    }
+    #barrage-ui .home-screen .home-actions{
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      gap:8px 9px !important;
+    }
+    #barrage-ui .home-screen .action-tile:nth-child(2),
+    #barrage-ui .home-screen .action-tile:nth-child(3),
+    #barrage-ui .home-screen .action-tile:nth-child(4),
+    #barrage-ui .home-screen .action-tile:nth-child(5){
+      grid-column:auto !important;
+    }
+    #barrage-ui .home-screen .action-tile:nth-child(2){--tile-accent:#ffd36a !important}
+    #barrage-ui .home-screen .action-tile:nth-child(3){--tile-accent:#92f6ff !important}
+    #barrage-ui .home-screen .action-tile:nth-child(4){--tile-accent:#ff6b93 !important}
+    #barrage-ui .home-screen .action-tile:nth-child(5){--tile-accent:#9dffd9 !important}
+    #barrage-ui .home-screen .action-tile{
+      height:60px !important;
+      min-height:60px !important;
+      padding:9px 11px 8px 12px !important;
+    }
+    #barrage-ui .home-screen .action-tile b{
+      font-size:14px !important;
+    }
+    #barrage-ui .home-screen .action-tile span{
+      font-size:10px !important;
+      line-height:1.15 !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile{
+      grid-column:1 / -1 !important;
+      height:74px !important;
+      min-height:74px !important;
+    }
+    @media (max-height: 660px){
+      #barrage-ui .home-screen .home-header{
+        right:62px !important;
+        grid-template-columns:minmax(0,1fr) minmax(78px,92px) !important;
+      }
+      #barrage-ui .home-screen .home-settings-button{
+        right:12px !important;
+        width:42px !important;
+        height:52px !important;
+        min-width:42px !important;
+        min-height:52px !important;
+        font-size:22px !important;
+      }
+      #barrage-ui .home-screen .loadout-panel{
+        bottom:224px !important;
+      }
+      #barrage-ui .home-screen .action-start.action-tile{
+        height:66px !important;
+        min-height:66px !important;
+      }
+      #barrage-ui .home-screen .action-tile{
+        height:56px !important;
+        min-height:56px !important;
+      }
+    }
+    /* UI quality pass: consistent hard-surface panels, clearer hierarchy, richer interaction states. */
+    #barrage-ui{
+      --quality-surface:#081115;
+      --quality-surface-2:#101c22;
+      --quality-line:rgba(238,247,255,.28);
+      --quality-line-hot:rgba(146,246,255,.62);
+      --quality-text:#f7fbff;
+      --quality-muted:rgba(238,247,255,.76);
+      --quality-shadow:0 18px 36px rgba(0,0,0,.48);
+      -webkit-font-smoothing:antialiased;
+      text-rendering:geometricPrecision;
+    }
+    #barrage-ui :is(button,[role="button"],select){
+      touch-action:manipulation;
+    }
+    #barrage-ui :is(button,[role="button"],select):focus-visible{
+      outline:2px solid var(--quality-line-hot) !important;
+      outline-offset:2px !important;
+    }
+    #barrage-ui :is(.page-title,.page-back,.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.upgrade-path-list,.store-offer-card,.store-category-tab,.part-buy-chip,.garage-slot-card,.garage-ship,.settings-row,.ranking-row,.gacha-result,.equipped-card,.cosmetic-row,.upgrade-path .upgrade-card,.showroom-part-chip){
+      border-color:var(--quality-line) !important;
+      background:
+        linear-gradient(120deg,rgba(146,246,255,.10) 0 13%,transparent 13% 76%,rgba(255,211,106,.05) 76% 78%,transparent 78%),
+        linear-gradient(180deg,rgba(16,28,34,.96),rgba(5,9,12,.94)) !important;
+      box-shadow:var(--quality-shadow),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui :is(.commerce-panel,.garage-panel,.gacha-panel,.settings-panel,.ranking-list,.upgrade-path-list)::after{
+      content:"" !important;
+      position:absolute !important;
+      left:12px !important;
+      right:12px !important;
+      top:8px !important;
+      height:1px !important;
+      background:linear-gradient(90deg,transparent,rgba(146,246,255,.66),rgba(255,211,106,.34),transparent) !important;
+      opacity:.72 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .page-title{
+      min-height:66px !important;
+      padding:13px 16px 12px !important;
+      border-left:4px solid var(--quality-line-hot) !important;
+      clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px)) !important;
+    }
+    #barrage-ui .page-title h1{
+      color:var(--quality-text) !important;
+      font-size:24px !important;
+      letter-spacing:0 !important;
+      line-height:1 !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.9),0 0 18px rgba(146,246,255,.22) !important;
+    }
+    #barrage-ui .page-title p{
+      margin-top:6px !important;
+      color:var(--quality-muted) !important;
+      font-size:10px !important;
+      line-height:1.15 !important;
+      letter-spacing:0 !important;
+    }
+    #barrage-ui .page-back{
+      width:58px !important;
+      min-width:58px !important;
+      height:42px !important;
+      min-height:42px !important;
+      border-top:3px solid var(--quality-line-hot) !important;
+      color:var(--quality-text) !important;
+      background:
+        linear-gradient(135deg,rgba(146,246,255,.16),transparent 48%),
+        linear-gradient(180deg,#101c22,#071014) !important;
+      box-shadow:0 12px 22px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .page-header{
+      grid-template-columns:minmax(0,1fr) 56px !important;
+      align-items:stretch !important;
+    }
+    #barrage-ui :is(.page-back,.showroom-back){
+      position:relative !important;
+      inset:auto !important;
+      width:56px !important;
+      min-width:56px !important;
+      height:66px !important;
+      min-height:66px !important;
+      padding:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      overflow:hidden !important;
+      border:1px solid rgba(238,247,255,.34) !important;
+      border-top:3px solid var(--quality-line-hot) !important;
+      border-radius:0 !important;
+      color:transparent !important;
+      font-size:0 !important;
+      line-height:0 !important;
+      background:
+        linear-gradient(132deg,rgba(146,246,255,.30) 0 18%,transparent 18% 100%),
+        linear-gradient(180deg,#13242a,#071014) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.56),0 18px 30px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.10) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+    }
+    #barrage-ui :is(.page-back,.showroom-back)::before{
+      content:"" !important;
+      position:absolute !important;
+      left:21px !important;
+      top:23px !important;
+      width:15px !important;
+      height:15px !important;
+      border-left:4px solid #c8fbff !important;
+      border-bottom:4px solid #c8fbff !important;
+      background:transparent !important;
+      box-shadow:-2px 2px 0 rgba(0,0,0,.42),0 0 14px rgba(146,246,255,.48) !important;
+      opacity:1 !important;
+      transform:rotate(45deg) !important;
+    }
+    #barrage-ui :is(.page-back,.showroom-back)::after{
+      content:"" !important;
+      position:absolute !important;
+      left:22px !important;
+      top:31px !important;
+      width:20px !important;
+      height:4px !important;
+      border:0 !important;
+      background:#c8fbff !important;
+      box-shadow:0 1px 0 rgba(0,0,0,.48),0 0 14px rgba(146,246,255,.48) !important;
+      opacity:1 !important;
+      transform:none !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui :is(.page-back,.showroom-back):hover{
+      border-color:rgba(238,247,255,.54) !important;
+      transform:translateY(-1px) !important;
+      filter:brightness(1.08) !important;
+    }
+    #barrage-ui :is(.store-offer-card,.part-buy-chip,.garage-slot-card,.garage-ship,.settings-row,.ranking-row,.cosmetic-row,.upgrade-path .upgrade-card){
+      position:relative !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui :is(.store-offer-card,.part-buy-chip,.garage-slot-card,.garage-ship,.settings-row,.ranking-row,.cosmetic-row,.upgrade-path .upgrade-card)::before{
+      content:"" !important;
+      position:absolute !important;
+      left:0 !important;
+      top:0 !important;
+      bottom:0 !important;
+      width:3px !important;
+      background:var(--accent,var(--quality-line-hot)) !important;
+      box-shadow:0 0 16px color-mix(in srgb,var(--accent,var(--quality-line-hot)) 42%,transparent) !important;
+      opacity:.82 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui :is(.store-offer-card,.part-buy-chip,.garage-ship,.settings-row,.ranking-row,.cosmetic-row,.upgrade-path .upgrade-card):hover{
+      border-color:rgba(238,247,255,.44) !important;
+      transform:translateY(-1px) !important;
+      box-shadow:0 20px 38px rgba(0,0,0,.52),0 0 22px rgba(146,246,255,.14),inset 0 1px 0 rgba(255,255,255,.10) !important;
+    }
+    #barrage-ui :is(.store-offer-card b,.store-offer-card h3,.part-buy-chip b,.garage-slot-card b,.garage-ship b,.settings-row b,.ranking-row b,.cosmetic-row b,.upgrade-path .upgrade-card b){
+      color:var(--quality-text) !important;
+      letter-spacing:0 !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.84) !important;
+    }
+    #barrage-ui :is(.store-offer-card span,.store-offer-card small,.part-buy-chip span,.part-buy-chip small,.garage-slot-card span,.garage-slot-card small,.garage-ship span,.settings-row small,.ranking-row span,.cosmetic-row small,.upgrade-path .upgrade-card p){
+      color:var(--quality-muted) !important;
+      letter-spacing:0 !important;
+      line-height:1.18 !important;
+    }
+    #barrage-ui .home-screen .home-settings-button{
+      clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px)) !important;
+    }
+    #barrage-ui .home-screen .home-actions .action-tile{
+      border-left:1px solid rgba(238,247,255,.18) !important;
+      border-right:1px solid rgba(238,247,255,.18) !important;
+      clip-path:polygon(0 0,calc(100% - 13px) 0,100% 13px,100% 100%,13px 100%,0 calc(100% - 13px)) !important;
+    }
+    #barrage-ui .home-screen .home-actions .action-tile:not(.action-start){
+      background:
+        linear-gradient(120deg,color-mix(in srgb,var(--tile-accent,var(--hm-cyan)) 21%,transparent) 0 18%,transparent 18% 78%,rgba(255,255,255,.04) 78% 82%,transparent 82%),
+        linear-gradient(180deg,#15252b,#091316) !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile{
+      background:
+        linear-gradient(118deg,rgba(255,255,255,.88) 0 16%,transparent 16% 66%,rgba(4,16,20,.14) 66% 72%,transparent 72%),
+        linear-gradient(90deg,#ffffff 0%,#7af6ff 72%,#c7fff1 100%) !important;
+      box-shadow:7px 7px 0 rgba(0,0,0,.58),0 20px 38px rgba(0,0,0,.46),0 0 34px rgba(102,247,255,.32) !important;
+    }
+    #barrage-ui .home-screen button.action-tile:hover{
+      filter:brightness(1.08) !important;
+    }
+    #barrage-ui .game-hud :is(.game-top-card,.game-bottom,.game-pause,.game-upgrade,.game-chip){
+      border-color:var(--quality-line) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .game-meter-track,
+    #barrage-ui .game-xp-track,
+    #barrage-ui .game-wave-track{
+      background:rgba(255,255,255,.10) !important;
+      border:1px solid rgba(238,247,255,.24) !important;
+      box-shadow:inset 0 0 12px rgba(0,0,0,.42) !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back){
+      width:68px !important;
+      min-width:68px !important;
+      height:42px !important;
+      min-height:42px !important;
+      padding:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      overflow:hidden !important;
+      border:1px solid rgba(238,247,255,.30) !important;
+      border-left:6px solid #c8fbff !important;
+      border-top:3px solid rgba(146,246,255,.74) !important;
+      color:transparent !important;
+      background:
+        linear-gradient(132deg,rgba(146,246,255,.22) 0 22%,transparent 22% 100%),
+        linear-gradient(180deg,#16282e,#071014) !important;
+      box-shadow:0 14px 24px rgba(0,0,0,.42),0 0 18px rgba(146,246,255,.12),inset 0 1px 0 rgba(255,255,255,.10) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span{
+      width:0 !important;
+      height:0 !important;
+      border:0 !important;
+      font-size:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back)::before{
+      content:"" !important;
+      position:absolute !important;
+      left:25px !important;
+      top:12px !important;
+      width:18px !important;
+      height:18px !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#c8fbff 0 33%,transparent 33% 67%,#c8fbff 67% 100%) !important;
+      box-shadow:0 0 14px rgba(146,246,255,.58) !important;
+      opacity:1 !important;
+      transform:none !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back)::after{
+      content:"" !important;
+      position:absolute !important;
+      left:14px !important;
+      right:10px !important;
+      bottom:7px !important;
+      height:2px !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#c8fbff,rgba(200,251,255,.12)) !important;
+      box-shadow:0 0 10px rgba(146,246,255,.40) !important;
+      opacity:.92 !important;
+      transform:none !important;
+      pointer-events:none !important;
+    }
+    /* Mobile portrait aspect pass: make pages follow the live canvas instead of a fixed 390px box. */
+    #barrage-ui .screen,
+    #barrage-ui .hud,
+    #barrage-ui .upgrade-overlay{
+      position:absolute !important;
+      inset:0 !important;
+      left:0 !important;
+      right:0 !important;
+      top:0 !important;
+      bottom:0 !important;
+      width:100% !important;
+      max-width:none !important;
+      height:100% !important;
+      max-height:none !important;
+      transform:none !important;
+      transform-origin:center center !important;
+    }
+    #barrage-ui .screen{
+      overflow:hidden !important;
+    }
+    #barrage-ui .home-screen .home-hub{
+      position:absolute !important;
+      inset:0 !important;
+      left:0 !important;
+      top:0 !important;
+      width:100% !important;
+      height:100% !important;
+      transform:none !important;
+      transform-origin:center center !important;
+    }
+    #barrage-ui .home-screen .home-actions{
+      top:auto !important;
+      height:auto !important;
+      bottom:calc(14px + env(safe-area-inset-bottom)) !important;
+    }
+    #barrage-ui .garage-screen{
+      --garage-edge:clamp(10px,3.4vw,16px);
+      --garage-dock-bottom:calc(8px + env(safe-area-inset-bottom));
+      --garage-dock-h:clamp(52px,6.8vh,58px);
+      --garage-panel-h:clamp(232px,30vh,272px);
+      --garage-panel-bottom:calc(var(--garage-dock-bottom) + var(--garage-dock-h) + 10px);
+    }
+    #barrage-ui .garage-screen .ship-showroom-ui.showroom-v2{
+      left:0 !important;
+      right:0 !important;
+      top:0 !important;
+      width:100% !important;
+      height:calc(100% - var(--garage-panel-h) - var(--garage-dock-h) - 24px) !important;
+      min-height:318px !important;
+      max-height:none !important;
+    }
+    #barrage-ui .garage-screen .ship-showroom-ui.showroom-v2::after{
+      left:calc(var(--garage-edge) + 14px) !important;
+      right:calc(var(--garage-edge) + 14px) !important;
+    }
+    #barrage-ui .garage-screen .garage-panel{
+      left:var(--garage-edge) !important;
+      right:var(--garage-edge) !important;
+      bottom:var(--garage-panel-bottom) !important;
+      width:auto !important;
+      height:var(--garage-panel-h) !important;
+    }
+    #barrage-ui .garage-screen .commerce-bottom-dock{
+      left:var(--garage-edge) !important;
+      right:var(--garage-edge) !important;
+      bottom:var(--garage-dock-bottom) !important;
+      width:auto !important;
+      height:var(--garage-dock-h) !important;
+      grid-template-columns:.82fr 1fr 1fr .82fr !important;
+      gap:clamp(6px,1.8vw,8px) !important;
+    }
+    #barrage-ui .garage-screen .commerce-bottom-dock button{
+      height:var(--garage-dock-h) !important;
+      min-height:var(--garage-dock-h) !important;
+    }
+    @media (min-height:760px) and (max-width:520px){
+      #barrage-ui .garage-screen .garage-slot-card{
+        padding:6px !important;
+        grid-template-rows:8px 14px 10px 24px !important;
+      }
+      #barrage-ui .garage-screen .garage-slot-card select{
+        height:24px !important;
+        min-height:24px !important;
+      }
+      #barrage-ui .garage-screen .garage-ship-rail{
+        height:28px !important;
+      }
+      #barrage-ui .garage-screen .garage-ship{
+        height:28px !important;
+        min-height:28px !important;
+      }
+    }
+    /* Home quality layout v4: one cockpit frame above a fixed mobile command dock. */
+    #barrage-ui .home-screen{
+      --home-edge:clamp(12px,3.7vw,16px);
+      --home-bottom:calc(12px + env(safe-area-inset-bottom));
+      --home-header-h:60px;
+      --home-gear:52px;
+      --home-gap:10px;
+      --home-start-h:clamp(70px,8.9vh,76px);
+      --home-small-h:clamp(56px,7.2vh,60px);
+      --home-actions-h:calc(var(--home-start-h) + var(--home-small-h) + var(--home-small-h) + 16px);
+      --home-loadout-h:clamp(76px,9.4vh,82px);
+      --home-loadout-bottom:calc(var(--home-bottom) + var(--home-actions-h) + 12px);
+      --home-hangar-top:calc(12px + var(--home-header-h) + 12px);
+      --home-hangar-bottom:calc(var(--home-loadout-bottom) + var(--home-loadout-h) + 10px);
+      --home-cyan:#8df5ff;
+      --home-amber:#ffd36a;
+      --home-surface:#071114;
+      --home-surface-2:#101e23;
+      --home-line:rgba(238,247,255,.28);
+      --home-text:#ffffff;
+      --home-soft:rgba(238,247,255,.76);
+    }
+    #barrage-ui .home-screen::after{
+      height:calc(var(--home-actions-h) + var(--home-loadout-h) + 64px) !important;
+      background:linear-gradient(180deg,transparent,rgba(2,4,5,.70) 28%,rgba(2,4,5,.96) 100%) !important;
+      z-index:0 !important;
+    }
+    #barrage-ui .home-screen .home-header{
+      left:var(--home-edge) !important;
+      right:calc(var(--home-edge) + var(--home-gear) + var(--home-gap)) !important;
+      top:12px !important;
+      height:var(--home-header-h) !important;
+      grid-template-columns:minmax(0,1fr) minmax(82px,96px) !important;
+      gap:8px !important;
+      z-index:34 !important;
+    }
+    #barrage-ui .home-screen .brand-lockup,
+    #barrage-ui .home-screen .wallet-chip{
+      height:var(--home-header-h) !important;
+      min-height:var(--home-header-h) !important;
+      background:
+        linear-gradient(112deg,rgba(141,245,255,.14) 0 18%,transparent 18%),
+        linear-gradient(180deg,var(--home-surface-2),var(--home-surface)) !important;
+      border-color:var(--home-line) !important;
+      box-shadow:0 14px 30px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.10) !important;
+    }
+    #barrage-ui .home-screen .brand-lockup span{
+      font-size:clamp(27px,8vw,32px) !important;
+      line-height:.92 !important;
+      color:var(--home-text) !important;
+      text-shadow:0 1px 0 #000,0 0 18px rgba(141,245,255,.34) !important;
+    }
+    #barrage-ui .home-screen .brand-lockup small{
+      right:12px !important;
+      bottom:11px !important;
+      color:var(--home-cyan) !important;
+      font-size:9px !important;
+    }
+    #barrage-ui .home-screen .wallet-chip{
+      padding:10px 10px 9px !important;
+    }
+    #barrage-ui .home-screen .wallet-chip .token-value{
+      margin-top:8px !important;
+      justify-content:flex-end !important;
+    }
+    #barrage-ui .home-screen .wallet-chip .token-number{
+      font-size:17px !important;
+      color:var(--home-text) !important;
+    }
+    #barrage-ui .home-screen .home-settings-button{
+      top:12px !important;
+      right:var(--home-edge) !important;
+      width:var(--home-gear) !important;
+      min-width:var(--home-gear) !important;
+      height:var(--home-header-h) !important;
+      min-height:var(--home-header-h) !important;
+      border:1px solid rgba(238,247,255,.34) !important;
+      border-top:3px solid var(--home-cyan) !important;
+      color:var(--home-text) !important;
+      background:
+        linear-gradient(136deg,rgba(141,245,255,.24) 0 24%,transparent 24%),
+        linear-gradient(180deg,#13242a,#071014) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.56),0 16px 30px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.10) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+    }
+    #barrage-ui .home-screen .home-hub::before,
+    #barrage-ui .home-screen .hangar-visual{
+      left:var(--home-edge) !important;
+      right:var(--home-edge) !important;
+      top:var(--home-hangar-top) !important;
+      bottom:var(--home-hangar-bottom) !important;
+      height:auto !important;
+      min-height:0 !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 20px),calc(100% - 20px) 100%,0 100%,0 18px) !important;
+    }
+    #barrage-ui .home-screen .home-hub::before{
+      background:
+        linear-gradient(180deg,rgba(238,247,255,.052),rgba(5,10,12,.18) 44%,rgba(2,4,5,.62)),
+        repeating-linear-gradient(90deg,transparent 0 42px,rgba(238,247,255,.040) 42px 43px) !important;
+      border-color:rgba(141,245,255,.28) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.09),inset 0 -1px 0 rgba(141,245,255,.20),0 22px 52px rgba(0,0,0,.38) !important;
+    }
+    #barrage-ui .home-screen .home-hub::after{
+      top:auto !important;
+      bottom:calc(var(--home-hangar-bottom) - 2px) !important;
+      left:calc(var(--home-edge) + 18px) !important;
+      right:calc(var(--home-edge) + 18px) !important;
+      height:2px !important;
+      background:linear-gradient(90deg,transparent,var(--home-cyan),rgba(255,211,106,.58),transparent) !important;
+      z-index:4 !important;
+    }
+    #barrage-ui .home-screen .hangar-visual{
+      z-index:5 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .home-screen .hangar-visual::before{
+      left:40px !important;
+      right:40px !important;
+      bottom:60px !important;
+      height:64px !important;
+      opacity:.44 !important;
+      background:
+        repeating-linear-gradient(90deg,rgba(141,245,255,.18) 0 2px,transparent 2px 18px),
+        linear-gradient(180deg,transparent,rgba(141,245,255,.12)) !important;
+    }
+    #barrage-ui .home-screen .hangar-visual::after{
+      left:28px !important;
+      right:28px !important;
+      bottom:43px !important;
+      background:linear-gradient(90deg,transparent,rgba(141,245,255,.70),rgba(255,211,106,.42),transparent) !important;
+    }
+    #barrage-ui .home-screen .home-dots{
+      right:24px !important;
+      top:24px !important;
+      opacity:.22 !important;
+    }
+    #barrage-ui .home-screen .hangar-rails{
+      left:26px !important;
+      right:26px !important;
+      top:62px !important;
+      bottom:48px !important;
+      opacity:.72 !important;
+    }
+    #barrage-ui .home-screen .mission-tag{
+      left:calc(var(--home-edge) + 18px) !important;
+      top:calc(var(--home-hangar-top) + 20px) !important;
+      height:34px !important;
+      min-width:124px !important;
+      z-index:18 !important;
+      background:linear-gradient(90deg,#ffffff,#dffbff) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.56),0 0 18px rgba(141,245,255,.14) !important;
+    }
+    #barrage-ui .home-screen .record-stack{
+      left:calc(var(--home-edge) + 18px) !important;
+      top:calc(var(--home-hangar-top) + 62px) !important;
+      width:160px !important;
+      z-index:18 !important;
+    }
+    #barrage-ui .home-screen .record-pill{
+      width:160px !important;
+      height:86px !important;
+      min-height:86px !important;
+      padding:11px 13px 10px !important;
+      border-left:4px solid var(--home-amber) !important;
+      background:
+        linear-gradient(118deg,rgba(255,211,106,.12) 0 18%,transparent 18%),
+        linear-gradient(180deg,rgba(10,18,21,.98),rgba(4,8,10,.96)) !important;
+      box-shadow:0 16px 30px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .home-screen .record-pill b{
+      color:rgba(238,247,255,.80) !important;
+      font-size:8px !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .home-screen .record-pill span{
+      color:var(--home-cyan) !important;
+      font-size:17px !important;
+    }
+    #barrage-ui .home-screen .record-pill small{
+      color:var(--home-text) !important;
+      font-size:24px !important;
+    }
+    #barrage-ui .home-screen .hangar-status{
+      left:calc(var(--home-edge) + 18px) !important;
+      right:calc(var(--home-edge) + 18px) !important;
+      top:auto !important;
+      bottom:30px !important;
+      height:40px !important;
+      display:flex !important;
+      align-items:center !important;
+      justify-content:space-between !important;
+      padding:0 14px !important;
+      z-index:18 !important;
+      border:1px solid rgba(238,247,255,.20) !important;
+      border-left:3px solid var(--home-cyan) !important;
+      background:rgba(3,7,8,.86) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.07) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+    }
+    #barrage-ui .home-screen .hangar-status b,
+    #barrage-ui .home-screen .hangar-status span{
+      position:static !important;
+      display:block !important;
+      width:auto !important;
+      max-width:48% !important;
+      margin:0 !important;
+      padding:0 !important;
+      opacity:1 !important;
+      transform:none !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.85) !important;
+    }
+    #barrage-ui .home-screen .hangar-status b{
+      color:var(--home-soft) !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .home-screen .hangar-status span{
+      margin-left:auto !important;
+      text-align:right !important;
+      color:var(--home-cyan) !important;
+      font-size:11px !important;
+    }
+    #barrage-ui .home-screen .loadout-panel{
+      left:var(--home-edge) !important;
+      right:var(--home-edge) !important;
+      bottom:var(--home-loadout-bottom) !important;
+      height:var(--home-loadout-h) !important;
+      min-height:var(--home-loadout-h) !important;
+      padding:12px 13px !important;
+      grid-template-columns:minmax(0,1fr) minmax(92px,118px) !important;
+      gap:12px !important;
+      border:1px solid rgba(238,247,255,.28) !important;
+      border-left:4px solid var(--home-cyan) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.14) 0 14%,transparent 14%),
+        linear-gradient(180deg,#0d1b1f,#071114) !important;
+      box-shadow:0 16px 32px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.09) !important;
+      z-index:30 !important;
+    }
+    #barrage-ui .home-screen .loadout-copy{
+      min-width:0 !important;
+    }
+    #barrage-ui .home-screen .loadout-copy b{
+      color:var(--home-cyan) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .home-screen .loadout-copy h1{
+      margin-top:6px !important;
+      color:var(--home-text) !important;
+      font-size:clamp(21px,6.2vw,25px) !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .home-screen .loadout-copy p{
+      margin-top:5px !important;
+      color:var(--home-soft) !important;
+      font-size:10px !important;
+      line-height:1.1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .home-screen .base-sync{
+      min-width:0 !important;
+      align-self:center !important;
+      gap:6px !important;
+    }
+    #barrage-ui .home-screen .base-sync span,
+    #barrage-ui .home-screen .base-sync strong{
+      color:var(--home-soft) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .home-screen .sync-track{
+      height:7px !important;
+      border:1px solid rgba(238,247,255,.26) !important;
+      background:rgba(255,255,255,.10) !important;
+      box-shadow:inset 0 0 10px rgba(0,0,0,.42) !important;
+    }
+    #barrage-ui .home-screen .sync-track i{
+      background:linear-gradient(90deg,var(--home-amber),var(--home-cyan)) !important;
+      box-shadow:0 0 12px rgba(141,245,255,.34) !important;
+    }
+    #barrage-ui .home-screen .home-actions{
+      left:var(--home-edge) !important;
+      right:var(--home-edge) !important;
+      bottom:var(--home-bottom) !important;
+      height:var(--home-actions-h) !important;
+      display:grid !important;
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      grid-template-rows:var(--home-start-h) repeat(2,var(--home-small-h)) !important;
+      gap:8px !important;
+      z-index:36 !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile{
+      grid-column:1 / -1 !important;
+      height:100% !important;
+      min-height:0 !important;
+      padding:0 58px 0 20px !important;
+    }
+    #barrage-ui .home-screen .action-tile{
+      height:100% !important;
+      min-height:0 !important;
+      padding:8px 12px 8px 12px !important;
+      gap:5px !important;
+      border-color:rgba(238,247,255,.28) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--tile-accent,var(--home-cyan)) 19%,transparent) 0 22%,transparent 22%),
+        linear-gradient(180deg,#12242a,#081216) !important;
+      box-shadow:0 13px 24px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .home-screen .action-tile b{
+      padding-left:14px !important;
+      color:var(--home-text) !important;
+      font-size:14px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .home-screen .action-tile span{
+      color:var(--home-soft) !important;
+      font-size:10px !important;
+      line-height:1.1 !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile b{
+      padding-left:18px !important;
+      color:#041014 !important;
+      font-size:clamp(31px,8.9vw,36px) !important;
+      line-height:.94 !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile span{
+      padding-left:18px !important;
+      color:rgba(4,16,20,.72) !important;
+      font-size:11px !important;
+    }
+    @media (max-height:760px){
+      #barrage-ui .home-screen{
+        --home-header-h:54px;
+        --home-start-h:64px;
+        --home-small-h:52px;
+        --home-loadout-h:70px;
+        --home-hangar-top:76px;
+      }
+      #barrage-ui .home-screen .mission-tag{
+        height:30px !important;
+      }
+      #barrage-ui .home-screen .record-stack{
+        top:calc(var(--home-hangar-top) + 54px) !important;
+      }
+      #barrage-ui .home-screen .record-pill{
+        height:74px !important;
+        min-height:74px !important;
+      }
+      #barrage-ui .home-screen .record-pill small{
+        font-size:21px !important;
+      }
+      #barrage-ui .home-screen .action-tile span{
+        font-size:9px !important;
+      }
+    }
+    @media (max-width:370px){
+      #barrage-ui .home-screen{
+        --home-edge:10px;
+        --home-gear:48px;
+      }
+      #barrage-ui .home-screen .home-header{
+        grid-template-columns:minmax(0,1fr) 82px !important;
+      }
+      #barrage-ui .home-screen .record-stack{
+        width:148px !important;
+      }
+      #barrage-ui .home-screen .record-pill{
+        width:148px !important;
+      }
+      #barrage-ui .home-screen .loadout-panel{
+        grid-template-columns:minmax(0,1fr) 92px !important;
+      }
+      #barrage-ui .home-screen .action-tile b{
+        font-size:13px !important;
+      }
+      #barrage-ui .home-screen .action-tile span{
+        font-size:9px !important;
+      }
+    }
+    /* Home placement optimization v5: compact top telemetry, clearer center bay. */
+    #barrage-ui .home-screen{
+      --home-header-h:58px;
+      --home-start-h:clamp(68px,8.6vh,74px);
+      --home-small-h:clamp(54px,6.9vh,58px);
+      --home-actions-h:calc(var(--home-start-h) + var(--home-small-h) + var(--home-small-h) + 14px);
+      --home-loadout-h:clamp(72px,8.8vh,78px);
+      --home-loadout-bottom:calc(var(--home-bottom) + var(--home-actions-h) + 10px);
+      --home-hangar-top:calc(10px + var(--home-header-h) + 12px);
+      --home-hangar-bottom:calc(var(--home-loadout-bottom) + var(--home-loadout-h) + 10px);
+    }
+    #barrage-ui .home-screen .home-header{
+      top:10px !important;
+    }
+    #barrage-ui .home-screen .brand-lockup,
+    #barrage-ui .home-screen .wallet-chip,
+    #barrage-ui .home-screen .home-settings-button{
+      height:var(--home-header-h) !important;
+      min-height:var(--home-header-h) !important;
+    }
+    #barrage-ui .home-screen .brand-lockup{
+      padding:9px 13px !important;
+    }
+    #barrage-ui .home-screen .brand-lockup span{
+      font-size:clamp(26px,7.8vw,30px) !important;
+    }
+    #barrage-ui .home-screen .mission-tag{
+      top:calc(var(--home-hangar-top) + 18px) !important;
+      left:calc(var(--home-edge) + 18px) !important;
+      min-width:118px !important;
+      width:118px !important;
+      height:30px !important;
+      padding:0 24px 0 12px !important;
+      font-size:11px !important;
+      z-index:20 !important;
+    }
+    #barrage-ui .home-screen .mission-tag::after{
+      right:10px !important;
+      top:8px !important;
+      width:11px !important;
+      height:11px !important;
+      border-width:3px !important;
+    }
+    #barrage-ui .home-screen .record-stack{
+      left:auto !important;
+      right:calc(var(--home-edge) + 22px) !important;
+      top:calc(var(--home-hangar-top) + 18px) !important;
+      width:168px !important;
+      height:52px !important;
+      z-index:19 !important;
+    }
+    #barrage-ui .home-screen .record-pill{
+      width:168px !important;
+      height:52px !important;
+      min-height:52px !important;
+      padding:8px 11px 7px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      grid-template-rows:12px 24px !important;
+      gap:3px 9px !important;
+      align-items:center !important;
+      border-left:0 !important;
+      border-right:3px solid var(--home-amber) !important;
+      background:
+        linear-gradient(118deg,rgba(255,211,106,.12) 0 16%,transparent 16%),
+        linear-gradient(180deg,rgba(10,18,21,.98),rgba(4,8,10,.94)) !important;
+    }
+    #barrage-ui .home-screen .record-pill b,
+    #barrage-ui .home-screen .record-pill span,
+    #barrage-ui .home-screen .record-pill small{
+      position:static !important;
+      display:block !important;
+      margin:0 !important;
+      padding:0 !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .home-screen .record-pill b{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      color:rgba(238,247,255,.72) !important;
+      font-size:8px !important;
+    }
+    #barrage-ui .home-screen .record-pill span{
+      grid-column:2 !important;
+      grid-row:1 / span 2 !important;
+      align-self:center !important;
+      color:var(--home-cyan) !important;
+      font-size:17px !important;
+      text-align:right !important;
+    }
+    #barrage-ui .home-screen .record-pill small{
+      grid-column:1 !important;
+      grid-row:2 !important;
+      color:var(--home-text) !important;
+      font-size:22px !important;
+      text-align:left !important;
+    }
+    #barrage-ui .home-screen .hangar-visual::before{
+      bottom:56px !important;
+      height:72px !important;
+    }
+    #barrage-ui .home-screen .hangar-rails{
+      top:54px !important;
+      bottom:44px !important;
+    }
+    #barrage-ui .home-screen .hangar-status{
+      left:calc(var(--home-edge) + 22px) !important;
+      right:calc(var(--home-edge) + 22px) !important;
+      bottom:24px !important;
+      height:34px !important;
+      padding:0 13px !important;
+    }
+    #barrage-ui .home-screen .loadout-panel{
+      padding:11px 13px !important;
+    }
+    #barrage-ui .home-screen .loadout-copy h1{
+      margin-top:5px !important;
+      font-size:clamp(21px,6vw,24px) !important;
+    }
+    #barrage-ui .home-screen .home-actions{
+      gap:7px !important;
+      grid-template-rows:var(--home-start-h) repeat(2,var(--home-small-h)) !important;
+    }
+    #barrage-ui .home-screen .action-start.action-tile b{
+      font-size:clamp(30px,8.5vw,34px) !important;
+    }
+    @media (max-height:760px){
+      #barrage-ui .home-screen{
+        --home-header-h:52px;
+        --home-start-h:62px;
+        --home-small-h:50px;
+        --home-loadout-h:68px;
+        --home-hangar-top:74px;
+      }
+      #barrage-ui .home-screen .record-stack{
+        width:156px !important;
+      }
+      #barrage-ui .home-screen .record-pill{
+        width:156px !important;
+        height:48px !important;
+        min-height:48px !important;
+      }
+      #barrage-ui .home-screen .record-pill span{
+        font-size:15px !important;
+      }
+      #barrage-ui .home-screen .record-pill small{
+        font-size:19px !important;
+      }
+      #barrage-ui .home-screen .hangar-status{
+        height:32px !important;
+        bottom:22px !important;
+      }
+    }
+    @media (max-width:370px){
+      #barrage-ui .home-screen .mission-tag{
+        width:112px !important;
+        min-width:112px !important;
+      }
+      #barrage-ui .home-screen .record-stack{
+        right:calc(var(--home-edge) + 18px) !important;
+        width:150px !important;
+      }
+      #barrage-ui .home-screen .record-pill{
+        width:150px !important;
+        padding-left:9px !important;
+        padding-right:9px !important;
+      }
+      #barrage-ui .home-screen .record-pill span{
+        font-size:14px !important;
+      }
+    }
+    /* Whole UI tone pass v6: unify page panels, docks, and gameplay HUD. */
+    #barrage-ui{
+      --tone-bg:#020405;
+      --tone-surface:#071114;
+      --tone-surface-2:#12242a;
+      --tone-line:rgba(238,247,255,.28);
+      --tone-line-soft:rgba(238,247,255,.16);
+      --tone-cyan:#8df5ff;
+      --tone-amber:#ffd36a;
+      --tone-text:#ffffff;
+      --tone-muted:rgba(238,247,255,.76);
+      --tone-shadow:0 16px 32px rgba(0,0,0,.46);
+    }
+    #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen,.modal-screen){
+      color:var(--tone-text) !important;
+      background-color:var(--tone-bg) !important;
+    }
+    #barrage-ui :is(.page-title,.ranking-list,.settings-panel,.gacha-panel,.upgrade-path-list,.commerce-panel,.garage-panel,.modal-card,.dialog-card,.level-dialog,.basic-dialog){
+      border-color:var(--tone-line) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.10) 0 14%,transparent 14%),
+        linear-gradient(180deg,rgba(18,36,42,.94),rgba(5,10,12,.96)) !important;
+      box-shadow:var(--tone-shadow),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .page-title{
+      border-left:4px solid var(--tone-cyan) !important;
+      border-top:1px solid var(--tone-line) !important;
+    }
+    #barrage-ui .page-title h1,
+    #barrage-ui :is(.ranking-row b,.settings-row b,.gacha-result span,.upgrade-overview-main strong,.upgrade-card span,.market-card h3,.store-offer-card h3,.garage-slot-card b,.garage-ship b){
+      color:var(--tone-text) !important;
+      letter-spacing:0 !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.88),0 0 16px rgba(141,245,255,.16) !important;
+    }
+    #barrage-ui .page-title p,
+    #barrage-ui :is(.ranking-row span,.settings-row small,.gacha-result small,.upgrade-card p,.market-card small,.store-offer-card small,.garage-slot-card small,.garage-ship span){
+      color:var(--tone-muted) !important;
+      letter-spacing:0 !important;
+    }
+    #barrage-ui :is(.page-back,.showroom-back,.commerce-bottom-dock button,.gacha-roll,.store-category-tab,.store-offer-action,.part-buy-chip,.garage-ship,.garage-slot-card select,.settings-row button,.dialog-actions button){
+      border-color:var(--tone-line) !important;
+      border-top-color:var(--tone-cyan) !important;
+      background:
+        linear-gradient(132deg,rgba(141,245,255,.18) 0 21%,transparent 21%),
+        linear-gradient(180deg,var(--tone-surface-2),var(--tone-surface)) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui :is(.commerce-bottom-dock button.active,.commerce-bottom-dock button:disabled,.store-category-tab.active,.store-category-tab:disabled){
+      color:#061014 !important;
+      border-color:transparent !important;
+      background:linear-gradient(90deg,#f7fbff,var(--tone-cyan)) !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .game-hud{
+      --hud-panel:rgba(7,17,20,.92);
+      --hud-panel-2:rgba(18,36,42,.94);
+      --hud-line:rgba(238,247,255,.28);
+      --hud-cyan:#8df5ff;
+      --hud-text:#ffffff;
+      --hud-muted:rgba(238,247,255,.74);
+    }
+    #barrage-ui .game-hud.on :is(.game-pause,.game-score,.game-xpbar,.game-wave,.game-bottom,.game-upgrade,.game-chip){
+      border-color:var(--hud-line) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.12) 0 15%,transparent 15%),
+        linear-gradient(180deg,var(--hud-panel-2),var(--hud-panel)) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      color:var(--hud-text) !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.88) !important;
+    }
+    #barrage-ui .game-hud.on .game-wave{
+      border-left:4px solid var(--hud-cyan) !important;
+      border-top:1px solid var(--hud-line) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+    }
+    #barrage-ui .game-hud.on .game-wave::before{
+      background:linear-gradient(90deg,var(--hud-cyan),rgba(255,211,106,.72),transparent) !important;
+      opacity:.92 !important;
+    }
+    #barrage-ui .game-hud.on .game-wave b,
+    #barrage-ui .game-hud.on .game-score span,
+    #barrage-ui .game-hud.on .game-meter span,
+    #barrage-ui .game-hud.on .game-chip span{
+      color:var(--hud-text) !important;
+    }
+    #barrage-ui .game-hud.on .game-wave span,
+    #barrage-ui .game-hud.on .game-wave small,
+    #barrage-ui .game-hud.on .game-score b,
+    #barrage-ui .game-hud.on .game-meter b,
+    #barrage-ui .game-hud.on .game-chip b{
+      color:var(--hud-muted) !important;
+    }
+    #barrage-ui .game-hud.on :is(.game-xp-track,.game-meter-track,.game-wave-track){
+      border:1px solid rgba(238,247,255,.22) !important;
+      background:rgba(255,255,255,.09) !important;
+      box-shadow:inset 0 0 10px rgba(0,0,0,.44) !important;
+    }
+    #barrage-ui .game-hud.on :is(.game-xp-track i,.game-meter-track i,.game-wave-track i){
+      box-shadow:0 0 14px rgba(141,245,255,.32) !important;
+    }
+    #barrage-ui .modal-screen .dialog-card,
+    #barrage-ui .modal-screen .game-pause{
+      border-color:var(--tone-line) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.10) 0 14%,transparent 14%),
+        linear-gradient(180deg,rgba(18,36,42,.95),rgba(5,10,12,.96)) !important;
+      box-shadow:0 18px 36px rgba(0,0,0,.50),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
       #barrage-ui .brand-lockup,
@@ -18885,6 +21573,7 @@ function renderUi2(){
           <div class="brand-lockup"><span>BARRAGE</span><small>PIPE ASSAULT</small></div>
           <div class="wallet-chip">${tokenAmount(state.tokens, 'wallet-token')}</div>
         </div>
+        <button class="home-settings-button" data-action="settings" aria-label="オプション" title="オプション">&#9881;</button>
         <div class="hangar-visual" data-action="garage" role="button" tabindex="0" aria-label="ガレージを開く">
           <div class="home-dots"></div>
           <div class="hollow-tape"></div>
@@ -18910,10 +21599,9 @@ function renderUi2(){
         <div class="home-actions">
           <button class="action-tile action-start" data-action="start"><b>スタート</b><span>READY</span></button>
           <button class="action-tile" data-action="store" style="--accent:#d8e2ea"><b>ストア</b><span>機体とパーツ</span></button>
-          <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>アップグレード</b><span>ベース強化を開く</span></button>
+          <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>強化</b><span>アップグレード</span></button>
           <button class="action-tile" data-action="gacha" style="--accent:#d8e2ea"><b>ガチャ</b><span>スキンとクロマコート</span></button>
           <button class="action-tile" data-action="ranking" style="--accent:#8eefff"><b>ランキング</b><span>ハイスコア記録</span></button>
-          <button class="action-tile" data-action="settings" style="--accent:#d8e2ea"><b>オプション</b><span>環境とステータス</span></button>
         </div>
       </div>
     </div>
@@ -19005,7 +21693,7 @@ function renderUi2(){
         </div>
       </div>
     </div>
-    <div class="hud game-hud ${state.mode==='play'||state.mode==='levelup'||state.mode==='basicUpgrade'?'on':''} ${state.mode==='levelup'||state.mode==='basicUpgrade'?'leveling':''} ${state.hp / Math.max(1, state.maxHp) < .30 ? 'critical' : ''} ${state.basicPoints > 0 ? 'has-bp' : ''}" data-ref="hud">
+    <div class="hud game-hud ${state.mode==='play'||state.mode==='levelup'||state.mode==='basicUpgrade'?'on':''} ${state.mode==='levelup'||state.mode==='basicUpgrade'?'leveling':''} ${visibleHp() / visibleHpMax() < .30 ? 'critical' : ''} ${state.basicPoints > 0 ? 'has-bp' : ''}" data-ref="hud">
       <div class="game-top">
         <div class="game-top-card game-wave">
           <b>WAVE</b>
@@ -19032,8 +21720,8 @@ function renderUi2(){
         <div class="game-bars">
           <div class="game-meter is-hp" style="--meter-a:#ff3b62;--meter-b:#ffc3ce">
             <b>HP</b>
-            <div class="game-meter-track"><i data-ref="hp" style="width:${Math.max(0, state.hp / state.maxHp * 100)}%"></i></div>
-            <span data-ref="hpText">${Math.ceil(state.hp)}/${state.maxHp}</span>
+            <div class="game-meter-track"><i data-ref="hp" style="width:${hpFillPercent()}%"></i></div>
+            <span data-ref="hpText">${Math.ceil(visibleHp())}/${visibleHpMax()}</span>
           </div>
         </div>
         <div class="game-console">
@@ -19919,7 +22607,9 @@ function updateHud(){
   if(now < state.nextHudAt) return;
   state.nextHudAt = now + HUD_UPDATE_INTERVAL_MS;
   const threshold = xpThreshold();
-  const hudClass = `hud game-hud on${state.hp / Math.max(1, state.maxHp) < .30 ? ' critical' : ''}${state.basicPoints > 0 ? ' has-bp' : ''}`;
+  const hp = visibleHp();
+  const maxHp = visibleHpMax();
+  const hudClass = `hud game-hud on${hp / maxHp < .30 ? ' critical' : ''}${state.basicPoints > 0 ? ' has-bp' : ''}`;
   if(ui.refs.hud && hudCache.hudClass !== hudClass){
     hudCache.hudClass = hudClass;
     ui.refs.hud.className = hudClass;
@@ -19928,8 +22618,8 @@ function updateHud(){
   setHudText('score', formatNumber(state.score));
   setHudText('time', `${waveSeconds()}s`);
   setHudWidth('waveProgress', Math.min(100, state.waveTime / waveDuration() * 100));
-  setHudWidth('hp', Math.max(0, state.hp / state.maxHp * 100));
-  setHudText('hpText', `${Math.max(0, Math.ceil(state.hp))}/${state.maxHp}`);
+  setHudWidth('hp', hp / maxHp * 100);
+  setHudText('hpText', `${Math.ceil(hp)}/${maxHp}`);
   setHudWidth('xp', Math.min(100, state.xp / threshold * 100));
   setHudText('xpLabel', state.level);
   setHudText('xpText', `${Math.floor(state.xp)}/${threshold}`);
@@ -20015,6 +22705,9 @@ function setMode(mode){
   if(state.mode === mode && !uiDirty) return;
   const previousMode = state.mode;
   state.mode = mode;
+  if(previousMode !== mode){
+    lastVisualFrameAt = 0;
+  }
   if(previousMode !== mode && (previousMode === 'store' || mode === 'store')){
     markHomeShipPartsDirty();
   }
@@ -20045,9 +22738,10 @@ function startRun(){
   state.runTokenGain = 0;
   state.runTime = 0;
   state.kills = 0;
-  state.maxHp = hpMax();
+  state.maxHp = safeHpMax();
   state.hp = state.maxHp;
   state.roll = 0;
+  state.prevRoll = 0;
   state.rollVel = 0;
   player.root.position.x = 0;
   camera.position.set(0, CAMERA_BASE_Y, CAMERA_BASE_Z);
@@ -20291,7 +22985,8 @@ function loop(now){
   }
   if(state.mode === 'home' || state.mode === 'store' || state.mode === 'garage'){
     const idleFrameMs = state.mode === 'home' ? HOME_IDLE_FRAME_MS : SHOWROOM_IDLE_FRAME_MS;
-    const minFrameMs = homeShipDrag.pointer === null && Math.abs(homeShipDrag.velocity) < .06
+    const previewAnimating = homePreviewMotion.transition > .02;
+    const minFrameMs = homeShipDrag.pointer === null && Math.abs(homeShipDrag.velocity) < .06 && !previewAnimating
       ? idleFrameMs
       : 16;
     const waitMs = minFrameMs - (now - lastVisualFrameAt);
@@ -20327,6 +23022,7 @@ function updatePlay(dt, t){
   const speedLevel = statLevel('speed');
   const moveMult = loadoutMult('speed');
   const targetVel = state.input * CONTROL_TURN_SPEED * (1 + speedLevel * .035) * moveMult;
+  state.prevRoll = state.roll;
   state.rollVel += (targetVel - state.rollVel) * Math.min(1, dt * CONTROL_RESPONSE * (1 + speedLevel * .02 + loadoutBuff('speed') * .55));
   state.roll += state.rollVel * dt;
   state.waveTime += dt;
@@ -20347,8 +23043,9 @@ function updatePlay(dt, t){
 
   state.firing -= dt;
   if(state.firing <= 0){
-    const fireBoost = (1 + statLevel('fireRate') * .085) * barrelFireBoost() * loadoutMult('fireRate');
-    const fireInterval = Math.max(.052, (.18 - Math.min(.08, state.wave * .0014)) / fireBoost);
+    const fireBoost = (1 + statLevel('fireRate') * FIRE_RATE_STAT_STEP) * barrelFireBoost() * loadoutMult('fireRate');
+    const waveReduction = Math.min(FIRE_INTERVAL_WAVE_REDUCTION_MAX, state.wave * FIRE_INTERVAL_WAVE_REDUCTION);
+    const fireInterval = Math.max(FIRE_INTERVAL_MIN, (FIRE_INTERVAL_BASE - waveReduction) / fireBoost);
     let volleys = 0;
     while(state.firing <= 0 && volleys < 3){
       fireShot();
@@ -20364,8 +23061,7 @@ function updatePlay(dt, t){
     state.spawnTimer = spawnInterval();
   }
 
-  updateBullets(dt);
-  updateEnemies(dt, t);
+  updateCombat(dt, t);
   syncBulletInstances();
   if(state.hp <= 0){
     saveRun();
@@ -20391,6 +23087,7 @@ function applySceneVisualMode(mode){
   }else if(mode === 'play'){
     homeShip.root.visible = false;
     player.root.visible = true;
+    syncPlayerShipVariant();
     player.root.position.y = PLAYER_Y;
     player.root.position.z = PLAYER_Z;
     player.root.scale.setScalar(PLAYER_VISUAL_SCALE);
@@ -20404,10 +23101,57 @@ function applySceneVisualMode(mode){
   }
 }
 
+function homePreviewModeKey(mode = state.mode){
+  if(mode === 'store') return 'store';
+  if(mode === 'garage') return 'garage';
+  return 'home';
+}
+
+function homePreviewTargetPose(mode = state.mode){
+  return HOME_PREVIEW_POSES[homePreviewModeKey(mode)];
+}
+
+function previewDamp(current, target, dt, speed){
+  return current + (target - current) * Math.min(1, 1 - Math.exp(-dt * speed));
+}
+
+function syncHomePreviewMotionTarget(targetPose, dt){
+  if(!homePreviewMotion.initialized){
+    Object.assign(homePreviewMotion, targetPose, {
+      initialized: true,
+      mode: targetPose.key,
+      transition: 0,
+      direction: 1
+    });
+    camera.position.set(targetPose.cameraX, targetPose.cameraY, targetPose.cameraZ);
+    cameraHomeTarget.set(targetPose.targetX, targetPose.targetY, targetPose.targetZ);
+    return;
+  }
+  if(homePreviewMotion.mode !== targetPose.key){
+    homePreviewMotion.direction = Math.sign((HOME_PREVIEW_ORDER[targetPose.key] ?? 0) - (HOME_PREVIEW_ORDER[homePreviewMotion.mode] ?? 0)) || 1;
+    homePreviewMotion.mode = targetPose.key;
+    homePreviewMotion.transition = 1;
+    homeShipDrag.velocity += homePreviewMotion.direction * .16;
+  }
+  const poseSpeed = homePreviewMotion.transition > .02 ? HOME_PREVIEW_POSE_SPEED : HOME_PREVIEW_POSE_SPEED * 1.25;
+  for(const key of HOME_PREVIEW_SHIP_KEYS){
+    homePreviewMotion[key] = previewDamp(homePreviewMotion[key], targetPose[key], dt, poseSpeed);
+  }
+  for(const key of HOME_PREVIEW_CAMERA_KEYS){
+    homePreviewMotion[key] = previewDamp(homePreviewMotion[key], targetPose[key], dt, HOME_PREVIEW_CAMERA_SPEED);
+  }
+  for(const key of HOME_PREVIEW_TARGET_KEYS){
+    homePreviewMotion[key] = previewDamp(homePreviewMotion[key], targetPose[key], dt, HOME_PREVIEW_TARGET_SPEED);
+  }
+  homePreviewMotion.transition *= Math.pow(.08, dt);
+  if(homePreviewMotion.transition < .004) homePreviewMotion.transition = 0;
+}
+
 function updateHomePreview(dt, t){
   applySceneVisualMode('home');
   syncHomeShipParts();
-  const showroomMode = state.mode === 'store' || state.mode === 'garage';
+  const targetPose = homePreviewTargetPose();
+  syncHomePreviewMotionTarget(targetPose, dt);
   ringPhase = (ringPhase + 6.5 * dt) % PIPE_RING_LOOP;
   for(let i=0;i<stage.starLayers.length;i++){
     const layer = stage.starLayers[i];
@@ -20429,26 +23173,38 @@ function updateHomePreview(dt, t){
     homeShipDrag.velocity *= Math.pow(.12, dt);
     homeShipDrag.pitch += (HOME_PREVIEW_REST_PITCH - homeShipDrag.pitch) * Math.min(1, dt * .42);
   }
+  const pose = homePreviewMotion;
+  const transitionArc = Math.sin(Math.min(1, pose.transition) * Math.PI);
+  const transitionBank = transitionArc * pose.direction;
   homeShip.root.position.set(
-    (showroomMode ? 2.06 : 1.04) + Math.sin(t * .65) * .06,
-    (showroomMode ? 4.60 : 3.12) + Math.sin(t * 1.15) * .07,
-    showroomMode ? -8.58 : -8.42
+    pose.shipX + Math.sin(t * .65) * .06 + transitionBank * .14,
+    pose.shipY + Math.sin(t * 1.15) * .07 + transitionArc * .12,
+    pose.shipZ + transitionArc * .18
   );
-  homeShip.root.rotation.x = HOME_PREVIEW_FACE_ROTATION_OFFSET + (showroomMode ? -.88 : -.92) + homeShipDrag.pitch * .72 + Math.sin(t * .55) * .012;
-  homeShip.root.rotation.y = Math.PI + (showroomMode ? .24 : .06) + homeShipDrag.yaw * .86 + Math.sin(t * .42) * .012;
-  homeShip.root.rotation.z = (showroomMode ? -.10 : -.01) + Math.sin(t * .80) * .016;
-  homeShip.root.scale.setScalar((showroomMode ? 1.86 : 1.98) + Math.sin(t * 1.2) * .030);
-  homeShip.core.scale.setScalar(1.08 + Math.sin(t * 9) * .12);
+  homeShip.root.rotation.x = HOME_PREVIEW_FACE_ROTATION_OFFSET + pose.shipPitch + homeShipDrag.pitch * .72 + Math.sin(t * .55) * .012 - transitionArc * .025;
+  homeShip.root.rotation.y = Math.PI + pose.shipYaw + homeShipDrag.yaw * .86 + Math.sin(t * .42) * .012 + transitionBank * .055;
+  homeShip.root.rotation.z = pose.shipRoll + Math.sin(t * .80) * .016 + transitionBank * .075;
+  homeShip.root.scale.setScalar(pose.shipScale + Math.sin(t * 1.2) * .030 + transitionArc * .025);
+  const corePulse = 1.08 + Math.sin(t * 9) * .12;
+  for(const coreVisual of homeShip.animatedCoreVisuals || [homeShip.core]){
+    coreVisual.scale.setScalar(corePulse);
+  }
 
   ambient.intensity += (1.7 - ambient.intensity) * Math.min(1, dt * 4.8);
   keyLight.intensity += (22 - keyLight.intensity) * Math.min(1, dt * 4.8);
   rimLight.intensity += (9.5 - rimLight.intensity) * Math.min(1, dt * 4.8);
   keyLight.position.set(3.8, -2.4, 6.8);
   rimLight.position.set(6.4, 2.8, -7.6);
-  camera.position.x += ((showroomMode ? -.42 : -.36) - camera.position.x) * Math.min(1, dt * 5.2);
-  camera.position.y += ((showroomMode ? CAMERA_BASE_Y + 1.70 : CAMERA_BASE_Y + 2.35) - camera.position.y) * Math.min(1, dt * 5.2);
-  camera.position.z += ((showroomMode ? 9.92 : 9.72) - camera.position.z) * Math.min(1, dt * 5.2);
-  cameraHomeTarget.set(showroomMode ? .34 : .25, showroomMode ? .12 : .02, showroomMode ? -8.55 : -8.42);
+  camera.position.set(
+    pose.cameraX - transitionBank * .10,
+    pose.cameraY + transitionArc * .08,
+    pose.cameraZ + transitionArc * .06
+  );
+  cameraHomeTarget.set(
+    pose.targetX + transitionBank * .045,
+    pose.targetY + transitionArc * .045,
+    pose.targetZ
+  );
   camera.lookAt(cameraHomeTarget);
 }
 
@@ -20479,7 +23235,10 @@ function updateStage(dt, t){
   const bank = -state.input * PLAYER_BANK_SCALE - state.rollVel * .06;
   player.root.rotation.z += (bank - player.root.rotation.z) * Math.min(1, dt * 5.8);
   player.root.position.x += ((state.input * PLAYER_DRIFT_SCALE) - player.root.position.x) * Math.min(1, dt * 5.6);
-  player.core.scale.setScalar(1 + Math.sin(t * 12) * .10);
+  const playerCorePulse = 1 + Math.sin(t * 12) * .10;
+  for(const coreVisual of player.animatedCoreVisuals || [player.core]){
+    coreVisual.scale.setScalar(playerCorePulse);
+  }
 
   if(state.shake > 0){
     camera.position.x = (Math.random() - .5) * state.shake * .08;
@@ -20492,14 +23251,32 @@ function updateStage(dt, t){
   camera.lookAt(0, CAMERA_LOOK_Y, CAMERA_LOOK_Z);
 }
 
+function updateCombat(dt, t){
+  if(!bullets.length && !enemies.length) return;
+  const steps = Math.max(1, Math.ceil(dt / COMBAT_STEP_MAX));
+  let elapsed = 0;
+  for(let stepIndex=0;stepIndex<steps;stepIndex++){
+    const stepDt = dt / steps;
+    elapsed += stepDt;
+    const syncVisuals = stepIndex === steps - 1;
+    const stepTime = t - dt + elapsed;
+    updateBullets(stepDt);
+    updateEnemies(stepDt, stepTime, syncVisuals);
+  }
+}
+
 function updateBullets(dt){
   if(!bullets.length) return;
   for(let i=bullets.length-1;i>=0;i--){
     const b = bullets[i];
     b.prevZ = b.z;
     b.prevAngle = b.angle;
+    b.prevRadial = b.radial ?? BULLET_TARGET_RADIAL;
+    b.prevVisualRadial = b.visualRadial ?? b.muzzleRadial ?? PLAYER_RADIAL;
     b.z -= b.speed * dt;
     b.life -= dt;
+    b.radial = b.targetRadial ?? BULLET_TARGET_RADIAL;
+    b.visualRadial = b.prevVisualRadial + (b.radial - b.prevVisualRadial) * Math.min(1, dt * BULLET_VISUAL_RADIAL_SETTLE);
     if(b.angleVelocity){
       const nextAngle = normalizeAngle(b.angle + b.angleVelocity * dt);
       const spread = signedAngleDelta(nextAngle, b.originAngle ?? b.angle);
@@ -20520,7 +23297,7 @@ function updateBullets(dt){
   bulletsDirty = true;
 }
 
-function updateEnemies(dt, t){
+function updateEnemies(dt, t, syncVisuals = true){
   const stasisLevel = specialUpgradeLevel('stasisAura');
   for(let i=enemies.length-1;i>=0;i--){
     const e = enemies[i];
@@ -20542,14 +23319,19 @@ function updateEnemies(dt, t){
       e.z += e.speed * dt * stasisSlow;
       e.angle += Math.sin(t * e.wobble + e.phase) * dt * e.drift;
     }
+    if(e.recoilVel){
+      e.z -= e.recoilVel * dt;
+      e.recoilVel *= Math.pow(.08, dt);
+      if(e.recoilVel < .035) e.recoilVel = 0;
+    }
     e.sin = Math.sin(e.angle);
     e.cos = Math.cos(e.angle);
     const rollDistance = angleDistance(e.angle, state.roll);
     const visible = rollDistance < ENEMY_VISIBLE_ARC || (e.boss && e.z <= BOSS_SIGHT_Z);
     e.root.visible = visible;
     e.hitFlash = Math.max(0, (e.hitFlash || 0) - dt * 5.8);
-    if(visible){
-      setPipePositionFromTrig(e.root, e.sin, e.cos, e.z, e.boss ? .68 : .88);
+    if(syncVisuals && visible){
+      setPipePositionFromTrig(e.root, e.sin, e.cos, e.z, e.radial ?? (e.boss ? .68 : .88));
       const presence = enemyDepthPresence(e);
       e.root.scale.setScalar(enemyVisualScale(e, t, presence) * (1 + (e.hitFlash || 0) * .20));
       setEnemyOpacity(e.root, enemyVisualOpacity(e, presence));
@@ -20563,25 +23345,30 @@ function updateEnemies(dt, t){
 
     if(bullets.length && hitEnemyWithBullets(e, i)) continue;
 
-    const nearPlayer = e.z > PLAYER_Z - .40;
-    const danger = rollDistance < (e.boss ? .40 : .22 + e.radius * .09);
+    const nearPlayer = e.z > PLAYER_Z - enemyPlayerZWindow(e);
     if(nearPlayer){
-      if(danger){
+      const playerImpact = enemyPlayerImpact(e);
+      if(playerImpact){
         const counterDamage = collisionDamageAmount(e);
         if(counterDamage > 0){
           e.hp -= counterDamage;
-          triggerEnemyHit(e, 0xffd36a, e.boss ? 3 : 2);
+          triggerEnemyHit(e, 0xffd36a, e.boss ? 3 : 2, playerImpact);
           if(e.hp <= 0){
             defeatEnemy(e, i);
             continue;
           }
         }
-        damagePlayer(e.damage);
+        damagePlayer(e.damage, playerImpact);
       }
+      if(playerImpact || enemyPassedPlayer(e)){
+        removeEnemy(i, false);
+        continue;
+      }
+    }
+    if(e.z > PIPE_Z_NEAR + 4){
       removeEnemy(i, false);
       continue;
     }
-    if(e.z > PIPE_Z_NEAR + 4) removeEnemy(i, false);
   }
 }
 
@@ -20592,6 +23379,7 @@ function hitEnemyWithBullets(enemy, enemyIndex){
     const impact = bulletEnemyImpact(enemy, b);
     if(!impact) continue;
     enemy.hp -= b.damage;
+    enemy.recoilVel = Math.max(enemy.recoilVel || 0, enemy.boss ? 2.2 : Math.min(8.2, 4.8 + b.damage * .022));
     triggerEnemyHit(enemy, b.crit ? 0xffd36a : enemy.type.color, b.crit ? 2 : 1, {
       angle: impact.angle,
       z: impact.z,
@@ -20612,36 +23400,107 @@ function hitEnemyWithBullets(enemy, enemyIndex){
 }
 
 function bulletEnemyImpact(enemy, bullet){
-  const zPad = enemyHitZWindow(enemy);
-  const anglePad = enemyHitAngleWindow(enemy);
   const bulletStartZ = bullet.prevZ ?? bullet.z;
+  const bulletStartAngle = bullet.prevAngle ?? bullet.angle;
+  const bulletStartRadial = bulletCollisionPathRadial(bullet.prevRadial ?? bullet.radial);
   const enemyStartZ = enemy.prevZ ?? enemy.z;
-  const relStart = bulletStartZ - enemyStartZ;
-  const relEnd = bullet.z - enemy.z;
-  const relDelta = relEnd - relStart;
-  let t = Math.abs(relEnd) < Math.abs(relStart) ? 1 : 0;
-  if(Math.abs(relDelta) > HIT_SWEEP_EPSILON){
-    t = clamp(-relStart / relDelta, 0, 1);
-  }
-  const closestZ = relStart + relDelta * t;
-  if(Math.abs(closestZ) > zPad) return null;
+  const enemyStartAngle = enemy.prevAngle ?? enemy.angle;
+  const enemyRadial = enemy.radial ?? (enemy.boss ? .68 : .88);
+  const hitRadius = enemyCollisionRadius(enemy) + bulletCollisionRadius(bullet);
+  if(!zRangesOverlap(bulletStartZ, bullet.z, enemyStartZ, enemy.z, hitRadius + .24)) return null;
 
-  const bulletAngle = interpolateAngle(bullet.prevAngle ?? bullet.angle, bullet.angle, t);
-  const enemyAngle = interpolateAngle(enemy.prevAngle ?? enemy.angle, enemy.angle, t);
-  const angularDistance = Math.abs(signedAngleDelta(enemyAngle, bulletAngle));
-  if(angularDistance > anglePad) return null;
+  const bulletEndRadial = bulletCollisionPathRadial(bullet.radial);
+  const bx0 = pipeX(bulletStartAngle, bulletStartRadial);
+  const by0 = pipeY(bulletStartAngle, bulletStartRadial);
+  const bz0 = bulletStartZ;
+  const bx1 = pipeX(bullet.angle, bulletEndRadial);
+  const by1 = pipeY(bullet.angle, bulletEndRadial);
+  const bz1 = bullet.z;
 
-  const bulletZ = bulletStartZ + (bullet.z - bulletStartZ) * t;
-  const enemyZ = enemyStartZ + (enemy.z - enemyStartZ) * t;
+  const ex0 = pipeX(enemyStartAngle, enemyRadial);
+  const ey0 = pipeY(enemyStartAngle, enemyRadial);
+  const ez0 = enemyStartZ;
+  const ex1 = pipeX(enemy.angle, enemyRadial);
+  const ey1 = pipeY(enemy.angle, enemyRadial);
+  const ez1 = enemy.z;
+  const impact = sweptPointImpact(
+    bx0, by0, bz0, bx1, by1, bz1,
+    ex0, ey0, ez0, ex1, ey1, ez1,
+    hitRadius
+  );
+  if(!impact) return null;
+
+  const bulletZ = bulletStartZ + (bullet.z - bulletStartZ) * impact.t;
+  const enemyZ = enemyStartZ + (enemy.z - enemyStartZ) * impact.t;
+  const hitX = (impact.ax + impact.bx) * .5;
+  const hitY = (impact.ay + impact.by) * .5;
   return {
-    angle: enemyAngle + signedAngleDelta(enemyAngle, bulletAngle) * .42,
+    angle: pipeAngleFromXY(hitX, hitY),
     z: (bulletZ + enemyZ) * .5,
-    t
+    t: impact.t
   };
 }
 
 function interpolateAngle(from, to, t){
   return normalizeAngle(from + signedAngleDelta(to, from) * clamp(t, 0, 1));
+}
+
+function pipeX(angle, radial){
+  return Math.sin(angle) * PIPE_RADIUS * radial;
+}
+
+function pipeY(angle, radial){
+  return -Math.cos(angle) * PIPE_RADIUS * radial;
+}
+
+function pipeAngleFromXY(x, y){
+  if(Math.abs(x) + Math.abs(y) < 0.00001) return 0;
+  return normalizeAngle(Math.atan2(x, -y));
+}
+
+function zRangesOverlap(a0, a1, b0, b1, pad){
+  const minA = Math.min(a0, a1);
+  const maxA = Math.max(a0, a1);
+  const minB = Math.min(b0, b1);
+  const maxB = Math.max(b0, b1);
+  return maxA >= minB - pad && maxB >= minA - pad;
+}
+
+function sweptPointImpact(ax0, ay0, az0, ax1, ay1, az1, bx0, by0, bz0, bx1, by1, bz1, radius){
+  const rx0 = ax0 - bx0;
+  const ry0 = ay0 - by0;
+  const rz0 = az0 - bz0;
+  const rdx = (ax1 - ax0) - (bx1 - bx0);
+  const rdy = (ay1 - ay0) - (by1 - by0);
+  const rdz = (az1 - az0) - (bz1 - bz0);
+  const denom = rdx * rdx + rdy * rdy + rdz * rdz;
+  const t = denom > HIT_SWEEP_EPSILON ? clamp(-(rx0 * rdx + ry0 * rdy + rz0 * rdz) / denom, 0, 1) : 0;
+  const rx = rx0 + rdx * t;
+  const ry = ry0 + rdy * t;
+  const rz = rz0 + rdz * t;
+  if(rx * rx + ry * ry + rz * rz > radius * radius) return null;
+  return {
+    t,
+    ax: ax0 + (ax1 - ax0) * t,
+    ay: ay0 + (ay1 - ay0) * t,
+    az: az0 + (az1 - az0) * t,
+    bx: bx0 + (bx1 - bx0) * t,
+    by: by0 + (by1 - by0) * t,
+    bz: bz0 + (bz1 - bz0) * t
+  };
+}
+
+function enemyCollisionRadius(enemy){
+  const radius = Math.max(.2, enemy.radius || 1);
+  return enemy.boss ? radius * 1.06 : radius * .94;
+}
+
+function bulletCollisionRadius(bullet){
+  return BULLET_COLLISION_RADIUS * (bullet.crit ? 1.15 : 1) * (bullet.pierce > 0 ? 1.06 : 1);
+}
+
+function bulletCollisionPathRadial(radial){
+  return Math.max(BULLET_TARGET_RADIAL, Number(radial) || BULLET_TARGET_RADIAL);
 }
 
 function enemyHitZWindow(enemy){
@@ -20652,6 +23511,37 @@ function enemyHitZWindow(enemy){
 function enemyHitAngleWindow(enemy){
   if(enemy.boss) return .32 + BULLET_HIT_ANGLE_PAD;
   return clamp(.105 + enemy.radius * .040 + BULLET_HIT_ANGLE_PAD, .14, .19);
+}
+
+function enemyPlayerImpact(enemy){
+  const zPad = enemyPlayerZWindow(enemy);
+  const startZ = enemy.prevZ ?? enemy.z;
+  if(!zRangesOverlap(startZ, enemy.z, PLAYER_Z, PLAYER_Z, zPad)) return null;
+  const dz = enemy.z - startZ;
+  const t = Math.abs(dz) > HIT_SWEEP_EPSILON
+    ? clamp((PLAYER_Z - startZ) / dz, 0, 1)
+    : 0;
+  const impactZ = startZ + dz * t;
+  if(Math.abs(impactZ - PLAYER_Z) > zPad) return null;
+  const enemyAngle = interpolateAngle(enemy.prevAngle ?? enemy.angle, enemy.angle, t);
+  const playerAngle = interpolateAngle(state.prevRoll ?? state.roll, state.roll, t);
+  const angleGap = Math.abs(signedAngleDelta(enemyAngle, playerAngle));
+  if(angleGap > enemyPlayerAngleWindow(enemy)) return null;
+  return {angle: enemyAngle, z: impactZ, t};
+}
+
+function enemyPlayerZWindow(enemy){
+  if(enemy.boss) return 1.35;
+  return clamp(.48 + (enemy.radius || 1) * .18, .58, .92);
+}
+
+function enemyPlayerAngleWindow(enemy){
+  if(enemy.boss) return .34;
+  return clamp(.125 + (enemy.radius || 1) * .045, .17, .27);
+}
+
+function enemyPassedPlayer(enemy){
+  return enemy.z > PLAYER_Z + enemyPlayerZWindow(enemy);
 }
 
 function defeatEnemy(enemy, enemyIndex){
@@ -20666,18 +23556,18 @@ function defeatEnemy(enemy, enemyIndex){
   removeEnemy(enemyIndex, true);
 }
 
-function damagePlayer(amount){
+function damagePlayer(amount, impact = null){
   if(amount <= 0) return;
   const evade = evasionChance();
   if(evade > 0 && Math.random() < evade){
     state.shake = Math.max(state.shake, .24);
-    burst(state.roll, PLAYER_Z - .3, 0x1ed6ff, 3);
+    burst(impact?.angle ?? state.roll, impact?.z ?? PLAYER_Z - .3, 0x1ed6ff, 3);
     return;
   }
   const taken = Math.max(1, Math.ceil(amount * defenseMultiplier() * specialDefenseMultiplier()));
   state.hp -= taken;
   state.shake = Math.max(state.shake, .62);
-  burst(state.roll, PLAYER_Z - .3, 0xff3b62, 4);
+  burst(impact?.angle ?? state.roll, impact?.z ?? PLAYER_Z - .3, 0xff3b62, 4);
 }
 
 function fireShot(){
@@ -20722,7 +23612,12 @@ function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedM
     cos: Math.cos(angle),
     z: PLAYER_Z - .72,
     prevZ: PLAYER_Z - .72,
-    radial,
+    radial: BULLET_TARGET_RADIAL,
+    prevRadial: BULLET_TARGET_RADIAL,
+    visualRadial: radial,
+    prevVisualRadial: radial,
+    muzzleRadial: radial,
+    targetRadial: BULLET_TARGET_RADIAL,
     speed: speed * speedMult,
     damage: Math.ceil(baseDamage * damageMult * (crit ? critDamageMult() : 1)),
     crit,
@@ -20769,6 +23664,7 @@ function spawnEnemy(offset = 0){
     damage: Math.ceil(type.damage * (1 + state.wave * .018)),
     speed: 12.5 + Math.min(8.5, state.wave * .11) + Math.random() * 2.2,
     radius: type.radius * ENEMY_HITBOX_MULT,
+    radial:.88,
     baseScale: ENEMY_SIZE_MULT,
     phase: Math.random() * TAU,
     drift: .026 + Math.random() * .030,
@@ -20784,7 +23680,7 @@ function spawnEnemy(offset = 0){
   enemy.spawnZ = enemy.z;
   enemies.push(enemy);
   enemyRoot.add(root);
-  setPipePositionFromTrig(root, enemy.sin, enemy.cos, enemy.z, .88);
+  setPipePositionFromTrig(root, enemy.sin, enemy.cos, enemy.z, enemy.radial);
   applyEnemyVisual(enemy, 0);
 }
 
@@ -20803,6 +23699,7 @@ function spawnBoss(){
     hp: Math.ceil((220 + state.wave * 38) * Math.pow(1.035, state.wave - 10)),
     damage: 42 + Math.floor(state.wave * 1.2),
     radius:1.4 * ENEMY_HITBOX_MULT,
+    radial:.68,
     baseScale:BOSS_VISUAL_SCALE,
     speed:0,
     phase:Math.random() * TAU,
@@ -20818,7 +23715,7 @@ function spawnBoss(){
   enemy.spawnZ = enemy.z;
   enemies.push(enemy);
   enemyRoot.add(root);
-  setPipePositionFromTrig(root, enemy.sin, enemy.cos, enemy.z, .68);
+  setPipePositionFromTrig(root, enemy.sin, enemy.cos, enemy.z, enemy.radial);
   applyEnemyVisual(enemy, 0);
 }
 
@@ -20837,6 +23734,7 @@ function spawnBossShard(boss){
       damage: Math.ceil(18 + state.wave * .4),
       speed: 24 + Math.min(8, state.wave * .08),
       radius:.42 * ENEMY_HITBOX_MULT,
+      radial:.88,
       baseScale:1.20 * ENEMY_SIZE_BOOST,
       phase:Math.random() * TAU,
       drift:.018,
@@ -20852,7 +23750,7 @@ function spawnBossShard(boss){
     shard.spawnZ = shard.z;
     enemies.push(shard);
     enemyRoot.add(root);
-    setPipePositionFromTrig(root, shard.sin, shard.cos, shard.z, .88);
+    setPipePositionFromTrig(root, shard.sin, shard.cos, shard.z, shard.radial);
     applyEnemyVisual(shard, 0);
   }
 }
@@ -21151,9 +24049,10 @@ function syncBulletInstances(){
   }
   for(let i=0;i<count;i++){
     const b = bullets[i];
+    const renderRadial = b.visualRadial ?? b.muzzleRadial ?? b.radial;
     bulletMatrix.makeTranslation(
-      b.sin * PIPE_RADIUS * b.radial,
-      -b.cos * PIPE_RADIUS * b.radial,
+      b.sin * PIPE_RADIUS * renderRadial,
+      -b.cos * PIPE_RADIUS * renderRadial,
       b.z
     );
     bulletMesh.setMatrixAt(i, bulletMatrix);
