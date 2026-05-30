@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.js';
-import { getRankingRows, upsertScore } from './features/ranking.js';
+import { RANKING_KEY, getRankingRows, upsertScore } from './features/ranking.js';
 
 const canvas = document.getElementById('canvas');
 const W = 390;
@@ -14,7 +14,7 @@ const PIPE_RING_LOOP = 304;
 const PLAYER_Z = -2.15;
 const PLAYER_RADIAL = .36;
 const PLAYER_Y = -PIPE_RADIUS * PLAYER_RADIAL;
-const PLAYER_VISUAL_SCALE = 1.56;
+const PLAYER_VISUAL_SCALE = 1.38;
 const CAMERA_BASE_Y = 2.65;
 const CAMERA_BASE_Z = 11.8;
 const CAMERA_LOOK_Y = -PIPE_RADIUS * .77;
@@ -47,12 +47,13 @@ const PLAYER_DRIFT_SCALE = .12;
 const LOW_POWER_DEVICE = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
 const SMALL_SCREEN = Math.min(window.innerWidth || W, window.innerHeight || H) <= 520;
 const VISUAL_LOW_POWER = LOW_POWER_DEVICE || SMALL_SCREEN;
+const ENEMY_RENDER_ARC = VISUAL_LOW_POWER ? 2.05 : ENEMY_VISIBLE_ARC;
 const HIGH_DETAIL_CANVAS_MODES = new Set(['home', 'store', 'garage']);
-const RENDER_PLAY_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.65 : 1.35) : SMALL_SCREEN ? 2.05 : 1.60;
-const RENDER_SHOWROOM_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 2.05 : 1.70) : SMALL_SCREEN ? 2.45 : 1.80;
-const RENDER_PLAY_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1050000 : 1050000) : SMALL_SCREEN ? 1350000 : 1600000;
-const RENDER_SHOWROOM_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1550000 : 1300000) : SMALL_SCREEN ? 2200000 : 1850000;
-const RENDER_QUALITY_MIN = LOW_POWER_DEVICE ? .82 : .88;
+const RENDER_PLAY_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.45 : 1.25) : SMALL_SCREEN ? 1.82 : 1.55;
+const RENDER_SHOWROOM_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.90 : 1.60) : SMALL_SCREEN ? 2.25 : 1.75;
+const RENDER_PLAY_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 820000 : 950000) : SMALL_SCREEN ? 1080000 : 1500000;
+const RENDER_SHOWROOM_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1300000 : 1150000) : SMALL_SCREEN ? 1850000 : 1700000;
+const RENDER_QUALITY_MIN = LOW_POWER_DEVICE ? .72 : .80;
 const RENDER_QUALITY_DROP_FRAME_MS = LOW_POWER_DEVICE ? 23.5 : 21.5;
 const RENDER_QUALITY_RAISE_FRAME_MS = LOW_POWER_DEVICE ? 16.5 : 15.2;
 const RENDER_QUALITY_SAMPLE_MS = 900;
@@ -63,17 +64,17 @@ const HIDDEN_UI_FRAME_MS = 240;
 const PASSIVE_3D_FRAME_MS = 140;
 const MAX_ENEMIES = LOW_POWER_DEVICE ? 24 : 30;
 const MAX_BULLETS = LOW_POWER_DEVICE ? 72 : 128;
-const MAX_PARTICLES = VISUAL_LOW_POWER ? 36 : 48;
+const MAX_PARTICLES = VISUAL_LOW_POWER ? 28 : 42;
 const ENEMY_POOL_LIMIT = LOW_POWER_DEVICE ? 24 : 34;
-const ENEMY_DETAIL_Z = VISUAL_LOW_POWER ? -74 : -92;
+const ENEMY_DETAIL_Z = VISUAL_LOW_POWER ? -60 : -84;
 const PLAYER_HIT_FLASH_DECAY = 3.2;
 const PLAYER_HIT_CORE_DECAY = 5.0;
 const HIT_CONFIRM_DECAY = 1.9;
 const BULLET_HIT_Z_PAD = .22;
 const BULLET_HIT_ANGLE_PAD = .020;
 const HIT_SWEEP_EPSILON = 0.0001;
-const COMBAT_STEP_MAX = 1 / 120;
-const FIRE_INTERVAL_BASE = .28;
+const COMBAT_STEP_MAX = VISUAL_LOW_POWER ? 1 / 90 : 1 / 120;
+const FIRE_INTERVAL_BASE = .30;
 const FIRE_INTERVAL_MIN = .09;
 const FIRE_INTERVAL_WAVE_REDUCTION = .0011;
 const FIRE_INTERVAL_WAVE_REDUCTION_MAX = .06;
@@ -81,7 +82,10 @@ const FIRE_RATE_STAT_STEP = .065;
 const BULLET_TARGET_RADIAL = .86;
 const BULLET_VISUAL_RADIAL_SETTLE = 10;
 const BULLET_VISUAL_Z_SETTLE = 14;
+const BULLET_VISUAL_ANGLE_SETTLE = 4.8;
 const BULLET_MUZZLE_Z = PLAYER_Z - PLAYER_VISUAL_SCALE * 1.82;
+const BULLET_MUZZLE_STRAIGHT_DISTANCE = 6.4;
+const BULLET_GROUPING_RAMP_DISTANCE = 8.2;
 const BULLET_COLLISION_RADIUS = .42;
 const ENEMY_SIZE_BOOST = 2.05;
 const ENEMY_SIZE_MULT = 1.62 * ENEMY_SIZE_BOOST;
@@ -90,9 +94,30 @@ const BOSS_ATTACK_HIT_RADIUS = .30 * ENEMY_HITBOX_MULT;
 const BOSS_ATTACK_PLAYER_Z_WINDOW = .46;
 const BOSS_ATTACK_PLAYER_ANGLE_WINDOW = .105;
 const BOSS_ATTACK_VISUAL_SCALE = 1.22 * ENEMY_SIZE_BOOST;
-const ENEMY_HP_MULT = 1.18;
-const BOSS_HP_MULT = 1.12;
-const BOSS_SHARD_HP_MULT = 1.08;
+const BOSS_ATTACK_LANE_SPACING = .68;
+const BOSS_ATTACK_LANE_JITTER = .022;
+const BOSS_ATTACK_FIRE_INTERVAL = 1.90;
+const BOSS_CHASE_TURN_SPEED = .42;
+const BOSS_CHASE_CATCHUP_TURN = .48;
+const BOSS_CHASE_LEAD_TIME = .22;
+const BOSS_CHASE_WOBBLE = .025;
+const PLAYER_HURTBOX_LANE_RADIAL = .72;
+const PLAYER_HURTBOX_LATERAL = .48;
+const PLAYER_HURTBOX_Z_BASE = .34;
+const ENEMY_HP_MULT = 1.34;
+const BOSS_HP_MULT = 1.24;
+const BOSS_SHARD_HP_MULT = 1.18;
+const ENEMY_HP_BAR_VISIBLE_TIME = 4.15;
+const ENEMY_HP_BAR_FADE_TIME = .78;
+const ENEMY_HP_BAR_GHOST_DECAY = .58;
+const ENEMY_HP_BAR_PULSE_DECAY = 3.4;
+const ENEMY_HP_BAR_MIN_ALPHA = .78;
+const ENEMY_HP_BAR_DETAIL_LEVEL = VISUAL_LOW_POWER ? 1 : 2;
+const AFTERBURNER_PLAY_BASE = 1.08;
+const AFTERBURNER_PREVIEW_BASE = .78;
+const AFTERBURNER_DETAIL_LEVEL = VISUAL_LOW_POWER ? 1 : 2;
+const AFTERBURNER_UPDATE_INTERVAL = VISUAL_LOW_POWER ? 1 / 30 : 0;
+const PARTICLE_SYNC_INTERVAL = VISUAL_LOW_POWER ? 1 / 30 : 0;
 const STAGE_Z_SEGMENTS = VISUAL_LOW_POWER ? 28 : 34;
 const STAGE_ARC_SEGMENTS = VISUAL_LOW_POWER ? 32 : 38;
 const STAGE_RING_COUNT = VISUAL_LOW_POWER ? 22 : 28;
@@ -109,6 +134,8 @@ const TOKEN_WAVE_BONUS = 4;
 const TOKEN_KILL_BONUS = .45;
 const TOKEN_TIME_BONUS = .08;
 const START_TOKENS = 1000;
+const SKILL_REROLL_BASE_COST = 45;
+const SKILL_REROLL_COST_STEP = 35;
 
 const COLORS = {
   bg: 0x02040a,
@@ -210,7 +237,7 @@ const SPECIAL_UPGRADE_DEFS = [
   { id:'barrelMultishot', family:'barrel', name:'マルチショット', icon:'MS', color:COLORS.cyan, text:'弾丸を扇状に拡散。武装の射撃型を決める', max:1, tag:'武装' },
   { id:'barrelDouble', family:'barrel', name:'ダブルバレル', icon:'DB', color:COLORS.gold, text:'銃身を増設。Lv.3でクアッドバレル', max:3, tag:'武装' },
   { id:'barrelGatling', family:'barrel', name:'ガトリング', icon:'GT', color:COLORS.orange, text:'連射速度を大幅上昇、単発火力は低下', max:1, tag:'武装' },
-  { id:'barrelShotgun', family:'barrel', name:'ショットガン', icon:'SG', color:COLORS.rose, text:'短射程の散弾。至近距離火力が非常に高い', max:1, tag:'武装' },
+  { id:'barrelShotgun', family:'barrel', name:'ショットガン', icon:'SG', color:COLORS.rose, text:'一点から散る短射程の散弾。至近距離火力が非常に高い', max:1, tag:'武装' },
   { id:'barrelSniper', family:'barrel', name:'スナイパー', icon:'SR', color:COLORS.violet, text:'低連射の高速高威力弾を撃つ', max:1, tag:'武装' },
   { id:'powerShot', family:'payload', name:'パワーショット', icon:'PW', color:COLORS.rose, text:'全弾の威力を上げる高出力弾。純火力型', max:5, tag:'弾種' },
   { id:'pierceShot', family:'payload', name:'貫通弾', icon:'PR', color:COLORS.jade, text:'単発威力は少し落ちるが敵を貫通する', max:3, tag:'弾種' },
@@ -251,7 +278,7 @@ const SPECIAL_ICON_SVG = {
   default: '<svg viewBox="0 0 24 24"><path d="M12 3.2 20.8 12 12 20.8 3.2 12 12 3.2Z"/><path d="M12 7.2v9.6"/><path d="M7.2 12h9.6"/></svg>'
 };
 const SHIP_DEFS = [
-  { id:'nu_arc', name:'NU-3D アーク', role:'標準ロールフレーム', cost:0, color:'#8eefff', partPower:1.00, slots:{barrel:1, innerFrame:1, drone:0}, mult:{hp:.90, defense:.94, damage:.82, fireRate:.70, speed:.96} },
+  { id:'nu_arc', name:'NU-3D アーク', role:'標準ロールフレーム', cost:0, color:'#8eefff', partPower:1.00, slots:{barrel:1, innerFrame:1, drone:0}, mult:{hp:.90, defense:.94, damage:.82, fireRate:.44, speed:.96} },
   { id:'vx_razor', name:'VX-03 レイザー', role:'強襲バレル機', cost:650, color:'#ff5d7e', partPower:1.15, slots:{barrel:2, innerFrame:1, drone:0}, mult:{hp:.94, defense:.98, damage:1.05, fireRate:1.08, speed:1.02} },
   { id:'bg_bulwark', name:'BG-12 バルワーク', role:'重装インナーフレーム機', cost:1100, color:'#d8e2ea', partPower:1.12, slots:{barrel:1, innerFrame:3, drone:0}, mult:{hp:1.16, defense:1.10, damage:.96, fireRate:.94, speed:.92} },
   { id:'dr_hive', name:'DR-07 ハイヴ', role:'ドローン管制機', cost:1650, color:'#9dffd9', partPower:1.06, slots:{barrel:1, innerFrame:1, drone:3}, mult:{hp:1.02, defense:1.02, damage:.98, fireRate:1, speed:.98, xp:1.04, token:1.03} },
@@ -392,9 +419,26 @@ const DOUBLE_BARREL_OFFSETS = [
   [-.065, 0, .065],
   [-.095, -.032, .032, .095]
 ];
-const SHOTGUN_OFFSETS = [-.18, -.09, 0, .09, .18];
+const SHOTGUN_SCATTER_SPREADS = [-.30, -.20, -.105, -.025, .07, .18, .29];
+const SHOTGUN_SCATTER_JITTER = .055;
+const SHOTGUN_SCATTER_LIMIT = .34;
+const GATLING_MUZZLE_JITTER = .055;
+const GATLING_SCATTER_MIN = .055;
+const GATLING_SCATTER_MAX = .135;
 const MULTISHOT_SPREADS = [-.24, 0, .24];
 const MULTISHOT_SPREAD_LIMIT = 0;
+const BULLET_GROUPING_MIN = .16;
+const BULLET_GROUPING_MAX = .92;
+const BULLET_GROUPING_STAT_BONUS_CAP = .12;
+const BULLET_GROUPING_MOVE_JITTER = .024;
+const BULLET_GROUPING_PROFILES = {
+  default: {grouping:.44, jitter:.058},
+  double: {grouping:.38, jitter:.070},
+  sniper: {grouping:.74, jitter:.026},
+  multishot: {grouping:.32, jitter:.084},
+  gatling: {grouping:.20, jitter:.124},
+  shotgun: {grouping:.16, jitter:.134}
+};
 const HOME_PART_SLOT_LAYOUTS = {
   barrel: {
     1: [1],
@@ -425,7 +469,9 @@ const state = {
   xp: 0,
   level: 1,
   skillPoints: 0,
+  skillRerolls: 0,
   basicPoints: 0,
+  basicPickerOpen: false,
   basicPointMeter: 0,
   tokens: 0,
   runTokenGain: 0,
@@ -461,10 +507,13 @@ const state = {
   garage: freshGarageState(),
   cosmetics: freshCosmeticState(),
   settings: freshSettingsState(),
+  settingsReturnMode: 'home',
   lastGacha: null,
   nextHudAt: 0,
   storeCategory: 'ship',
-  storePreviewShipId: null
+  storePreviewShipId: null,
+  deathTimer: 0,
+  deathSaved: false
 };
 
 const save = loadSave();
@@ -502,8 +551,9 @@ const pipeRoot = new THREE.Group();
 const enemyRoot = new THREE.Group();
 const bulletRoot = new THREE.Group();
 const particleRoot = new THREE.Group();
+const enemyHpBarRoot = new THREE.Group();
 world.add(pipeRoot, enemyRoot, bulletRoot, particleRoot);
-scene.add(world);
+scene.add(world, enemyHpBarRoot);
 
 const ambient = new THREE.AmbientLight(0x557799, 1.25);
 scene.add(ambient);
@@ -535,6 +585,8 @@ const bulletGlowMatrix = new THREE.Matrix4();
 const particleMatrix = new THREE.Matrix4();
 const particleColor = new THREE.Color();
 const enemyFlashColor = new THREE.Color(0xffffff);
+const enemyHpBarWorldPosition = new THREE.Vector3();
+const enemyHpBarScreenUp = new THREE.Vector3();
 const cameraHomeTarget = new THREE.Vector3();
 let ringPhase = 0;
 let uiDirty = true;
@@ -544,6 +596,7 @@ let sceneVisualMode = '';
 let lastVisualFrameAt = 0;
 let bulletsDirty = true;
 let particlesDirty = true;
+let particleSyncClock = 0;
 let cosmeticBuffCache = null;
 let loadoutBuffCache = null;
 let loadoutMultCache = null;
@@ -553,7 +606,7 @@ let uiMotionTimer = 0;
 const uiBoundsCache = {left:null, top:null, width:null, height:null, scale:null};
 const canvasBoundsCache = {left:0, top:0, width:W, height:H, scale:1};
 let canvasVisibilityState = null;
-const CANVAS_VISIBLE_MODES = new Set(['home', 'store', 'garage', 'play', 'levelup', 'pause', 'dead']);
+const CANVAS_VISIBLE_MODES = new Set(['home', 'store', 'garage', 'play', 'levelup', 'pause', 'crash', 'dead']);
 const HOME_PREVIEW_REST_PITCH = -.18;
 const HOME_PREVIEW_PITCH_MIN = -.48;
 const HOME_PREVIEW_PITCH_MAX = .22;
@@ -674,8 +727,12 @@ function applyUiPreviewMode(){
   const preview = new URLSearchParams(window.location.search).get('ui');
   if(!preview) return;
   if(preview === 'basic'){
-    state.mode = 'basicUpgrade';
+    state.mode = 'play';
     state.basicPoints = Math.max(state.basicPoints, 8);
+    state.basicPickerOpen = true;
+    state.maxHp = safeHpMax();
+    state.hp = state.maxHp;
+    state.spawnTimer = 999;
   }else if(preview === 'special'){
     state.mode = 'levelup';
     state.skillPoints = Math.max(state.skillPoints, 1);
@@ -718,7 +775,32 @@ function applyUiPreviewMode(){
       boss.spawnZ = BOSS_SIGHT_Z;
       setPipePositionFromTrig(boss.root, boss.sin, boss.cos, boss.z, boss.radial);
       applyEnemyVisual(boss, 0);
+      revealEnemyHpBar(boss, boss.maxHp, Math.max(1, Math.floor(boss.maxHp * .18)));
       spawnBossShard(boss);
+    }
+  }else if(preview === 'bossChase'){
+    state.mode = 'play';
+    applySceneVisualMode('play');
+    state.wave = Math.max(state.wave, 10);
+    state.maxHp = safeHpMax();
+    state.hp = state.maxHp;
+    state.roll = .92;
+    state.prevRoll = .92;
+    state.rollVel = 0;
+    state.input = 0;
+    clearRunObjects();
+    spawnBoss();
+    const boss = enemies.find(enemy => enemy.boss);
+    if(boss){
+      boss.z = BOSS_TARGET_Z;
+      boss.prevZ = boss.z;
+      boss.angle = -.72;
+      boss.prevAngle = boss.angle;
+      boss.sin = Math.sin(boss.angle);
+      boss.cos = Math.cos(boss.angle);
+      boss.spawnZ = BOSS_SIGHT_Z;
+      setPipePositionFromTrig(boss.root, boss.sin, boss.cos, boss.z, boss.radial);
+      applyEnemyVisual(boss, 0);
     }
   }else if(preview === 'hit'){
     state.mode = 'play';
@@ -738,7 +820,9 @@ function applyUiPreviewMode(){
       target.prevAngle = target.angle;
       target.sin = Math.sin(target.angle);
       target.cos = Math.cos(target.angle);
-      target.hp = Math.max(target.hp, 999);
+      target.maxHp = 999;
+      target.initialHp = 999;
+      target.hp = 620;
       target.spawnZ = PIPE_Z_FAR + 24;
       target.hitFlash = 1;
       target.hitCue = 1;
@@ -747,8 +831,51 @@ function applyUiPreviewMode(){
       applyEnemyVisual(target, 0);
       const previewBullet = {crit:false, pierce:0, z:target.z, prevZ:target.z + 1};
       triggerHitConfirm(target, previewBullet, target.type.color);
+      revealEnemyHpBar(target, 999, 379);
       spawnBulletImpact(target, previewBullet, target.angle, target.z, target.type.color, 2);
     }
+  }else if(preview === 'shotgun'){
+    state.mode = 'play';
+    applySceneVisualMode('play');
+    state.wave = Math.max(state.wave, 4);
+    state.maxHp = safeHpMax();
+    state.hp = state.maxHp;
+    state.roll = 0;
+    state.prevRoll = 0;
+    state.input = 0;
+    state.firing = 999;
+    clearRunObjects();
+    state.specialUpgrades.barrelShotgun = 1;
+    fireShot();
+    for(let i = 0; i < 18; i++) updateBullets(1 / 60);
+  }else if(preview === 'gatling'){
+    state.mode = 'play';
+    applySceneVisualMode('play');
+    state.wave = Math.max(state.wave, 4);
+    state.maxHp = safeHpMax();
+    state.hp = state.maxHp;
+    state.roll = 0;
+    state.prevRoll = 0;
+    state.input = 0;
+    state.firing = 999;
+    clearRunObjects();
+    state.specialUpgrades.barrelGatling = 1;
+    for(let i = 0; i < 8; i++){
+      fireShot();
+      updateBullets(1 / 26);
+    }
+  }else if(preview === 'crash'){
+    state.mode = 'play';
+    applySceneVisualMode('play');
+    state.wave = Math.max(state.wave, 4);
+    state.maxHp = safeHpMax();
+    state.hp = state.maxHp;
+    state.roll = 0;
+    state.prevRoll = 0;
+    state.input = 0;
+    state.firing = 999;
+    clearRunObjects();
+    triggerPlayerDamageEffect({angle:0, z:PLAYER_Z, t:0}, {taken:28});
   }else if(preview === 'dead'){
     state.mode = 'dead';
     state.score = Math.max(state.score, 12840);
@@ -846,7 +973,8 @@ function normalizeCosmeticState(raw){
 
 function freshSettingsState(){
   return {
-    controlMode: CONTROL_MODE_DEFAULT
+    controlMode: CONTROL_MODE_DEFAULT,
+    unlimitedTokens: false
   };
 }
 
@@ -855,7 +983,8 @@ function normalizeSettingsState(raw){
   const controlMode = CONTROL_MODES[raw?.controlMode] ? raw.controlMode : base.controlMode;
   return {
     ...base,
-    controlMode
+    controlMode,
+    unlimitedTokens: !!raw?.unlimitedTokens
   };
 }
 
@@ -922,6 +1051,91 @@ function setControlMode(mode){
   resetTouchStick();
   saveProgress();
   renderUi2();
+}
+
+function hasUnlimitedTokens(){
+  return !!state.settings?.unlimitedTokens;
+}
+
+function setUnlimitedTokens(enabled){
+  if(!state.settings) state.settings = freshSettingsState();
+  state.settings.unlimitedTokens = !!enabled;
+  saveProgress();
+  renderUi2();
+}
+
+function canSpendTokens(cost){
+  return hasUnlimitedTokens() || state.tokens >= cost;
+}
+
+function spendTokens(cost){
+  if(!Number.isFinite(cost) || cost < 0) return false;
+  if(!canSpendTokens(cost)) return false;
+  if(!hasUnlimitedTokens()) state.tokens -= cost;
+  return true;
+}
+
+function skillRerollCost(){
+  return SKILL_REROLL_BASE_COST + state.skillRerolls * SKILL_REROLL_COST_STEP;
+}
+
+function rerollSkillOptions(){
+  if(state.mode !== 'levelup' || state.skillPoints <= 0) return;
+  const cost = skillRerollCost();
+  if(!spendTokens(cost)) return;
+  const next = rollUpgradeOptions();
+  if(!next.length) return;
+  state.skillRerolls++;
+  state.upgradeOptions = next;
+  saveProgress();
+  renderUi2();
+}
+
+function resetSaveData(){
+  const confirmed = window.confirm?.('保存データとランキングを初期化します。よろしいですか？');
+  if(confirmed === false) return;
+  clearRunObjects();
+  state.mode = 'home';
+  state.wave = 1;
+  state.waveTime = 0;
+  state.score = 0;
+  state.hp = 100;
+  state.maxHp = 100;
+  state.xp = 0;
+  state.level = 1;
+  state.skillPoints = 0;
+  state.skillRerolls = 0;
+  state.basicPoints = 0;
+  state.basicPickerOpen = false;
+  state.basicPointMeter = 0;
+  state.tokens = START_TOKENS;
+  state.runTokenGain = 0;
+  state.runTime = 0;
+  state.kills = 0;
+  state.statLevels = freshStatMap();
+  state.homeUpgrades = freshHomeUpgradeMap();
+  state.specialUpgrades = freshSpecialUpgradeMap();
+  state.upgradeOptions = [];
+  state.highScore = 0;
+  state.bestWave = 1;
+  state.garage = freshGarageState();
+  state.cosmetics = freshCosmeticState();
+  state.settings = freshSettingsState();
+  state.settingsReturnMode = 'home';
+  state.lastGacha = null;
+  state.storeCategory = 'ship';
+  state.storePreviewShipId = DEFAULT_SHIP_ID;
+  state.deathTimer = 0;
+  state.deathSaved = false;
+  invalidateStatCache();
+  invalidateLoadoutCache();
+  cosmeticBuffCache = null;
+  markHomeShipPartsDirty();
+  localStorage.removeItem(RANKING_KEY);
+  saveProgress();
+  applyCosmetics();
+  renderUi2();
+  syncCanvasVisibility();
 }
 
 function resetTurnHold(){
@@ -1430,14 +1644,14 @@ function buyRunBasicUpgrade(id){
     state.maxHp = safeHpMax();
     state.hp = Math.min(state.maxHp, state.hp + Math.max(0, state.maxHp - beforeMax) + 18);
   }
+  if(state.basicPoints <= 0) state.basicPickerOpen = false;
   renderUi2();
 }
 
 function buyHomeUpgrade(id){
   if(!isHomeUpgradeUnlocked(id) || isHomeUpgradeMaxed(id)) return;
   const cost = homeUpgradeCost(id);
-  if(!Number.isFinite(cost) || state.tokens < cost) return;
-  state.tokens -= cost;
+  if(!spendTokens(cost)) return;
   state.homeUpgrades[id] = homeUpgradeLevel(id) + 1;
   invalidateStatCache();
   state.maxHp = safeHpMax();
@@ -1453,8 +1667,7 @@ function buyShip(id){
     equipShip(id);
     return;
   }
-  if(state.tokens < ship.cost) return;
-  state.tokens -= ship.cost;
+  if(!spendTokens(ship.cost)) return;
   state.garage.ownedShips[id] = 1;
   state.garage.selectedShipId = id;
   state.storePreviewShipId = id;
@@ -1485,8 +1698,7 @@ function buyPart(id){
     return;
   }
   const cost = partCost(part);
-  if(state.tokens < cost) return;
-  state.tokens -= cost;
+  if(!spendTokens(cost)) return;
   state.garage.ownedParts[id] = 1;
   const equipped = state.garage.equippedParts[part.type] || Array(3).fill(null);
   state.garage.equippedParts[part.type] = equipped;
@@ -1553,14 +1765,13 @@ function rollGachaItem(){
 }
 
 function rollGacha(){
-  if(state.tokens < GACHA_COST) return;
-  state.tokens -= GACHA_COST;
+  if(!spendTokens(GACHA_COST)) return;
   const item = rollGachaItem();
   const ownedCount = Number(state.cosmetics.owned[item.id]) || 0;
   const duplicate = ownedCount > 0;
   state.cosmetics.owned[item.id] = ownedCount + 1;
   if(!state.cosmetics.equipped[item.type]) state.cosmetics.equipped[item.type] = item.id;
-  if(duplicate){
+  if(duplicate && !hasUnlimitedTokens()){
     state.tokens += COSMETIC_RARITY_BY_ID[item.rarity].refund;
   }
   cosmeticBuffCache = null;
@@ -1597,6 +1808,21 @@ function colorHexValue(color, fallback = 0x8eefff){
     if(Number.isFinite(parsed)) return parsed & 0xffffff;
   }
   return fallback;
+}
+
+function setMaterialColorHexCached(material, color){
+  if(!material?.color) return;
+  const next = colorHexValue(color);
+  if(material.userData.lastColorHex === next) return;
+  material.userData.lastColorHex = next;
+  material.color.setHex(next);
+}
+
+function setMaterialOpacityCached(material, opacity, epsilon = .003){
+  if(!material || material.opacity === undefined) return;
+  if(Math.abs((material.userData.lastOpacity ?? -1) - opacity) < epsilon) return;
+  material.userData.lastOpacity = opacity;
+  material.opacity = opacity;
 }
 
 function blendHex(a, b, amount = .5){
@@ -1684,7 +1910,6 @@ function updateSkinKitAnimation(kit, t){
   const pulse = .78 + Math.sin(t * 3.2) * .10;
   if(kit.materials?.glow){
     kit.materials.glow.opacity = Math.max(.30, pulse);
-    kit.materials.glow.needsUpdate = true;
   }
   for(const ring of kit.rings || []){
     ring.rotation.z += .010 + Math.sin(t * .7) * .002;
@@ -1712,6 +1937,7 @@ function applyPlayerCosmeticFinish(visual = cosmeticVisualState(), frameAccent =
   applyLineFinish(shared.materials.playerRoseLine, blendHex(visual.coat.hot, visual.bullet.glow, .35), .64);
   applyLineFinish(shared.materials.railCyan, coatLine, .48);
   applySkinKitVisual(player?.skinKit, visual, frameAccent);
+  applyAfterburnerVisual(player?.afterburners, visual, frameAccent);
 }
 
 function applyHomeShipCosmeticFinish(ship = visualPreviewShip(), visual = cosmeticVisualState()){
@@ -1729,6 +1955,7 @@ function applyHomeShipCosmeticFinish(ship = visualPreviewShip(), visual = cosmet
   applyLineFinish(homeShip.materials.goldLine, visual.armor.trim, .66);
   applyLineFinish(homeShip.materials.roseLine, blendHex(visual.coat.hot, visual.bullet.glow, .34), .62);
   applySkinKitVisual(homeShip.skinKit, visual, frameAccent);
+  applyAfterburnerVisual(homeShip.afterburners, visual, frameAccent);
 }
 
 function applyHomeShipFrameAccent(ship){
@@ -1900,7 +2127,8 @@ function makeSharedAssets(){
   const geometries = {
     shot: new THREE.SphereGeometry(.118, SMALL_SCREEN ? 14 : 10, SMALL_SCREEN ? 8 : 6),
     bulletGlow: new THREE.SphereGeometry(.118, SMALL_SCREEN ? 14 : 10, SMALL_SCREEN ? 8 : 6),
-    engineFlare: new THREE.SphereGeometry(.20, 10, 6),
+    afterburnerCone: new THREE.ConeGeometry(.5, 1, VISUAL_LOW_POWER ? 10 : 14, 1, true),
+    afterburnerStreak: makeAfterburnerStreakGeometry(),
     particle: new THREE.SphereGeometry(.050, 5, 4),
     enemyCore: new THREE.SphereGeometry(.24, 9, 6),
     enemyBlade: new THREE.BoxGeometry(.13, .58, .14),
@@ -2218,6 +2446,128 @@ function makeShipSkinKit(parent, options = {}){
   return {root, groups, rings, materials};
 }
 
+function makeAfterburnerStreakGeometry(){
+  const points = [
+    new THREE.Vector3(-.34, 0, .02), new THREE.Vector3(-.12, 0, 1.00),
+    new THREE.Vector3(.34, 0, .02), new THREE.Vector3(.12, 0, 1.00),
+    new THREE.Vector3(0, -.24, .05), new THREE.Vector3(0, -.08, .92),
+    new THREE.Vector3(0, .24, .05), new THREE.Vector3(0, .08, .92)
+  ];
+  return new THREE.BufferGeometry().setFromPoints(points);
+}
+
+function makeAfterburnerMaterialSet(color = 0x1ed6ff){
+  const base = colorHexValue(color);
+  const core = blendHex(base, 0xf4fbff, .58);
+  const baseOptions = {
+    transparent:true,
+    depthWrite:false,
+    depthTest:true,
+    fog:false,
+    blending:THREE.AdditiveBlending
+  };
+  const materials = {
+    outer: new THREE.MeshBasicMaterial({...baseOptions, color:base, opacity:.28, side:THREE.DoubleSide}),
+    core: new THREE.MeshBasicMaterial({...baseOptions, color:core, opacity:.72, side:THREE.DoubleSide})
+  };
+  if(AFTERBURNER_DETAIL_LEVEL >= 2){
+    materials.streak = new THREE.LineBasicMaterial({color:base, transparent:true, opacity:.42, depthWrite:false, depthTest:true, blending:THREE.AdditiveBlending, fog:false});
+  }
+  return materials;
+}
+
+function objectVisibleInHierarchy(object){
+  for(let node = object; node; node = node.parent){
+    if(node.visible === false) return false;
+  }
+  return true;
+}
+
+function makeAfterburnerFlame(x, y, z, radius = .12, length = .68, intensity = 1){
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+  group.frustumCulled = false;
+
+  const materials = makeAfterburnerMaterialSet();
+  const outer = new THREE.Mesh(shared.geometries.afterburnerCone, materials.outer);
+  outer.rotation.x = Math.PI / 2;
+  outer.renderOrder = 6;
+
+  const core = new THREE.Mesh(shared.geometries.afterburnerCone, materials.core);
+  core.rotation.x = Math.PI / 2;
+  core.renderOrder = 7;
+
+  const wake = materials.streak ? new THREE.LineSegments(shared.geometries.afterburnerStreak, materials.streak) : null;
+  if(wake) wake.renderOrder = 10;
+
+  group.add(outer, core);
+  if(wake) group.add(wake);
+  group.userData = {
+    afterburner:true,
+    radius,
+    length,
+    intensity,
+    phase:Math.random() * TAU,
+    materials,
+    outer,
+    core,
+    wake
+  };
+  updateAfterburnerAnimation([group], 0, intensity);
+  return group;
+}
+
+function applyAfterburnerVisual(afterburners, visual, frameAccent = null){
+  if(!afterburners?.length || !visual) return;
+  const base = blendHex(visual.coat.engine, visual.bullet.glow, .25);
+  const core = blendHex(visual.bullet.core, 0xf4fbff, .40);
+  const wake = frameAccent == null ? base : blendHex(base, frameAccent, .16);
+  for(const flame of afterburners){
+    const data = flame.userData;
+    const materials = data?.materials;
+    if(!materials) continue;
+    if(materials.outer?.color) materials.outer.color.setHex(base);
+    if(materials.core?.color) materials.core.color.setHex(core);
+    if(materials.streak?.color) materials.streak.color.setHex(wake);
+    data.visualFlare = visual.bullet.flare ?? .34;
+    data.visualPulse = visual.bullet.pulse ?? 1;
+  }
+}
+
+function updateAfterburnerAnimation(afterburners, t, throttle = 1, bank = 0){
+  if(!afterburners?.length) return;
+  const powerBase = clamp(throttle, .25, 2.4);
+  for(const flame of afterburners){
+    const data = flame.userData;
+    if(!data?.afterburner) continue;
+    if(!objectVisibleInHierarchy(flame)) continue;
+    if(AFTERBURNER_UPDATE_INTERVAL > 0 && data.lastUpdateAt !== undefined && t - data.lastUpdateAt < AFTERBURNER_UPDATE_INTERVAL) continue;
+    data.lastUpdateAt = t;
+    const phase = data.phase || 0;
+    const flare = data.visualFlare ?? .34;
+    const visualPulse = data.visualPulse ?? 1;
+    const pulse = .5 + .5 * Math.sin(t * (13.5 + flare * 3.5) + phase);
+    const ripple = .5 + .5 * Math.sin(t * 23.0 + phase * 1.7);
+    const power = powerBase * (data.intensity || 1) * (1 + flare * .18);
+    const length = data.length * (.82 + power * .36 + pulse * .10);
+    const radius = data.radius * (.86 + power * .20 + ripple * .08);
+
+    data.outer.position.z = length * .50;
+    data.outer.scale.set(radius * 4.5, length * 1.18, radius * 3.8);
+    data.core.position.z = length * .38;
+    data.core.scale.set(radius * 2.15, length * .76, radius * 2.0);
+    if(data.wake){
+      data.wake.position.z = length * .04;
+      data.wake.scale.set(radius * 2.45, radius * 2.45, length * 1.05);
+      data.wake.rotation.z = Math.sin(t * 5.0 + phase) * .12 + bank * .25;
+    }
+
+    data.materials.outer.opacity = Math.min(.62, .22 + power * .15 + pulse * .08);
+    data.materials.core.opacity = Math.min(.88, .50 + power * .12 + ripple * .10);
+    if(data.materials.streak) data.materials.streak.opacity = Math.min(.54, (.20 + power * .08 + pulse * .07) * visualPulse);
+  }
+}
+
 function makePlayer(){
   const root = new THREE.Group();
   root.position.set(0, PLAYER_Y, PLAYER_Z);
@@ -2312,6 +2662,7 @@ function makePlayer(){
   core.position.set(0, .225, -.18);
   bodyRoot.add(core);
   const animatedCoreVisuals = [core];
+  const afterburners = [];
 
   const reactorHalo = new THREE.Line(makeRingCircleGeometry(.30, SMALL_SCREEN ? 56 : VISUAL_LOW_POWER ? 40 : 46), shared.materials.playerGoldLine);
   reactorHalo.rotation.x = Math.PI / 2;
@@ -2342,10 +2693,9 @@ function makePlayer(){
     nozzle.rotation.x = Math.PI / 2;
     nozzle.position.set(x, -.035, 1.08);
     bodyRoot.add(nozzle);
-    const flare = new THREE.Mesh(shared.geometries.engineFlare, shared.materials.shotGlow);
-    flare.position.set(x, -.035, 1.23);
-    flare.scale.set(.58, .58, 1.04);
-    bodyRoot.add(flare);
+    const burner = makeAfterburnerFlame(x, -.035, 1.16, .125, .72, 1.0);
+    bodyRoot.add(burner);
+    afterburners.push(burner);
   }
 
   for(const x of [-1.06, 1.06]){
@@ -2411,10 +2761,9 @@ function makePlayer(){
     engine.rotation.x = Math.PI / 2;
     engine.position.set(x, y, z);
     group.add(engine);
-    const flare = new THREE.Mesh(shared.geometries.engineFlare, shared.materials.shotGlow);
-    flare.position.set(x, y, z + length * .55);
-    flare.scale.set(radius * 5.6 * flareScale, radius * 5.6 * flareScale, .90);
-    group.add(flare);
+    const burner = makeAfterburnerFlame(x, y, z + length * .54, radius * 1.28 * flareScale, length * .98, flareScale);
+    group.add(burner);
+    afterburners.push(burner);
   };
 
   const razor = makeVariant('vx_razor');
@@ -2485,7 +2834,7 @@ function makePlayer(){
   addVariantEngine(ultima, 0, 1.16, .068, .34, -.034, .90);
 
   const skinKit = makeShipSkinKit(root, {y:.252});
-  return {root, body:mainBody, wings:leftWing, rightWing, core, aura, nose, hitShield, variantVisuals, animatedCoreVisuals, skinKit};
+  return {root, body:mainBody, wings:leftWing, rightWing, core, aura, nose, hitShield, variantVisuals, animatedCoreVisuals, afterburners, skinKit};
 }
 
 function makeHomePreviewShip(){
@@ -2588,6 +2937,7 @@ function makeHomePreviewShip(){
   core.position.set(0, .255, -.18);
   bodyRoot.add(core);
   const animatedCoreVisuals = [core];
+  const afterburners = [];
   const coreRing = new THREE.Line(makeRingCircleGeometry(.30, VISUAL_LOW_POWER ? 32 : 46), materials.goldLine);
   coreRing.rotation.x = Math.PI / 2;
   coreRing.position.set(0, .260, -.18);
@@ -2613,13 +2963,9 @@ function makeHomePreviewShip(){
     nozzle.rotation.x = Math.PI / 2;
     nozzle.position.set(x, -.045, 1.10);
     bodyRoot.add(nozzle);
-    const glowMat = materials.core.clone();
-    glowMat.transparent = true;
-    glowMat.opacity = .72;
-    const glow = new THREE.Mesh(shared.geometries.engineFlare, glowMat);
-    glow.position.set(x, -.045, 1.24);
-    glow.scale.set(.42, .42, .82);
-    bodyRoot.add(glow);
+    const burner = makeAfterburnerFlame(x, -.045, 1.16, .135, .76, .82);
+    bodyRoot.add(burner);
+    afterburners.push(burner);
   }
 
   for(const x of [-1.06, 1.06]){
@@ -2660,13 +3006,9 @@ function makeHomePreviewShip(){
     engine.position.set(x, y, z);
     engine.scale.set(scale, scale, 1);
     group.add(engine);
-    const glowMat = materials.core.clone();
-    glowMat.transparent = true;
-    glowMat.opacity = .62;
-    const glow = new THREE.Mesh(shared.geometries.engineFlare, glowMat);
-    glow.position.set(x, y, z + length * .54);
-    glow.scale.set(radius * 4.3 * scale, radius * 4.3 * scale, .82);
-    group.add(glow);
+    const burner = makeAfterburnerFlame(x, y, z + length * .54, radius * 1.20 * scale, length * .95, .78 * scale);
+    group.add(burner);
+    afterburners.push(burner);
   };
   const addVariantCore = (group, x = 0, z = -.18, radius = .15, y = .255) => {
     const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 18, 10), materials.core);
@@ -2870,7 +3212,7 @@ function makeHomePreviewShip(){
   bodyRoot.add(underGlow);
 
   const skinKit = makeShipSkinKit(root, {y:.292});
-  return {root, core, materials, partVisuals, variantVisuals, animatedCoreVisuals, skinKit};
+  return {root, core, materials, partVisuals, variantVisuals, animatedCoreVisuals, afterburners, skinKit};
 }
 
 function makeRingCircleGeometry(radius, steps){
@@ -22227,6 +22569,29 @@ function createUi(){
         linear-gradient(180deg,rgba(18,36,42,.95),rgba(5,10,12,.96)) !important;
       box-shadow:0 18px 36px rgba(0,0,0,.50),inset 0 1px 0 rgba(255,255,255,.08) !important;
     }
+    #barrage-ui .pause-dialog{
+      max-width:min(390px,calc(100vw - 28px)) !important;
+      margin:0 auto !important;
+    }
+    #barrage-ui .pause-dialog .pause-actions{
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:7px !important;
+    }
+    #barrage-ui .pause-dialog .pause-actions button{
+      min-width:0 !important;
+      padding-inline:6px !important;
+      font-size:11px !important;
+      white-space:nowrap !important;
+    }
+    @media (max-width:370px){
+      #barrage-ui .pause-dialog .pause-actions{
+        grid-template-columns:1fr !important;
+      }
+      #barrage-ui .pause-dialog .pause-actions button{
+        height:42px !important;
+        min-height:42px !important;
+      }
+    }
     /* UI placement and finish v8: cleaner mobile hierarchy for showroom pages. */
     #barrage-ui{
       --ui-polish-edge:clamp(12px,3.6vw,16px);
@@ -26575,6 +26940,2821 @@ function createUi(){
         height:56px !important;
       }
     }
+    /* Store/upgrade command deck parity: bring secondary screens back to the home visual language. */
+    #barrage-ui :is(.store-screen,.upgrade-screen){
+      --command-edge:14px;
+      --command-header-h:58px;
+      --command-bottom:calc(12px + env(safe-area-inset-bottom));
+      --command-cyan:var(--tone-cyan,#8df5ff);
+      --command-amber:var(--tone-amber,#ffd36a);
+      --command-text:#f7ffff;
+      --command-soft:rgba(238,247,255,.74);
+      --command-panel:#071114;
+      --command-panel-2:#12242a;
+      --command-line:rgba(238,247,255,.30);
+      background-color:#020405 !important;
+      background-image:
+        linear-gradient(180deg,rgba(141,245,255,.045),transparent 30%,rgba(255,211,106,.035) 76%,transparent),
+        linear-gradient(rgba(141,245,255,.06) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(238,247,255,.038) 1px,transparent 1px) !important;
+      background-size:100% 100%,32px 32px,32px 32px !important;
+      color:var(--command-text) !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen) .page-stage{
+      inset:0 !important;
+      padding:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen) .page-header{
+      position:absolute !important;
+      left:var(--command-edge) !important;
+      right:var(--command-edge) !important;
+      top:10px !important;
+      height:var(--command-header-h) !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 54px !important;
+      align-items:stretch !important;
+      gap:10px !important;
+      z-index:68 !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen) .page-title{
+      position:relative !important;
+      inset:auto !important;
+      width:auto !important;
+      height:var(--command-header-h) !important;
+      min-height:var(--command-header-h) !important;
+      min-width:0 !important;
+      padding:9px 13px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      grid-template-rows:1fr auto !important;
+      align-content:center !important;
+      gap:3px 10px !important;
+      border:1px solid var(--command-line) !important;
+      border-left:4px solid var(--command-cyan) !important;
+      border-top-color:rgba(141,245,255,.56) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.16) 0 18%,transparent 18% 78%,rgba(255,211,106,.08) 78% 81%,transparent 81%),
+        linear-gradient(180deg,rgba(18,36,42,.96),rgba(7,17,20,.94)) !important;
+      box-shadow:0 14px 30px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen) .page-title::after{
+      content:"" !important;
+      position:absolute !important;
+      right:13px !important;
+      bottom:11px !important;
+      width:52px !important;
+      height:3px !important;
+      background:linear-gradient(90deg,var(--command-amber),var(--command-cyan)) !important;
+      box-shadow:0 0 14px rgba(141,245,255,.24) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen) .page-title h1,
+    #barrage-ui :is(.store-screen,.upgrade-screen) .page-title p{
+      min-width:0 !important;
+      margin:0 !important;
+      padding:0 !important;
+      letter-spacing:0 !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-align:left !important;
+      text-transform:none !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen) .page-title h1{
+      grid-column:1 / -1 !important;
+      color:var(--command-text) !important;
+      font-size:28px !important;
+      font-weight:950 !important;
+      text-shadow:0 1px 0 #000,0 0 18px rgba(141,245,255,.20) !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen) .page-title p{
+      grid-column:1 / -1 !important;
+      color:var(--command-soft) !important;
+      font-size:10px !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen) :is(.page-back,.showroom-back){
+      position:relative !important;
+      inset:auto !important;
+      width:54px !important;
+      min-width:54px !important;
+      height:var(--command-header-h) !important;
+      min-height:var(--command-header-h) !important;
+      padding:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      color:transparent !important;
+      font-size:0 !important;
+      line-height:0 !important;
+      border:1px solid var(--command-line) !important;
+      border-top:4px solid var(--command-cyan) !important;
+      border-radius:0 !important;
+      background:
+        linear-gradient(132deg,rgba(141,245,255,.20) 0 24%,transparent 24%),
+        linear-gradient(180deg,var(--command-panel-2),var(--command-panel)) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.48),0 14px 28px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      text-shadow:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-screen .page-header .showroom-back{
+      display:grid !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen) :is(.page-back,.showroom-back)::before{
+      content:"" !important;
+      position:absolute !important;
+      left:20px !important;
+      top:20px !important;
+      width:14px !important;
+      height:14px !important;
+      border-left:4px solid #c8fbff !important;
+      border-bottom:4px solid #c8fbff !important;
+      background:transparent !important;
+      box-shadow:-2px 2px 0 rgba(0,0,0,.42),0 0 14px rgba(141,245,255,.45) !important;
+      opacity:1 !important;
+      transform:rotate(45deg) !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen) :is(.page-back,.showroom-back)::after{
+      content:"" !important;
+      position:absolute !important;
+      left:20px !important;
+      top:28px !important;
+      width:20px !important;
+      height:4px !important;
+      border:0 !important;
+      background:#c8fbff !important;
+      box-shadow:0 1px 0 rgba(0,0,0,.48),0 0 14px rgba(141,245,255,.45) !important;
+      opacity:1 !important;
+      transform:none !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .store-screen{
+      --store-dock-bottom:calc(10px + env(safe-area-inset-bottom));
+      --store-dock-h:54px;
+      --store-panel-h:294px;
+      --store-panel-bottom:calc(var(--store-dock-bottom) + var(--store-dock-h) + 10px);
+    }
+    #barrage-ui .store-screen .showroom-v2 .showroom-copy,
+    #barrage-ui .store-screen .showroom-part-stack,
+    #barrage-ui .store-screen .showroom-mode,
+    #barrage-ui .store-screen .showroom-v2 .showroom-tabs{
+      display:none !important;
+    }
+    #barrage-ui .store-screen .ship-showroom-ui.showroom-v2{
+      left:0 !important;
+      right:0 !important;
+      top:78px !important;
+      width:100% !important;
+      height:clamp(210px,35vh,252px) !important;
+      min-height:0 !important;
+      border:0 !important;
+      background:transparent !important;
+      box-shadow:none !important;
+      clip-path:none !important;
+      pointer-events:none !important;
+      z-index:12 !important;
+    }
+    #barrage-ui .store-screen .ship-showroom-ui.showroom-v2::before{
+      display:none !important;
+    }
+    #barrage-ui .store-screen .ship-showroom-ui.showroom-v2::after{
+      left:44px !important;
+      right:44px !important;
+      bottom:4px !important;
+      height:2px !important;
+      background:linear-gradient(90deg,transparent,rgba(141,245,255,.62),rgba(255,211,106,.34),transparent) !important;
+      box-shadow:0 0 18px rgba(141,245,255,.22) !important;
+      opacity:.72 !important;
+    }
+    #barrage-ui .store-screen .commerce-panel{
+      left:var(--command-edge) !important;
+      right:var(--command-edge) !important;
+      top:auto !important;
+      bottom:var(--store-panel-bottom) !important;
+      width:auto !important;
+      height:var(--store-panel-h) !important;
+      min-height:0 !important;
+      max-height:none !important;
+      padding:10px !important;
+      border:1px solid var(--command-line) !important;
+      border-top:4px solid var(--command-cyan) !important;
+      border-radius:0 !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.12) 0 16%,transparent 16% 78%,rgba(255,211,106,.06) 78% 81%,transparent 81%),
+        linear-gradient(180deg,rgba(18,36,42,.92),rgba(5,10,12,.96)) !important;
+      box-shadow:0 -18px 38px rgba(0,0,0,.54),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px) !important;
+      overflow:hidden !important;
+      z-index:34 !important;
+    }
+    #barrage-ui .store-screen .store-market-v3{
+      height:100% !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-rows:30px 42px minmax(0,1fr) 46px !important;
+      gap:8px !important;
+      align-content:start !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-screen .compact-stats{
+      height:30px !important;
+      min-height:0 !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:7px !important;
+    }
+    #barrage-ui .store-screen .compact-stats > span,
+    #barrage-ui .store-screen .store-category-head,
+    #barrage-ui .store-screen .store-category-tab,
+    #barrage-ui .store-screen .store-offer-card{
+      border-radius:0 !important;
+      border:1px solid rgba(238,247,255,.20) !important;
+      border-top:3px solid color-mix(in srgb,var(--accent,var(--command-cyan)) 72%,rgba(247,255,255,.24)) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--accent,var(--command-cyan)) 16%,transparent) 0 20%,transparent 20% 78%,rgba(255,255,255,.055) 78% 81%,transparent 81%),
+        linear-gradient(180deg,#12242a,#071114) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px) !important;
+    }
+    #barrage-ui .store-screen .compact-stats > span{
+      height:30px !important;
+      min-height:0 !important;
+      padding:5px 7px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:4px !important;
+    }
+    #barrage-ui .store-screen .compact-stats > span b,
+    #barrage-ui .store-screen .compact-stats > span small{
+      min-width:0 !important;
+      line-height:1 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .store-screen .compact-stats > span b{
+      color:var(--command-text) !important;
+      font-size:11px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .store-screen .compact-stats > span small{
+      color:var(--command-soft) !important;
+      font-size:7px !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .store-screen .store-category-head{
+      height:42px !important;
+      min-height:42px !important;
+      padding:6px 9px !important;
+      display:grid !important;
+      grid-template-columns:58px minmax(0,1fr) !important;
+      grid-template-rows:1fr 1fr !important;
+      gap:2px 8px !important;
+      align-items:center !important;
+    }
+    #barrage-ui .store-screen .store-category-head b{
+      grid-column:1 !important;
+      grid-row:1 / span 2 !important;
+      min-width:0 !important;
+      height:26px !important;
+      padding:0 6px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--command-cyan)) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .store-screen .store-category-head strong,
+    #barrage-ui .store-screen .store-category-head span{
+      min-width:0 !important;
+      line-height:1 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .store-screen .store-category-head strong{
+      color:var(--command-text) !important;
+      font-size:14px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .store-screen .store-category-head span{
+      color:var(--command-soft) !important;
+      font-size:9px !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .store-screen .store-offer-list{
+      min-height:0 !important;
+      height:100% !important;
+      display:grid !important;
+      grid-auto-flow:column !important;
+      grid-auto-columns:minmax(224px,78%) !important;
+      grid-auto-rows:100% !important;
+      gap:9px !important;
+      overflow-x:auto !important;
+      overflow-y:hidden !important;
+      padding:0 18px 0 0 !important;
+      scrollbar-width:none !important;
+      mask-image:none !important;
+      scroll-padding-inline:0 !important;
+    }
+    #barrage-ui .store-screen .store-offer-list::-webkit-scrollbar{
+      display:none !important;
+    }
+    #barrage-ui .store-screen .store-offer-card{
+      min-width:0 !important;
+      width:100% !important;
+      min-height:0 !important;
+      height:100% !important;
+      padding:8px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 78px !important;
+      grid-template-rows:minmax(0,1fr) 34px !important;
+      grid-template-areas:
+        "main action"
+        "buff action" !important;
+      gap:6px 8px !important;
+      align-items:stretch !important;
+      scroll-snap-align:start !important;
+    }
+    #barrage-ui .store-screen .store-offer-card.is-selected,
+    #barrage-ui .store-screen .store-offer-card.is-owned{
+      border-color:color-mix(in srgb,var(--accent,var(--command-cyan)) 54%,rgba(247,255,255,.28)) !important;
+      border-top-color:color-mix(in srgb,var(--accent,var(--command-cyan)) 70%,#f7ffff) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--accent,var(--command-cyan)) 24%,transparent) 0 21%,transparent 21% 78%,rgba(255,255,255,.07) 78% 81%,transparent 81%),
+        linear-gradient(180deg,#172a31,#081216) !important;
+    }
+    #barrage-ui .store-screen .store-offer-main{
+      grid-area:main !important;
+      min-width:0 !important;
+      min-height:0 !important;
+      gap:4px !important;
+      align-content:start !important;
+    }
+    #barrage-ui .store-screen .store-offer-main b,
+    #barrage-ui .store-screen .store-offer-main strong,
+    #barrage-ui .store-screen .store-offer-main span{
+      min-width:0 !important;
+      letter-spacing:0 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .store-screen .store-offer-main b{
+      color:color-mix(in srgb,var(--accent,var(--command-cyan)) 72%,#f7ffff) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .store-screen .store-offer-main strong{
+      color:var(--command-text) !important;
+      font-size:18px !important;
+      line-height:1.02 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .store-screen .store-offer-main span{
+      color:var(--command-soft) !important;
+      font-size:10px !important;
+      line-height:1.15 !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:2 !important;
+      -webkit-box-orient:vertical !important;
+      white-space:normal !important;
+    }
+    #barrage-ui .store-screen .store-offer-desc{
+      display:none !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid{
+      grid-area:buff !important;
+      min-height:0 !important;
+      display:flex !important;
+      gap:5px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid span{
+      flex:1 1 0 !important;
+      min-width:0 !important;
+      height:34px !important;
+      padding:5px !important;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      grid-template-rows:10px 12px !important;
+      align-items:center !important;
+      gap:2px !important;
+      border:1px solid rgba(141,245,255,.22) !important;
+      background:rgba(141,245,255,.07) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid span:nth-child(n+4){
+      display:none !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid b,
+    #barrage-ui .store-screen .store-buff-grid em{
+      min-width:0 !important;
+      justify-self:center !important;
+      text-align:center !important;
+      line-height:1 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid b{
+      color:var(--command-soft) !important;
+      font-size:7px !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid em{
+      color:var(--command-cyan) !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .store-screen .store-offer-action{
+      grid-area:action !important;
+      width:78px !important;
+      min-width:78px !important;
+      height:100% !important;
+      min-height:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,var(--command-cyan))) !important;
+      box-shadow:0 0 18px color-mix(in srgb,var(--accent,var(--command-cyan)) 24%,transparent),inset 0 1px 0 rgba(255,255,255,.58) !important;
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .store-screen .store-offer-action:disabled{
+      color:rgba(238,247,255,.48) !important;
+      border:1px solid rgba(238,247,255,.14) !important;
+      background:rgba(238,247,255,.06) !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .store-screen .store-category-tabs{
+      height:46px !important;
+      min-height:46px !important;
+      display:grid !important;
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+      gap:7px !important;
+    }
+    #barrage-ui .store-screen .store-category-tab{
+      height:46px !important;
+      min-height:46px !important;
+      padding:6px 4px !important;
+    }
+    #barrage-ui .store-screen .store-category-tab.active,
+    #barrage-ui .store-screen .store-category-tab:disabled.active{
+      color:#061014 !important;
+      border-color:transparent !important;
+      border-top-color:#f7ffff !important;
+      background:
+        linear-gradient(116deg,rgba(255,255,255,.70) 0 20%,transparent 20%),
+        linear-gradient(90deg,#f7ffff,var(--command-cyan)) !important;
+      box-shadow:0 0 22px rgba(141,245,255,.24),0 12px 22px rgba(0,0,0,.42) !important;
+      opacity:1 !important;
+    }
+    #barrage-ui .store-screen .store-category-tab b,
+    #barrage-ui .store-screen .store-category-tab span{
+      min-width:0 !important;
+      line-height:1 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .store-screen .store-category-tab b{
+      color:inherit !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .store-screen .store-category-tab span{
+      margin-top:4px !important;
+      color:currentColor !important;
+      opacity:.74 !important;
+      font-size:8px !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .store-screen .commerce-bottom-dock{
+      left:var(--command-edge) !important;
+      right:var(--command-edge) !important;
+      bottom:var(--store-dock-bottom) !important;
+      height:var(--store-dock-h) !important;
+      display:grid !important;
+      grid-template-columns:.86fr 1fr 1fr .86fr !important;
+      gap:8px !important;
+      z-index:64 !important;
+    }
+    #barrage-ui .store-screen .commerce-bottom-dock button{
+      height:var(--store-dock-h) !important;
+      min-height:var(--store-dock-h) !important;
+      padding:0 6px !important;
+      color:var(--command-text) !important;
+      border:1px solid rgba(238,247,255,.26) !important;
+      border-top:3px solid rgba(141,245,255,.48) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.13) 0 18%,transparent 18% 76%,rgba(255,255,255,.06) 76% 79%,transparent 79%),
+        linear-gradient(180deg,#12242a,#071114) !important;
+      box-shadow:0 12px 22px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.09) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      font-size:11px !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .store-screen .commerce-bottom-dock button.active,
+    #barrage-ui .store-screen .commerce-bottom-dock button:disabled.active{
+      color:#061014 !important;
+      border-color:transparent !important;
+      background:
+        linear-gradient(116deg,rgba(255,255,255,.70) 0 20%,transparent 20%),
+        linear-gradient(90deg,#f7ffff,var(--command-cyan)) !important;
+      box-shadow:0 0 22px rgba(141,245,255,.24),0 12px 22px rgba(0,0,0,.42) !important;
+      opacity:1 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .upgrade-screen{
+      --upgrade-edge:var(--command-edge);
+      --upgrade-bottom:var(--command-bottom);
+      --upgrade-cyan:var(--command-cyan);
+      --upgrade-amber:var(--command-amber);
+      --upgrade-line:var(--command-line);
+      --upgrade-text:var(--command-text);
+      --upgrade-muted:var(--command-soft);
+    }
+    #barrage-ui .upgrade-screen .upgrade-path-list{
+      left:var(--command-edge) !important;
+      right:var(--command-edge) !important;
+      top:82px !important;
+      bottom:var(--command-bottom) !important;
+      padding:10px !important;
+      grid-template-rows:82px minmax(0,1fr) !important;
+      gap:10px !important;
+      border:1px solid var(--command-line) !important;
+      border-top:4px solid var(--command-cyan) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.12) 0 16%,transparent 16% 78%,rgba(255,211,106,.06) 78% 81%,transparent 81%),
+        linear-gradient(180deg,rgba(18,36,42,.92),rgba(5,10,12,.96)) !important;
+      box-shadow:0 18px 36px rgba(0,0,0,.50),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px) !important;
+    }
+    #barrage-ui .upgrade-overview{
+      grid-template-columns:minmax(0,1.15fr) repeat(3,minmax(0,.75fr)) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .upgrade-overview-main,
+    #barrage-ui .upgrade-overview-stat{
+      padding:8px !important;
+      border:1px solid rgba(238,247,255,.20) !important;
+      border-top:3px solid rgba(141,245,255,.62) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.12) 0 21%,transparent 21%),
+        rgba(6,11,13,.88) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+    }
+    #barrage-ui .upgrade-overview-main strong{
+      font-size:23px !important;
+    }
+    #barrage-ui .upgrade-overview-stat b{
+      font-size:15px !important;
+    }
+    #barrage-ui .upgrade-path-grid{
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      grid-auto-rows:120px !important;
+      gap:8px !important;
+      padding:0 2px 2px 0 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card{
+      padding:8px 8px 7px 40px !important;
+      grid-template-rows:9px 16px 4px minmax(18px,1fr) 25px !important;
+      gap:3px !important;
+      border:1px solid rgba(238,247,255,.20) !important;
+      border-top:3px solid var(--accent,var(--command-cyan)) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--accent,var(--command-cyan)) 18%,transparent) 0 20%,transparent 20% 78%,rgba(255,255,255,.055) 78% 81%,transparent 81%),
+        linear-gradient(180deg,#12242a,#071114) !important;
+      box-shadow:0 12px 22px rgba(0,0,0,.36),0 0 18px color-mix(in srgb,var(--accent,var(--command-cyan)) 10%,transparent),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card-mark{
+      color:#061014 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,var(--command-cyan))) !important;
+      font-size:11px !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card span{
+      font-size:14px !important;
+      line-height:1.04 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card small{
+      font-size:8px !important;
+      line-height:1.08 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button{
+      height:25px !important;
+      min-height:25px !important;
+      color:#061014 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,var(--command-cyan))) !important;
+      font-size:9.5px !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui :is(.store-screen,.upgrade-screen).on :is(.page-title,.page-back){
+      animation:uiPolishHeaderStep .30s cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .store-screen.on .commerce-panel,
+    #barrage-ui .upgrade-screen.on .upgrade-path-list{
+      transform-origin:center bottom !important;
+      animation:uiPolishSettle .36s cubic-bezier(.16,1,.3,1) .04s both !important;
+    }
+    #barrage-ui .store-screen.on .store-offer-card,
+    #barrage-ui .upgrade-screen.on .upgrade-path .upgrade-card{
+      transform-origin:center bottom !important;
+      animation:uiPolishDockStep .30s cubic-bezier(.16,1,.3,1) both !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui :is(.store-screen,.upgrade-screen){
+        --command-edge:10px;
+        --command-header-h:56px;
+      }
+      #barrage-ui :is(.store-screen,.upgrade-screen) .page-header{
+        top:9px !important;
+        grid-template-columns:minmax(0,1fr) 50px !important;
+        gap:8px !important;
+      }
+      #barrage-ui :is(.store-screen,.upgrade-screen) .page-title{
+        padding:8px 11px !important;
+      }
+      #barrage-ui :is(.store-screen,.upgrade-screen) .page-title h1{
+        font-size:24px !important;
+      }
+      #barrage-ui :is(.store-screen,.upgrade-screen) .page-title p{
+        font-size:9px !important;
+      }
+      #barrage-ui :is(.store-screen,.upgrade-screen) :is(.page-back,.showroom-back){
+        width:50px !important;
+        min-width:50px !important;
+      }
+      #barrage-ui :is(.store-screen,.upgrade-screen) :is(.page-back,.showroom-back)::before{
+        left:18px !important;
+        top:19px !important;
+      }
+      #barrage-ui :is(.store-screen,.upgrade-screen) :is(.page-back,.showroom-back)::after{
+        left:18px !important;
+        top:27px !important;
+      }
+      #barrage-ui .store-screen{
+        --store-panel-h:276px;
+        --store-dock-h:50px;
+        --store-dock-bottom:8px;
+        --store-panel-bottom:calc(var(--store-dock-bottom) + var(--store-dock-h) + 8px);
+      }
+      #barrage-ui .store-screen .ship-showroom-ui.showroom-v2{
+        top:72px !important;
+        height:clamp(196px,34vh,232px) !important;
+      }
+      #barrage-ui .store-screen .commerce-panel{
+        padding:9px !important;
+      }
+      #barrage-ui .store-screen .store-market-v3{
+        grid-template-rows:28px 38px minmax(0,1fr) 42px !important;
+        gap:7px !important;
+      }
+      #barrage-ui .store-screen .compact-stats,
+      #barrage-ui .store-screen .compact-stats > span{
+        height:28px !important;
+      }
+      #barrage-ui .store-screen .store-category-head{
+        height:38px !important;
+        min-height:38px !important;
+      }
+      #barrage-ui .store-screen .store-category-head strong{
+        font-size:13px !important;
+      }
+      #barrage-ui .store-screen .store-offer-list{
+        grid-auto-columns:minmax(212px,80%) !important;
+      }
+      #barrage-ui .store-screen .store-offer-card{
+        grid-template-columns:minmax(0,1fr) 72px !important;
+        grid-template-rows:minmax(0,1fr) 31px !important;
+        gap:5px 7px !important;
+      }
+      #barrage-ui .store-screen .store-offer-main strong{
+        font-size:16px !important;
+      }
+      #barrage-ui .store-screen .store-offer-main span{
+        font-size:9px !important;
+      }
+      #barrage-ui .store-screen .store-buff-grid span{
+        height:31px !important;
+      }
+      #barrage-ui .store-screen .store-offer-action{
+        width:72px !important;
+        min-width:72px !important;
+      }
+      #barrage-ui .store-screen .store-category-tabs,
+      #barrage-ui .store-screen .store-category-tab{
+        height:42px !important;
+        min-height:42px !important;
+      }
+      #barrage-ui .store-screen .commerce-bottom-dock button{
+        font-size:10px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path-list{
+        top:76px !important;
+        grid-template-rows:76px minmax(0,1fr) !important;
+        gap:8px !important;
+        padding:9px !important;
+      }
+      #barrage-ui .upgrade-overview{
+        gap:6px !important;
+      }
+      #barrage-ui .upgrade-overview-main strong{
+        font-size:20px !important;
+      }
+      #barrage-ui .upgrade-overview-stat b{
+        font-size:13px !important;
+      }
+      #barrage-ui .upgrade-path-grid{
+        grid-auto-rows:112px !important;
+        gap:7px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card{
+        padding:7px 7px 6px 36px !important;
+        grid-template-rows:8px 14px 4px minmax(16px,1fr) 23px !important;
+        gap:2px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card-mark{
+        width:22px !important;
+        height:22px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card span{
+        font-size:13px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card small{
+        font-size:7.5px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button{
+        height:23px !important;
+        min-height:23px !important;
+        font-size:9px !important;
+      }
+    }
+    /* Full UI readability audit v2: fix low-contrast captions and dense mobile overlaps. */
+    #barrage-ui :is(.ranking-screen,.settings-screen){
+      --audit-edge:14px;
+      --audit-header-h:58px;
+      --audit-cyan:var(--tone-cyan,#8df5ff);
+      --audit-text:#f7ffff;
+      --audit-soft:rgba(238,247,255,.78);
+      --audit-panel:#071114;
+      --audit-panel-2:#12242a;
+      --audit-line:rgba(238,247,255,.30);
+      color:var(--audit-text) !important;
+    }
+    #barrage-ui :is(.ranking-screen,.settings-screen) .page-stage{
+      inset:0 !important;
+      padding:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui :is(.ranking-screen,.settings-screen) .page-header{
+      position:absolute !important;
+      left:var(--audit-edge) !important;
+      right:var(--audit-edge) !important;
+      top:10px !important;
+      height:var(--audit-header-h) !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 54px !important;
+      align-items:stretch !important;
+      gap:10px !important;
+      z-index:68 !important;
+    }
+    #barrage-ui :is(.ranking-screen,.settings-screen) .page-title{
+      position:relative !important;
+      inset:auto !important;
+      width:auto !important;
+      height:var(--audit-header-h) !important;
+      min-height:var(--audit-header-h) !important;
+      min-width:0 !important;
+      padding:9px 13px !important;
+      display:grid !important;
+      align-content:center !important;
+      gap:4px !important;
+      border:1px solid var(--audit-line) !important;
+      border-left:4px solid var(--audit-cyan) !important;
+      border-top-color:rgba(141,245,255,.56) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.16) 0 18%,transparent 18% 78%,rgba(255,211,106,.08) 78% 81%,transparent 81%),
+        linear-gradient(180deg,rgba(18,36,42,.96),rgba(7,17,20,.94)) !important;
+      box-shadow:0 14px 30px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui :is(.ranking-screen,.settings-screen) .page-title h1,
+    #barrage-ui :is(.ranking-screen,.settings-screen) .page-title p{
+      margin:0 !important;
+      padding:0 !important;
+      min-width:0 !important;
+      line-height:1 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-align:left !important;
+    }
+    #barrage-ui :is(.ranking-screen,.settings-screen) .page-title h1{
+      color:var(--audit-text) !important;
+      font-size:28px !important;
+      font-weight:950 !important;
+      text-shadow:0 1px 0 #000,0 0 18px rgba(141,245,255,.20) !important;
+    }
+    #barrage-ui :is(.ranking-screen,.settings-screen) .page-title p{
+      color:var(--audit-soft) !important;
+      font-size:10px !important;
+      font-weight:900 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui :is(.ranking-screen,.settings-screen) .page-back{
+      position:relative !important;
+      inset:auto !important;
+      width:54px !important;
+      min-width:54px !important;
+      height:var(--audit-header-h) !important;
+      min-height:var(--audit-header-h) !important;
+      padding:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      color:transparent !important;
+      font-size:0 !important;
+      line-height:0 !important;
+      border:1px solid var(--audit-line) !important;
+      border-top:4px solid var(--audit-cyan) !important;
+      background:
+        linear-gradient(132deg,rgba(141,245,255,.20) 0 24%,transparent 24%),
+        linear-gradient(180deg,var(--audit-panel-2),var(--audit-panel)) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.48),0 14px 28px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui :is(.ranking-screen,.settings-screen) .page-back::before{
+      content:"" !important;
+      position:absolute !important;
+      left:20px !important;
+      top:20px !important;
+      width:14px !important;
+      height:14px !important;
+      border-left:4px solid #c8fbff !important;
+      border-bottom:4px solid #c8fbff !important;
+      background:transparent !important;
+      box-shadow:-2px 2px 0 rgba(0,0,0,.42),0 0 14px rgba(141,245,255,.45) !important;
+      opacity:1 !important;
+      transform:rotate(45deg) !important;
+    }
+    #barrage-ui :is(.ranking-screen,.settings-screen) .page-back::after{
+      content:"" !important;
+      position:absolute !important;
+      left:20px !important;
+      top:28px !important;
+      width:20px !important;
+      height:4px !important;
+      border:0 !important;
+      background:#c8fbff !important;
+      box-shadow:0 1px 0 rgba(0,0,0,.48),0 0 14px rgba(141,245,255,.45) !important;
+      opacity:1 !important;
+      transform:none !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui :is(.ranking-screen .ranking-list,.settings-screen .settings-panel){
+      left:var(--audit-edge) !important;
+      right:var(--audit-edge) !important;
+      top:82px !important;
+      bottom:14px !important;
+      padding:10px !important;
+      border:1px solid var(--audit-line) !important;
+      border-top:4px solid var(--audit-cyan) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.10) 0 16%,transparent 16% 78%,rgba(255,211,106,.05) 78% 81%,transparent 81%),
+        linear-gradient(180deg,rgba(18,36,42,.92),rgba(5,10,12,.96)) !important;
+      box-shadow:0 18px 36px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px) !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+    }
+    #barrage-ui .settings-screen .settings-panel{
+      display:grid !important;
+      grid-auto-rows:auto !important;
+      align-content:start !important;
+      gap:9px !important;
+    }
+    #barrage-ui .settings-screen .settings-summary{
+      min-height:86px !important;
+      margin:0 !important;
+      padding:12px !important;
+      grid-template-columns:minmax(0,1fr) 76px !important;
+      gap:9px !important;
+      border-color:rgba(238,247,255,.24) !important;
+      border-top:3px solid rgba(141,245,255,.72) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.12) 0 18%,transparent 18%),
+        rgba(6,11,13,.90) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+    }
+    #barrage-ui .settings-screen .settings-summary b{
+      color:rgba(238,247,255,.70) !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .settings-screen .settings-summary span{
+      color:var(--audit-text) !important;
+      font-size:21px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .settings-screen .settings-summary small{
+      color:var(--audit-soft) !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .settings-screen .settings-summary strong{
+      width:76px !important;
+      height:58px !important;
+      color:#061014 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--audit-cyan)) !important;
+      font-size:19px !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .settings-screen .settings-row{
+      min-height:82px !important;
+      padding:11px 13px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) !important;
+      grid-template-rows:auto auto auto !important;
+      align-content:center !important;
+      gap:5px !important;
+      overflow:hidden !important;
+      border-color:rgba(238,247,255,.22) !important;
+      border-left:4px solid var(--accent,var(--audit-cyan)) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--accent,var(--audit-cyan)) 13%,transparent) 0 18%,transparent 18%),
+        rgba(6,11,13,.88) !important;
+    }
+    #barrage-ui .settings-screen .settings-row b,
+    #barrage-ui .settings-screen .settings-row span,
+    #barrage-ui .settings-screen .settings-row small{
+      min-width:0 !important;
+      line-height:1.08 !important;
+      letter-spacing:0 !important;
+      text-shadow:0 1px 0 #000 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .settings-screen .settings-row b{
+      color:color-mix(in srgb,var(--accent,var(--audit-cyan)) 65%,#f7ffff) !important;
+      font-size:11px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .settings-screen .settings-row span{
+      color:var(--audit-text) !important;
+      font-size:18px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .settings-screen .settings-row small{
+      color:var(--audit-soft) !important;
+      font-size:10px !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .settings-screen .control-mode-row{
+      min-height:168px !important;
+      grid-template-rows:auto auto auto 44px !important;
+      align-content:start !important;
+      gap:7px !important;
+      padding-bottom:12px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .settings-screen .control-mode-row .settings-segment{
+      grid-row:4 !important;
+      margin:2px 0 0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .settings-screen .settings-segment button{
+      height:42px !important;
+      min-height:42px !important;
+      padding:0 8px !important;
+      color:var(--audit-text) !important;
+      border:1px solid rgba(238,247,255,.24) !important;
+      border-top:3px solid rgba(141,245,255,.46) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.12) 0 20%,transparent 20%),
+        linear-gradient(180deg,#12242a,#071114) !important;
+      box-shadow:0 8px 16px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+    }
+    #barrage-ui .settings-screen .settings-segment button.active,
+    #barrage-ui .settings-screen .settings-segment button:disabled{
+      color:#061014 !important;
+      border-color:transparent !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,var(--audit-cyan))) !important;
+      box-shadow:0 0 18px color-mix(in srgb,var(--accent,var(--audit-cyan)) 28%,transparent),0 8px 16px rgba(0,0,0,.34) !important;
+      opacity:1 !important;
+    }
+    #barrage-ui .settings-screen .settings-segment button b{
+      color:inherit !important;
+      font-size:12px !important;
+      text-shadow:inherit !important;
+    }
+    #barrage-ui .settings-screen .settings-segment button small{
+      color:currentColor !important;
+      opacity:.70 !important;
+      font-size:8px !important;
+      text-shadow:inherit !important;
+    }
+    #barrage-ui .ranking-screen .ranking-empty{
+      min-height:190px !important;
+      color:var(--audit-text) !important;
+      border-color:rgba(238,247,255,.22) !important;
+      border-left:4px solid var(--audit-cyan) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.12) 0 24%,transparent 24%),
+        rgba(6,11,13,.90) !important;
+    }
+    #barrage-ui .ranking-screen .ranking-empty b{
+      color:var(--audit-text) !important;
+      font-size:28px !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .ranking-screen .ranking-empty span{
+      color:var(--audit-soft) !important;
+      font-size:12px !important;
+      line-height:1.25 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .ranking-screen .ranking-empty small{
+      color:#061014 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--audit-cyan)) !important;
+      font-size:10px !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui :is(.store-screen,.gacha-screen,.upgrade-screen) .page-title p{
+      color:rgba(238,247,255,.82) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .garage-screen :is(.compact-head span,.garage-slot-card small,.garage-ship span),
+    #barrage-ui .store-screen :is(.store-category-head span,.store-offer-main span,.store-buff-grid b),
+    #barrage-ui .gacha-screen :is(.signal-copy span,.signal-channel-row em,.signal-cost-card span,.equipped-card small,.cosmetic-row small),
+    #barrage-ui .upgrade-overlay :is(.special-upgrade-card small,.run-basic-card small,.run-basic-card em),
+    #barrage-ui .game-hud :is(.game-top-card b,.game-chip b,.game-console,.game-wave small){
+      color:rgba(238,247,255,.80) !important;
+      text-shadow:0 1px 0 rgba(0,0,0,.92) !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row.locked{
+      opacity:.78 !important;
+      filter:saturate(.86) !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row.locked :is(b,span,small){
+      color:rgba(238,247,255,.78) !important;
+    }
+    #barrage-ui .gacha-screen .gacha-panel{
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+      overscroll-behavior:contain !important;
+      scrollbar-width:none !important;
+    }
+    #barrage-ui .gacha-screen .gacha-panel::-webkit-scrollbar{
+      display:none !important;
+    }
+    #barrage-ui .gacha-screen .gacha-terminal{
+      height:auto !important;
+      min-height:100% !important;
+      overflow:visible !important;
+      padding-bottom:14px !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row button:disabled{
+      color:rgba(238,247,255,.68) !important;
+      background:rgba(238,247,255,.09) !important;
+      opacity:1 !important;
+    }
+    #barrage-ui .game-hud .game-upgrade{
+      color:rgba(247,255,255,.96) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud .game-upgrade span,
+    #barrage-ui .game-hud .game-upgrade b{
+      color:rgba(247,255,255,.96) !important;
+      text-shadow:0 1px 0 #000,0 0 12px rgba(141,245,255,.20) !important;
+    }
+    #barrage-ui .upgrade-overlay.on :is(.run-basic-card,.special-upgrade-card) :is(b,span,small,em){
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.on .run-basic-card button,
+    #barrage-ui .upgrade-overlay.on .run-basic-card strong{
+      text-shadow:none !important;
+    }
+    /* Combat HUD optimization v14: compact, centered, and safer for vertical phones. */
+    #barrage-ui .game-hud{
+      --combat-opt-edge:clamp(9px,3vw,14px);
+      --combat-opt-bottom:calc(7px + env(safe-area-inset-bottom));
+    }
+    #barrage-ui .game-hud::after{
+      height:clamp(128px,21vh,184px) !important;
+      opacity:.78 !important;
+    }
+    #barrage-ui .game-hud.on .game-top{
+      top:calc(7px + env(safe-area-inset-top)) !important;
+      width:min(430px,calc(100vw - var(--combat-opt-edge) * 2)) !important;
+      height:44px !important;
+      min-height:44px !important;
+      grid-template-columns:40px minmax(0,1fr) 104px !important;
+      gap:7px !important;
+      align-items:start !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back){
+      width:40px !important;
+      min-width:40px !important;
+      max-width:40px !important;
+      height:40px !important;
+      min-height:40px !important;
+      max-height:40px !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span{
+      width:18px !important;
+      height:18px !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span::before,
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span::after{
+      top:2px !important;
+      bottom:2px !important;
+      width:4px !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span::before{left:4px !important}
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span::after{right:4px !important}
+    #barrage-ui .game-hud.on .game-xpbar{
+      height:31px !important;
+      min-height:31px !important;
+      margin-top:4px !important;
+      padding:5px 7px !important;
+      grid-template-columns:22px minmax(0,1fr) auto !important;
+      gap:6px !important;
+    }
+    #barrage-ui .game-hud.on .game-xpbar .game-xp-level{
+      width:20px !important;
+      min-width:20px !important;
+      max-width:20px !important;
+      height:20px !important;
+      min-height:20px !important;
+      max-height:20px !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .game-hud.on .game-xpbar .game-xp-track{
+      height:7px !important;
+      min-height:7px !important;
+      max-height:7px !important;
+    }
+    #barrage-ui .game-hud.on .game-xpbar .game-xp-count{
+      max-width:38px !important;
+      color:rgba(247,255,255,.90) !important;
+      font-size:8px !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on .game-score{
+      height:40px !important;
+      min-height:40px !important;
+      padding:6px 8px 5px !important;
+      grid-template-rows:9px 1fr !important;
+      gap:1px !important;
+    }
+    #barrage-ui .game-hud.on .game-score b{
+      font-size:7px !important;
+    }
+    #barrage-ui .game-hud.on .game-score span[data-ref="score"]{
+      font-size:17px !important;
+      line-height:.96 !important;
+    }
+    #barrage-ui .game-hud.on .game-score small{
+      display:none !important;
+    }
+    #barrage-ui .game-hud .boss-hp{
+      top:calc(54px + env(safe-area-inset-top)) !important;
+      width:min(318px,calc(100vw - 54px)) !important;
+      height:43px !important;
+      min-height:43px !important;
+      max-height:43px !important;
+      padding:7px 10px 8px !important;
+    }
+    #barrage-ui .game-hud .boss-hp-head{
+      height:13px !important;
+      margin-bottom:5px !important;
+    }
+    #barrage-ui .game-hud .boss-hp-head b,
+    #barrage-ui .game-hud .boss-hp-head span{
+      font-size:8px !important;
+    }
+    #barrage-ui .game-hud .boss-hp-track{
+      height:10px !important;
+      min-height:10px !important;
+      max-height:10px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom{
+      bottom:var(--combat-opt-bottom) !important;
+      width:min(430px,calc(100vw - var(--combat-opt-edge) * 2)) !important;
+      max-width:430px !important;
+      height:150px !important;
+      min-height:150px !important;
+      max-height:150px !important;
+      padding:8px !important;
+      grid-template-columns:98px minmax(0,1fr) !important;
+      grid-template-rows:35px 34px 47px !important;
+      gap:6px !important;
+      align-items:stretch !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave{
+      width:98px !important;
+      min-width:98px !important;
+      max-width:98px !important;
+      height:35px !important;
+      min-height:35px !important;
+      max-height:35px !important;
+      padding:5px 7px 5px 9px !important;
+      grid-template-rows:8px 15px 4px !important;
+      column-gap:5px !important;
+      row-gap:2px !important;
+      border-left-width:3px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave b{
+      font-size:7px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave span{
+      font-size:16px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave small{
+      font-size:7px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave .game-wave-track{
+      height:4px !important;
+      min-height:4px !important;
+      max-height:4px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-special-slots{
+      height:35px !important;
+      min-height:35px !important;
+      max-height:35px !important;
+      grid-template-columns:repeat(5,minmax(0,32px)) !important;
+      gap:4px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot{
+      width:32px !important;
+      min-width:32px !important;
+      max-width:32px !important;
+      height:32px !important;
+      min-height:32px !important;
+      max-height:32px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot b .special-icon{
+      width:20px !important;
+      height:20px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot small{
+      min-width:11px !important;
+      height:11px !important;
+      font-size:7px !important;
+      line-height:11px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-bars,
+    #barrage-ui .game-hud.on .game-bars{
+      height:34px !important;
+      min-height:34px !important;
+      max-height:34px !important;
+    }
+    #barrage-ui .game-hud.on .game-meter.is-hp{
+      height:34px !important;
+      min-height:34px !important;
+      max-height:34px !important;
+      padding:5px 8px !important;
+      grid-template-columns:27px minmax(0,1fr) 60px !important;
+      gap:7px !important;
+    }
+    #barrage-ui .game-hud.on .game-meter.is-hp b{
+      font-size:8px !important;
+    }
+    #barrage-ui .game-hud.on .game-meter.is-hp span{
+      font-size:10px !important;
+    }
+    #barrage-ui .game-hud.on .game-meter.is-hp .game-meter-track{
+      height:10px !important;
+      min-height:10px !important;
+      max-height:10px !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-console,
+    #barrage-ui .game-hud.on .game-console{
+      height:47px !important;
+      min-height:47px !important;
+      max-height:47px !important;
+      grid-template-columns:minmax(0,1fr) 92px !important;
+      gap:6px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on .game-chips{
+      height:47px !important;
+      min-height:47px !important;
+      max-height:47px !important;
+      gap:5px !important;
+    }
+    #barrage-ui .game-hud.on .game-chip{
+      height:47px !important;
+      min-height:47px !important;
+      max-height:47px !important;
+      padding:6px 3px 4px !important;
+      grid-template-rows:9px minmax(0,1fr) !important;
+      gap:2px !important;
+    }
+    #barrage-ui .game-hud.on .game-chip b{
+      font-size:7px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-hud.on .game-chip span{
+      max-width:100% !important;
+      font-size:13px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .game-hud.on .game-upgrade{
+      width:92px !important;
+      min-width:92px !important;
+      max-width:92px !important;
+      height:47px !important;
+      min-height:47px !important;
+      max-height:47px !important;
+      padding:0 6px !important;
+      font-size:10px !important;
+      line-height:1.05 !important;
+    }
+    #barrage-ui .game-hud:not(.has-bp) .game-upgrade{
+      color:rgba(238,247,255,.72) !important;
+      border-color:rgba(238,247,255,.16) !important;
+      background:
+        linear-gradient(116deg,rgba(141,245,255,.10) 0 21%,transparent 21%),
+        rgba(7,13,16,.82) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 18px rgba(0,0,0,.34) !important;
+      opacity:1 !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud{
+        --combat-opt-edge:9px;
+        --combat-opt-bottom:calc(6px + env(safe-area-inset-bottom));
+      }
+      #barrage-ui .game-hud::after{
+        height:138px !important;
+      }
+      #barrage-ui .game-hud.on .game-top{
+        top:calc(6px + env(safe-area-inset-top)) !important;
+        width:calc(100vw - 18px) !important;
+        height:41px !important;
+        min-height:41px !important;
+        grid-template-columns:38px minmax(0,1fr) 98px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back){
+        width:38px !important;
+        min-width:38px !important;
+        max-width:38px !important;
+        height:38px !important;
+        min-height:38px !important;
+        max-height:38px !important;
+      }
+      #barrage-ui .game-hud.on .game-xpbar{
+        height:29px !important;
+        min-height:29px !important;
+        margin-top:4px !important;
+        padding:5px 6px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .game-hud.on .game-score{
+        height:38px !important;
+        min-height:38px !important;
+        padding:5px 7px 4px !important;
+      }
+      #barrage-ui .game-hud.on .game-score span[data-ref="score"]{
+        font-size:16px !important;
+      }
+      #barrage-ui .game-hud.on .game-score small{
+        display:none !important;
+      }
+      #barrage-ui .game-hud .boss-hp{
+        top:calc(50px + env(safe-area-inset-top)) !important;
+        width:min(300px,calc(100vw - 46px)) !important;
+        height:40px !important;
+        min-height:40px !important;
+        max-height:40px !important;
+        padding:6px 9px 7px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom{
+        width:calc(100vw - 18px) !important;
+        max-width:none !important;
+        height:136px !important;
+        min-height:136px !important;
+        max-height:136px !important;
+        padding:7px !important;
+        grid-template-columns:90px minmax(0,1fr) !important;
+        grid-template-rows:31px 32px 45px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-wave{
+        width:90px !important;
+        min-width:90px !important;
+        max-width:90px !important;
+        height:31px !important;
+        min-height:31px !important;
+        max-height:31px !important;
+        padding:4px 6px 4px 8px !important;
+        grid-template-rows:7px 14px 4px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-wave span{
+        font-size:15px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-special-slots{
+        height:31px !important;
+        min-height:31px !important;
+        max-height:31px !important;
+        grid-template-columns:repeat(5,minmax(0,29px)) !important;
+        gap:3px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot{
+        width:29px !important;
+        min-width:29px !important;
+        max-width:29px !important;
+        height:29px !important;
+        min-height:29px !important;
+        max-height:29px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-special-slots .special-slot b .special-icon{
+        width:18px !important;
+        height:18px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-bars,
+      #barrage-ui .game-hud.on .game-bars,
+      #barrage-ui .game-hud.on .game-meter.is-hp{
+        height:32px !important;
+        min-height:32px !important;
+        max-height:32px !important;
+      }
+      #barrage-ui .game-hud.on .game-meter.is-hp{
+        padding:5px 7px !important;
+        grid-template-columns:25px minmax(0,1fr) 56px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-hud.on .game-meter.is-hp .game-meter-track{
+        height:9px !important;
+        min-height:9px !important;
+        max-height:9px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-console,
+      #barrage-ui .game-hud.on .game-console{
+        height:45px !important;
+        min-height:45px !important;
+        max-height:45px !important;
+        grid-template-columns:minmax(0,1fr) 84px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .game-hud.on .game-chips,
+      #barrage-ui .game-hud.on .game-chip,
+      #barrage-ui .game-hud.on .game-upgrade{
+        height:45px !important;
+        min-height:45px !important;
+        max-height:45px !important;
+      }
+      #barrage-ui .game-hud.on .game-chip{
+        padding:5px 2px 4px !important;
+      }
+      #barrage-ui .game-hud.on .game-chip span{
+        font-size:12px !important;
+      }
+      #barrage-ui .game-hud.on .game-upgrade{
+        width:84px !important;
+        min-width:84px !important;
+        max-width:84px !important;
+        padding:0 5px !important;
+        font-size:9px !important;
+      }
+    }
+    /* In-run basic upgrades: horizontal picker lives inside the HP frame. */
+    #barrage-ui .game-hud.basic-open.on .game-bottom{
+      height:160px !important;
+      min-height:160px !important;
+      max-height:160px !important;
+      grid-template-rows:35px 44px 47px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom > .game-bars,
+    #barrage-ui .game-hud.basic-open.on .game-bars{
+      height:44px !important;
+      min-height:44px !important;
+      max-height:44px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-meter.is-hp.is-basic-picker{
+      height:44px !important;
+      min-height:44px !important;
+      max-height:44px !important;
+      display:block !important;
+      padding:4px !important;
+      overflow:hidden !important;
+      pointer-events:auto !important;
+      border-color:rgba(141,245,255,.36) !important;
+      border-top-color:rgba(255,211,106,.58) !important;
+      background:
+        linear-gradient(112deg,rgba(255,211,106,.18) 0 16%,transparent 16%),
+        linear-gradient(180deg,rgba(15,35,38,.96),rgba(5,12,15,.94)) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 0 24px rgba(141,245,255,.12),0 10px 20px rgba(0,0,0,.38) !important;
+    }
+    #barrage-ui .hud-basic-picker{
+      position:relative !important;
+      width:100% !important;
+      height:100% !important;
+      min-width:0 !important;
+      overflow:hidden !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui .hud-basic-track{
+      height:100% !important;
+      min-width:0 !important;
+      display:flex !important;
+      gap:6px !important;
+      overflow-x:auto !important;
+      overflow-y:hidden !important;
+      overscroll-behavior-x:contain !important;
+      scroll-snap-type:x proximity !important;
+      -webkit-overflow-scrolling:touch !important;
+      scrollbar-width:none !important;
+      padding:0 2px 2px !important;
+    }
+    #barrage-ui .hud-basic-track::-webkit-scrollbar{
+      display:none !important;
+    }
+    #barrage-ui .hud-basic-card{
+      flex:0 0 clamp(122px,35vw,150px) !important;
+      height:100% !important;
+      min-height:0 !important;
+      max-height:100% !important;
+      min-width:0 !important;
+      box-sizing:border-box !important;
+      display:grid !important;
+      grid-template-columns:28px minmax(0,1fr) 34px !important;
+      grid-template-rows:16px 16px !important;
+      gap:2px 5px !important;
+      align-items:center !important;
+      padding:4px 5px !important;
+      scroll-snap-align:start !important;
+      color:rgba(247,255,255,.96) !important;
+      border:1px solid rgba(238,247,255,.18) !important;
+      border-left:3px solid var(--accent) !important;
+      background:
+        linear-gradient(116deg,color-mix(in srgb,var(--accent) 22%,transparent) 0 22%,transparent 22%),
+        linear-gradient(180deg,rgba(18,31,35,.97),rgba(4,10,12,.95)) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 4px 10px rgba(0,0,0,.34) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      appearance:none !important;
+    }
+    #barrage-ui .hud-basic-card > i{
+      grid-row:1 / 3 !important;
+      width:26px !important;
+      height:26px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      background:linear-gradient(135deg,#f7ffff,var(--accent)) !important;
+      box-shadow:0 0 14px color-mix(in srgb,var(--accent) 34%,transparent) !important;
+      font-style:normal !important;
+      font-size:9px !important;
+      font-weight:950 !important;
+      line-height:1 !important;
+      text-shadow:none !important;
+      clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px) !important;
+    }
+    #barrage-ui .hud-basic-card > span{
+      grid-column:2 !important;
+      grid-row:1 !important;
+      min-width:0 !important;
+      display:flex !important;
+      align-items:center !important;
+      gap:4px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .hud-basic-card > span b{
+      flex:0 0 auto !important;
+      color:color-mix(in srgb,var(--accent) 86%,#ffffff) !important;
+      font-size:7px !important;
+      font-weight:950 !important;
+      line-height:1 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .hud-basic-card > span strong{
+      min-width:0 !important;
+      display:block !important;
+      overflow:hidden !important;
+      color:rgba(247,255,255,.98) !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+      line-height:1 !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .hud-basic-card > small{
+      grid-column:2 !important;
+      grid-row:2 !important;
+      min-width:0 !important;
+      overflow:hidden !important;
+      color:rgba(238,247,255,.74) !important;
+      font-size:7px !important;
+      font-weight:850 !important;
+      line-height:1 !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .hud-basic-card > em,
+    #barrage-ui .hud-basic-card > mark{
+      grid-column:3 !important;
+      justify-self:stretch !important;
+      min-width:0 !important;
+      height:14px !important;
+      display:grid !important;
+      place-items:center !important;
+      padding:0 2px !important;
+      border:1px solid rgba(238,247,255,.18) !important;
+      background:rgba(238,247,255,.08) !important;
+      color:rgba(247,255,255,.88) !important;
+      font-size:7px !important;
+      font-style:normal !important;
+      font-weight:950 !important;
+      line-height:1 !important;
+      text-shadow:0 1px 0 #000 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:clip !important;
+    }
+    #barrage-ui .hud-basic-card > em{
+      grid-row:1 !important;
+    }
+    #barrage-ui .hud-basic-card > mark{
+      grid-row:2 !important;
+      border-color:color-mix(in srgb,var(--accent) 44%,transparent) !important;
+      background:linear-gradient(90deg,rgba(247,255,255,.94),color-mix(in srgb,var(--accent) 72%,#ffffff)) !important;
+      color:#061014 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .hud-basic-card.disabled{
+      opacity:.58 !important;
+      filter:saturate(.72) !important;
+    }
+    #barrage-ui .hud-basic-card.locked > mark,
+    #barrage-ui .hud-basic-card.maxed > mark{
+      color:rgba(238,247,255,.72) !important;
+      border-color:rgba(238,247,255,.14) !important;
+      background:rgba(238,247,255,.07) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud.basic-open.on .game-bottom{
+        height:148px !important;
+        min-height:148px !important;
+        max-height:148px !important;
+        grid-template-rows:31px 44px 45px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .game-bottom > .game-bars,
+      #barrage-ui .game-hud.basic-open.on .game-bars,
+      #barrage-ui .game-hud.basic-open.on .game-meter.is-hp.is-basic-picker{
+        height:44px !important;
+        min-height:44px !important;
+        max-height:44px !important;
+      }
+      #barrage-ui .hud-basic-card{
+        flex-basis:132px !important;
+        grid-template-columns:25px minmax(0,1fr) 31px !important;
+        grid-template-rows:15px 15px !important;
+        gap:2px 4px !important;
+        padding:4px !important;
+      }
+      #barrage-ui .hud-basic-card > i{
+        width:23px !important;
+        height:23px !important;
+        font-size:8px !important;
+      }
+      #barrage-ui .hud-basic-card > span strong{
+        font-size:9px !important;
+      }
+      #barrage-ui .hud-basic-card > small,
+      #barrage-ui .hud-basic-card > em,
+      #barrage-ui .hud-basic-card > mark{
+        font-size:6.5px !important;
+      }
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui :is(.ranking-screen,.settings-screen){
+        --audit-edge:10px;
+        --audit-header-h:56px;
+      }
+      #barrage-ui :is(.ranking-screen,.settings-screen) .page-header{
+        top:9px !important;
+        grid-template-columns:minmax(0,1fr) 50px !important;
+        gap:8px !important;
+      }
+      #barrage-ui :is(.ranking-screen,.settings-screen) .page-title{
+        padding:8px 11px !important;
+      }
+      #barrage-ui :is(.ranking-screen,.settings-screen) .page-title h1{
+        font-size:24px !important;
+      }
+      #barrage-ui :is(.ranking-screen,.settings-screen) .page-title p{
+        font-size:9px !important;
+      }
+      #barrage-ui :is(.ranking-screen,.settings-screen) .page-back{
+        width:50px !important;
+        min-width:50px !important;
+      }
+      #barrage-ui :is(.ranking-screen,.settings-screen) .page-back::before{
+        left:18px !important;
+        top:19px !important;
+      }
+      #barrage-ui :is(.ranking-screen,.settings-screen) .page-back::after{
+        left:18px !important;
+        top:27px !important;
+      }
+      #barrage-ui :is(.ranking-screen .ranking-list,.settings-screen .settings-panel){
+        top:76px !important;
+        bottom:10px !important;
+        padding:9px !important;
+      }
+      #barrage-ui .settings-screen .settings-summary{
+        min-height:78px !important;
+        grid-template-columns:minmax(0,1fr) 68px !important;
+        padding:10px !important;
+      }
+      #barrage-ui .settings-screen .settings-summary strong{
+        width:68px !important;
+        height:52px !important;
+        font-size:18px !important;
+      }
+      #barrage-ui .settings-screen .settings-row{
+        min-height:76px !important;
+        padding:10px 12px !important;
+      }
+      #barrage-ui .settings-screen .settings-row span{
+        font-size:17px !important;
+      }
+      #barrage-ui .settings-screen .control-mode-row{
+        min-height:156px !important;
+        grid-template-rows:auto auto auto 40px !important;
+      }
+      #barrage-ui .settings-screen .settings-segment button{
+        height:40px !important;
+        min-height:40px !important;
+      }
+    }
+    /* Game over result: a heavier retry screen with GAMEOVER as the first read. */
+    #barrage-ui .dead-screen{
+      --over-red:#ff3b62;
+      --over-cyan:#8df5ff;
+      --over-amber:#ffd36a;
+      --over-text:#f7ffff;
+      --over-muted:rgba(238,247,255,.74);
+      background-color:#020304 !important;
+      background-image:
+        linear-gradient(rgba(255,59,98,.055) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(141,245,255,.04) 1px,transparent 1px),
+        radial-gradient(circle at 50% 14%,rgba(255,59,98,.24),transparent 30%),
+        linear-gradient(180deg,#050607,#020304 62%,#050807) !important;
+      background-size:28px 28px,28px 28px,100% 100%,100% 100% !important;
+    }
+    #barrage-ui .dead-screen::before{
+      display:block !important;
+      content:"" !important;
+      position:absolute !important;
+      inset:0 !important;
+      pointer-events:none !important;
+      opacity:.44 !important;
+      background:
+        linear-gradient(180deg,transparent 0 38%,rgba(255,59,98,.18) 39%,transparent 40%),
+        repeating-linear-gradient(0deg,rgba(247,255,255,.055) 0 1px,transparent 1px 4px) !important;
+      transform:none !important;
+    }
+    #barrage-ui .dead-screen::after{
+      display:block !important;
+      content:"" !important;
+      position:absolute !important;
+      left:-18% !important;
+      right:-18% !important;
+      top:112px !important;
+      height:5px !important;
+      pointer-events:none !important;
+      opacity:.88 !important;
+      background:linear-gradient(90deg,transparent,var(--over-red),var(--over-amber),transparent) !important;
+      box-shadow:0 0 24px rgba(255,59,98,.46) !important;
+      animation:gameoverSweep .62s cubic-bezier(.2,.8,.2,1) both !important;
+    }
+    #barrage-ui .dead-screen .ui-stage{
+      position:absolute !important;
+      inset:0 !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui .dead-screen .gameover-card{
+      position:absolute !important;
+      left:50% !important;
+      right:auto !important;
+      top:calc(18px + env(safe-area-inset-top)) !important;
+      bottom:calc(14px + env(safe-area-inset-bottom)) !important;
+      width:min(520px, calc(100% - 24px)) !important;
+      max-width:calc(100% - 24px) !important;
+      min-width:0 !important;
+      box-sizing:border-box !important;
+      margin:0 auto !important;
+      transform:translateX(-50%) !important;
+      display:grid !important;
+      grid-template-rows:34px minmax(74px,.84fr) 112px 74px minmax(58px,.52fr) 64px !important;
+      gap:10px !important;
+      overflow:hidden !important;
+      padding:12px !important;
+      border-radius:8px !important;
+      border:1px solid rgba(255,59,98,.42) !important;
+      border-top:4px solid var(--over-red) !important;
+      background:
+        linear-gradient(180deg,rgba(11,15,18,.97),rgba(4,6,8,.96)),
+        radial-gradient(circle at 50% 0,rgba(255,59,98,.26),transparent 34%) !important;
+      box-shadow:0 28px 74px rgba(0,0,0,.72),0 0 0 1px rgba(141,245,255,.1) inset,0 0 38px rgba(255,59,98,.18) !important;
+      color:var(--over-text) !important;
+      animation:gameoverPanelIn .44s cubic-bezier(.2,.86,.22,1) both !important;
+    }
+    #barrage-ui .dead-screen .gameover-card::before{
+      content:"" !important;
+      position:absolute !important;
+      left:0 !important;
+      right:0 !important;
+      top:0 !important;
+      height:42% !important;
+      pointer-events:none !important;
+      background:linear-gradient(90deg,rgba(255,59,98,.2),transparent 24%,transparent 76%,rgba(141,245,255,.16)) !important;
+      opacity:.9 !important;
+    }
+    #barrage-ui .gameover-signal{
+      position:relative !important;
+      z-index:1 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:8px !important;
+      min-width:0 !important;
+      padding:0 8px !important;
+      color:var(--over-muted) !important;
+      font-size:10px !important;
+      font-weight:900 !important;
+      letter-spacing:0 !important;
+      border:1px solid rgba(141,245,255,.16) !important;
+      background:rgba(255,255,255,.035) !important;
+    }
+    #barrage-ui .gameover-signal span,
+    #barrage-ui .gameover-signal b{
+      min-width:0 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .gameover-signal span{
+      color:var(--over-red) !important;
+      text-shadow:0 0 12px rgba(255,59,98,.55) !important;
+    }
+    #barrage-ui .gameover-signal b{
+      color:var(--over-cyan) !important;
+      font-size:10px !important;
+      text-align:right !important;
+    }
+    #barrage-ui .gameover-title{
+      position:relative !important;
+      z-index:1 !important;
+      display:grid !important;
+      place-items:center !important;
+      min-width:0 !important;
+      color:#fff7f8 !important;
+      font-size:clamp(42px,12.5vw,64px) !important;
+      font-weight:1000 !important;
+      line-height:.82 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      text-align:center !important;
+      text-shadow:0 2px 0 #5a071a,0 0 18px rgba(255,59,98,.78),0 0 42px rgba(141,245,255,.2) !important;
+      filter:drop-shadow(0 12px 22px rgba(0,0,0,.7)) !important;
+      animation:gameoverTitleIn .52s cubic-bezier(.2,.9,.2,1) both !important;
+    }
+    #barrage-ui .gameover-summary{
+      position:relative !important;
+      z-index:1 !important;
+      display:grid !important;
+      grid-template-columns:1.2fr .8fr !important;
+      gap:10px !important;
+      min-width:0 !important;
+      min-height:0 !important;
+      animation:gameoverStatIn .58s .06s cubic-bezier(.2,.86,.22,1) both !important;
+    }
+    #barrage-ui .gameover-score,
+    #barrage-ui .gameover-rank,
+    #barrage-ui .gameover-result-grid .result-stat,
+    #barrage-ui .gameover-log{
+      min-width:0 !important;
+      border-radius:6px !important;
+      border:1px solid rgba(247,255,255,.14) !important;
+      background:rgba(3,6,8,.68) !important;
+      box-shadow:0 0 0 1px rgba(255,255,255,.035) inset !important;
+    }
+    #barrage-ui .gameover-score,
+    #barrage-ui .gameover-rank{
+      display:grid !important;
+      align-content:center !important;
+      gap:5px !important;
+      padding:12px !important;
+      border-top:3px solid var(--over-red) !important;
+    }
+    #barrage-ui .gameover-rank{
+      border-top-color:var(--over-cyan) !important;
+    }
+    #barrage-ui .gameover-score b,
+    #barrage-ui .gameover-rank b,
+    #barrage-ui .gameover-result-grid b,
+    #barrage-ui .gameover-log b{
+      color:var(--over-muted) !important;
+      font-size:10px !important;
+      font-weight:900 !important;
+      line-height:1 !important;
+      letter-spacing:0 !important;
+      text-transform:uppercase !important;
+    }
+    #barrage-ui .gameover-score strong,
+    #barrage-ui .gameover-rank strong{
+      min-width:0 !important;
+      overflow:hidden !important;
+      color:#ffffff !important;
+      font-size:clamp(30px,8.5vw,42px) !important;
+      font-weight:1000 !important;
+      line-height:.96 !important;
+      letter-spacing:0 !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+      text-shadow:0 0 18px rgba(141,245,255,.23) !important;
+    }
+    #barrage-ui .gameover-rank strong{
+      color:var(--over-cyan) !important;
+      text-shadow:0 0 18px rgba(141,245,255,.42) !important;
+    }
+    #barrage-ui .gameover-score span,
+    #barrage-ui .gameover-rank span{
+      min-width:0 !important;
+      overflow:hidden !important;
+      color:var(--over-muted) !important;
+      font-size:11px !important;
+      font-weight:800 !important;
+      letter-spacing:0 !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .gameover-result-grid{
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:8px !important;
+      height:auto !important;
+      margin:0 !important;
+      min-height:0 !important;
+      animation:gameoverStatIn .58s .12s cubic-bezier(.2,.86,.22,1) both !important;
+    }
+    #barrage-ui .gameover-result-grid .result-stat{
+      display:grid !important;
+      align-content:center !important;
+      gap:5px !important;
+      min-height:0 !important;
+      padding:9px 7px !important;
+      text-align:center !important;
+      border-color:rgba(141,245,255,.17) !important;
+    }
+    #barrage-ui .gameover-result-grid .result-stat > span{
+      display:flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      min-height:24px !important;
+      margin-top:0 !important;
+    }
+    #barrage-ui .gameover-result-grid span{
+      min-width:0 !important;
+      overflow:hidden !important;
+      color:#ffffff !important;
+      font-size:clamp(17px,5vw,22px) !important;
+      font-weight:1000 !important;
+      line-height:1 !important;
+      letter-spacing:0 !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .gameover-result-grid .token-value{
+      display:inline-flex !important;
+      align-items:center !important;
+      gap:4px !important;
+      justify-content:center !important;
+      width:100% !important;
+      max-width:100% !important;
+      margin-top:0 !important;
+      padding:0 !important;
+      background:transparent !important;
+      border:0 !important;
+    }
+    #barrage-ui .gameover-result-grid .token-number{
+      display:inline-block !important;
+      min-width:0 !important;
+      overflow:hidden !important;
+      color:#ffffff !important;
+      font-size:clamp(17px,5vw,22px) !important;
+      font-weight:1000 !important;
+      line-height:1 !important;
+      margin-top:0 !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .gameover-result-grid .token-diamond{
+      flex:0 0 12px !important;
+      width:12px !important;
+      height:12px !important;
+    }
+    #barrage-ui .gameover-log{
+      position:relative !important;
+      z-index:1 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 54px !important;
+      grid-template-rows:auto auto !important;
+      align-content:center !important;
+      column-gap:10px !important;
+      row-gap:5px !important;
+      min-height:0 !important;
+      padding:10px 12px !important;
+      border-left:3px solid var(--over-amber) !important;
+      animation:gameoverStatIn .58s .18s cubic-bezier(.2,.86,.22,1) both !important;
+    }
+    #barrage-ui .gameover-log span{
+      min-width:0 !important;
+      overflow:hidden !important;
+      color:rgba(247,255,255,.86) !important;
+      font-size:12px !important;
+      font-weight:850 !important;
+      letter-spacing:0 !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .gameover-log i{
+      grid-column:2 !important;
+      grid-row:1 / span 2 !important;
+      align-self:center !important;
+      justify-self:end !important;
+      width:48px !important;
+      height:18px !important;
+      border:1px solid rgba(255,211,106,.42) !important;
+      background:linear-gradient(90deg,var(--over-red) 0 34%,var(--over-amber) 34% 68%,var(--over-cyan) 68% 100%) !important;
+      box-shadow:0 0 18px rgba(255,211,106,.25) !important;
+    }
+    #barrage-ui .gameover-actions{
+      display:grid !important;
+      grid-template-columns:1.35fr .9fr !important;
+      gap:10px !important;
+      height:auto !important;
+      min-height:0 !important;
+      margin:0 !important;
+      animation:gameoverStatIn .58s .24s cubic-bezier(.2,.86,.22,1) both !important;
+    }
+    #barrage-ui .gameover-actions button{
+      min-width:0 !important;
+      min-height:0 !important;
+      height:64px !important;
+      display:grid !important;
+      align-content:center !important;
+      justify-items:start !important;
+      gap:3px !important;
+      padding:10px 14px !important;
+      border-radius:6px !important;
+      border:1px solid rgba(247,255,255,.18) !important;
+      color:#ffffff !important;
+      background:linear-gradient(180deg,rgba(16,22,26,.95),rgba(8,11,13,.95)) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.36),0 0 0 1px rgba(255,255,255,.04) inset !important;
+    }
+    #barrage-ui .gameover-actions button b{
+      min-width:0 !important;
+      overflow:hidden !important;
+      font-size:17px !important;
+      font-weight:1000 !important;
+      line-height:1 !important;
+      letter-spacing:0 !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .gameover-actions button span{
+      min-width:0 !important;
+      overflow:hidden !important;
+      color:rgba(247,255,255,.72) !important;
+      font-size:10px !important;
+      font-weight:900 !important;
+      letter-spacing:0 !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .gameover-actions .gameover-retry{
+      border-color:rgba(255,59,98,.58) !important;
+      background:linear-gradient(135deg,rgba(255,59,98,.96),rgba(123,14,38,.96) 58%,rgba(12,18,21,.96)) !important;
+      box-shadow:0 15px 30px rgba(255,59,98,.24),0 0 0 1px rgba(255,255,255,.13) inset,0 0 26px rgba(255,59,98,.23) !important;
+    }
+    #barrage-ui .gameover-actions .gameover-retry span{
+      color:rgba(255,255,255,.86) !important;
+    }
+    @media (max-width:520px){
+      #barrage-ui .dead-screen .gameover-card{
+        left:12px !important;
+        right:auto !important;
+        width:calc(100% - 24px) !important;
+        max-width:366px !important;
+        transform:none !important;
+        animation:gameoverPanelMobileIn .44s cubic-bezier(.2,.86,.22,1) both !important;
+      }
+      #barrage-ui .gameover-title{
+        font-size:clamp(42px,10.8vw,50px) !important;
+      }
+    }
+    @media (max-height:720px){
+      #barrage-ui .dead-screen .gameover-card{
+        top:calc(10px + env(safe-area-inset-top)) !important;
+        bottom:calc(10px + env(safe-area-inset-bottom)) !important;
+        grid-template-rows:30px minmax(58px,.74fr) 96px 66px minmax(50px,.42fr) 58px !important;
+        gap:8px !important;
+        padding:10px !important;
+      }
+      #barrage-ui .gameover-title{
+        font-size:clamp(40px,12vw,58px) !important;
+      }
+      #barrage-ui .gameover-score,
+      #barrage-ui .gameover-rank{
+        padding:10px !important;
+      }
+      #barrage-ui .gameover-result-grid .result-stat{
+        padding:7px 5px !important;
+      }
+      #barrage-ui .gameover-actions button{
+        height:58px !important;
+      }
+    }
+    @media (max-width:360px){
+      #barrage-ui .dead-screen .gameover-card{
+        left:9px !important;
+        width:calc(100% - 18px) !important;
+        max-width:342px !important;
+      }
+      #barrage-ui .gameover-summary{
+        grid-template-columns:1fr .78fr !important;
+        gap:8px !important;
+      }
+      #barrage-ui .gameover-actions{
+        grid-template-columns:1.25fr .88fr !important;
+        gap:8px !important;
+      }
+      #barrage-ui .gameover-actions button{
+        padding:9px 10px !important;
+      }
+      #barrage-ui .gameover-actions button b{
+        font-size:15px !important;
+      }
+    }
+    @keyframes gameoverPanelIn{
+      from{opacity:0;transform:translateX(-50%) translateY(22px) scale(.985)}
+      to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+    }
+    @keyframes gameoverPanelMobileIn{
+      from{opacity:0;transform:translateY(22px) scale(.985)}
+      to{opacity:1;transform:translateY(0) scale(1)}
+    }
+    @keyframes gameoverTitleIn{
+      0%{opacity:0;transform:translateY(-10px) scale(1.08);filter:blur(5px)}
+      64%{opacity:1;transform:translateY(0) scale(.985);filter:blur(0)}
+      100%{opacity:1;transform:translateY(0) scale(1);filter:drop-shadow(0 12px 22px rgba(0,0,0,.7))}
+    }
+    @keyframes gameoverStatIn{
+      from{opacity:0;transform:translateY(14px)}
+      to{opacity:1;transform:translateY(0)}
+    }
+    @keyframes gameoverSweep{
+      from{transform:translateX(-32%) scaleX(.34);opacity:0}
+      to{transform:translateX(0) scaleX(1);opacity:.88}
+    }
+    /* Readability audit: keep small labels legible on vertical phones. */
+    #barrage-ui :is(.page-title p,.settings-row small,.settings-summary small,.ranking-empty span,.level-note){
+      color:rgba(238,247,255,.88) !important;
+      opacity:1 !important;
+      text-shadow:0 1px 0 #000,0 0 10px rgba(141,245,255,.10) !important;
+    }
+    #barrage-ui .home-screen .record-pill b,
+    #barrage-ui .home-screen .base-sync{
+      color:rgba(238,247,255,.86) !important;
+      opacity:1 !important;
+      text-shadow:0 1px 0 #000,0 0 10px rgba(141,245,255,.10) !important;
+    }
+    #barrage-ui .home-screen .record-pill b{
+      font-size:9px !important;
+    }
+    #barrage-ui .home-screen .base-sync{
+      font-size:10px !important;
+      line-height:1.15 !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen,.gacha-screen,.upgrade-screen) :is(.compact-stats small,.compact-head span,.store-category-head span,.store-offer-main span,.store-offer-desc,.store-buff-grid b,.garage-slot-card small,.garage-ship span,.signal-copy span,.signal-channel-row em,.signal-cost-card span,.equipped-card small,.cosmetic-row small,.upgrade-card small){
+      color:rgba(238,247,255,.86) !important;
+      opacity:1 !important;
+      text-shadow:0 1px 0 #000,0 0 9px rgba(141,245,255,.09) !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen,.gacha-screen,.upgrade-screen) :is(.compact-stats small,.compact-head span,.store-buff-grid b,.garage-slot-card small,.cosmetic-row small,.upgrade-card small,.signal-reveal-grid b,.signal-reveal-grid em){
+      font-size:8.5px !important;
+      line-height:1.18 !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen,.gacha-screen,.upgrade-screen) :is(.store-offer-main span,.garage-ship span,.equipped-card small,.signal-channel-row em,.signal-guarantee b,.signal-guarantee span){
+      font-size:9px !important;
+      line-height:1.15 !important;
+    }
+    #barrage-ui .store-screen .store-offer-action:disabled,
+    #barrage-ui .garage-screen .garage-ship.locked,
+    #barrage-ui .garage-screen .garage-empty-slot{
+      color:rgba(238,247,255,.78) !important;
+      opacity:.90 !important;
+      filter:saturate(.90) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row.locked{
+      opacity:.88 !important;
+      filter:saturate(.94) !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row.locked :is(b,span,small){
+      color:rgba(238,247,255,.84) !important;
+      opacity:1 !important;
+    }
+    #barrage-ui .settings-screen .settings-segment button small{
+      font-size:9px !important;
+      opacity:.86 !important;
+    }
+    #barrage-ui .game-hud.on :is(.game-score b,.game-xp-count,.boss-hp-head b,.boss-hp-head span,.game-bottom > .game-wave b,.game-bottom > .game-wave small,.game-chip b,.game-upgrade,.game-meter.is-hp b){
+      color:rgba(247,255,255,.94) !important;
+      opacity:1 !important;
+      text-shadow:0 1px 0 #000,0 0 10px rgba(141,245,255,.14) !important;
+    }
+    #barrage-ui .game-hud.on .game-score b,
+    #barrage-ui .game-hud.on .game-bottom > .game-wave b,
+    #barrage-ui .game-hud.on .game-bottom > .game-wave small,
+    #barrage-ui .game-hud.on .game-chip b{
+      font-size:8px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-hud.on .boss-hp-head b,
+    #barrage-ui .game-hud.on .boss-hp-head span{
+      font-size:9px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-hud.on .game-chip span{
+      color:#f7ffff !important;
+      text-shadow:0 1px 0 #000,0 0 12px rgba(141,245,255,.16) !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom{
+      height:178px !important;
+      min-height:178px !important;
+      max-height:178px !important;
+      grid-template-rows:35px 62px 47px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom > .game-bars,
+    #barrage-ui .game-hud.basic-open.on .game-bars,
+    #barrage-ui .game-hud.basic-open.on .game-meter.is-hp.is-basic-picker{
+      height:62px !important;
+      min-height:62px !important;
+      max-height:62px !important;
+    }
+    #barrage-ui .hud-basic-card{
+      flex-basis:clamp(148px,40vw,172px) !important;
+      grid-template-columns:31px minmax(0,1fr) 40px !important;
+      grid-template-rows:20px 22px !important;
+      gap:3px 6px !important;
+      padding:6px !important;
+    }
+    #barrage-ui .hud-basic-card > i{
+      width:28px !important;
+      height:28px !important;
+      font-size:9px !important;
+    }
+    #barrage-ui .hud-basic-card > span b{
+      font-size:8px !important;
+      color:color-mix(in srgb,var(--accent) 84%,#ffffff) !important;
+    }
+    #barrage-ui .hud-basic-card > span strong{
+      font-size:11px !important;
+    }
+    #barrage-ui .hud-basic-card > small{
+      color:rgba(238,247,255,.88) !important;
+      font-size:8px !important;
+      line-height:1.22 !important;
+      align-self:start !important;
+      padding-top:1px !important;
+    }
+    #barrage-ui .hud-basic-card > em,
+    #barrage-ui .hud-basic-card > mark{
+      height:16px !important;
+      font-size:8px !important;
+      line-height:1 !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud.basic-open.on .game-bottom{
+        height:168px !important;
+        min-height:168px !important;
+        max-height:168px !important;
+        grid-template-rows:31px 60px 45px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .game-bottom > .game-bars,
+      #barrage-ui .game-hud.basic-open.on .game-bars,
+      #barrage-ui .game-hud.basic-open.on .game-meter.is-hp.is-basic-picker{
+        height:60px !important;
+        min-height:60px !important;
+        max-height:60px !important;
+      }
+      #barrage-ui .hud-basic-card{
+        flex-basis:146px !important;
+        grid-template-columns:29px minmax(0,1fr) 37px !important;
+      }
+    }
+    #barrage-ui .store-screen .store-market-v3 .compact-stats > span small,
+    #barrage-ui .garage-screen .garage-v2 .compact-head span,
+    #barrage-ui .garage-screen .garage-slot-column > b,
+    #barrage-ui .upgrade-screen .upgrade-overview-main b,
+    #barrage-ui .upgrade-screen .upgrade-overview-stat span,
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card b,
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card small{
+      color:rgba(238,247,255,.88) !important;
+      opacity:1 !important;
+      font-size:8.5px !important;
+      line-height:1.2 !important;
+      text-shadow:0 1px 0 #000,0 0 9px rgba(141,245,255,.10) !important;
+    }
+    #barrage-ui .store-screen .store-offer-card .store-offer-action:disabled:not(.active):not(.selected),
+    #barrage-ui .garage-screen .garage-ship-rail .garage-ship.locked:disabled:not(.active):not(.selected),
+    #barrage-ui .gacha-screen .cosmetic-row button:disabled:not(.active):not(.selected){
+      color:rgba(238,247,255,.80) !important;
+      opacity:.92 !important;
+      filter:saturate(.92) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .gacha-screen .signal-reveal-grid em,
+    #barrage-ui .gacha-screen .equipped-card b,
+    #barrage-ui .gacha-screen .supply-section-head b,
+    #barrage-ui .gacha-screen .supply-section-head span,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .level-note{
+      color:rgba(238,247,255,.86) !important;
+      opacity:1 !important;
+      font-size:9px !important;
+      line-height:1.18 !important;
+      text-shadow:0 1px 0 #000,0 0 9px rgba(141,245,255,.10) !important;
+    }
+    #barrage-ui .game-hud.on .game-score b,
+    #barrage-ui .game-hud.on .game-bottom > .game-wave b,
+    #barrage-ui .game-hud.on .game-bottom > .game-wave small,
+    #barrage-ui .game-hud.on .game-chip b,
+    #barrage-ui .game-hud.on .game-meter.is-hp b,
+    #barrage-ui .hud-basic-card > span b,
+    #barrage-ui .hud-basic-card > small{
+      font-size:8.5px !important;
+    }
+    /* Final requested UI pass: unified back buttons, simple gacha, readable controls. */
+    #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .page-header{
+      left:14px !important;
+      right:14px !important;
+      top:10px !important;
+      height:58px !important;
+      display:grid !important;
+      grid-template-columns:54px minmax(0,1fr) !important;
+      gap:10px !important;
+      align-items:stretch !important;
+      z-index:90 !important;
+    }
+    #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .page-back{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      display:grid !important;
+      place-items:center !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      width:54px !important;
+      min-width:54px !important;
+      height:58px !important;
+      min-height:58px !important;
+      order:0 !important;
+    }
+    #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .page-title{
+      grid-column:2 !important;
+      grid-row:1 !important;
+      width:auto !important;
+      min-width:0 !important;
+      height:58px !important;
+      min-height:58px !important;
+      order:1 !important;
+    }
+    #barrage-ui .garage-screen .page-header .showroom-back{
+      display:grid !important;
+    }
+    #barrage-ui .home-screen .home-token-readout{
+      position:absolute !important;
+      z-index:38 !important;
+      top:10px !important;
+      right:calc(var(--home-edge) + var(--home-gear) + var(--home-gap)) !important;
+      width:96px !important;
+      height:var(--home-header-h) !important;
+      min-height:var(--home-header-h) !important;
+      padding:8px 10px !important;
+      display:grid !important;
+      grid-template-rows:14px minmax(0,1fr) !important;
+      align-items:center !important;
+      border:1px solid rgba(238,247,255,.30) !important;
+      border-top:3px solid var(--home-amber,#ffd36a) !important;
+      background:
+        linear-gradient(128deg,rgba(255,211,106,.18) 0 22%,transparent 22%),
+        linear-gradient(180deg,#132227,#071014) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.54),0 14px 28px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .home-screen .home-header > .brand-lockup{
+      right:108px !important;
+    }
+    #barrage-ui .home-screen .home-token-readout b{
+      color:rgba(238,247,255,.72) !important;
+      font-size:8px !important;
+      font-weight:950 !important;
+      line-height:1 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .home-screen .home-token-readout .token-value{
+      justify-content:flex-end !important;
+      gap:5px !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .home-screen .home-token-readout .token-number{
+      color:#fff !important;
+      font-size:18px !important;
+      font-weight:950 !important;
+      line-height:1 !important;
+      text-shadow:0 1px 0 #000,0 0 14px rgba(255,211,106,.18) !important;
+    }
+    #barrage-ui .game-hud::before{
+      background:linear-gradient(180deg,rgba(0,0,0,.58),rgba(0,0,0,.24) 58%,transparent) !important;
+      opacity:.72 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on{
+      background:linear-gradient(180deg,transparent 0 34%,rgba(0,0,0,.18) 40%,rgba(0,0,0,.74) 100%) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on::before{
+      top:36% !important;
+      opacity:.42 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+      top:auto !important;
+      bottom:calc(10px + env(safe-area-inset-bottom)) !important;
+      left:50% !important;
+      right:auto !important;
+      width:min(860px,calc(100vw - 24px)) !important;
+      height:min(60vh,450px) !important;
+      max-height:min(56vh,410px) !important;
+      grid-template-rows:44px 42px 38px minmax(0,1fr) !important;
+      transform:translateX(-50%) !important;
+      pointer-events:auto !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-head{
+      grid-template-columns:minmax(0,1fr) 132px !important;
+      min-height:44px !important;
+      gap:10px !important;
+      align-items:start !important;
+    }
+    #barrage-ui .level-action-stack{
+      min-width:0 !important;
+      display:grid !important;
+      grid-template-rows:30px 34px !important;
+      gap:6px !important;
+    }
+    #barrage-ui .level-action-stack .level-sp{
+      width:100% !important;
+      height:30px !important;
+      min-height:30px !important;
+      margin:0 !important;
+    }
+    #barrage-ui .level-reroll{
+      width:100% !important;
+      height:34px !important;
+      min-height:34px !important;
+      padding:0 8px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:6px !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--tone-cyan,#8df5ff)) !important;
+      box-shadow:4px 4px 0 rgba(0,0,0,.45),0 0 18px rgba(141,245,255,.18) !important;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px) !important;
+    }
+    #barrage-ui .level-reroll:disabled{
+      color:rgba(238,247,255,.64) !important;
+      background:rgba(238,247,255,.10) !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .level-reroll :is(b,span){
+      min-width:0 !important;
+      color:inherit !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+      line-height:1 !important;
+      text-shadow:none !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .level-reroll .token-value{
+      gap:4px !important;
+    }
+    #barrage-ui .skill-reroll-row{
+      display:grid !important;
+      grid-template-columns:132px minmax(0,1fr) !important;
+      align-items:center !important;
+      gap:10px !important;
+      min-height:38px !important;
+      margin:0 !important;
+    }
+    #barrage-ui .skill-reroll-row small{
+      display:block !important;
+      color:rgba(238,247,255,.78) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      text-align:left !important;
+      text-shadow:0 1px 0 #000 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      max-height:none !important;
+      min-height:0 !important;
+      overflow-y:auto !important;
+      scrollbar-width:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid::-webkit-scrollbar{display:none !important}
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+      opacity:1 !important;
+      visibility:visible !important;
+      filter:none !important;
+      transform:none !important;
+      animation:none !important;
+    }
+    #barrage-ui .gacha-screen .gacha-panel{
+      top:82px !important;
+      bottom:14px !important;
+      overflow-y:auto !important;
+      scrollbar-width:none !important;
+    }
+    #barrage-ui .gacha-screen .gacha-panel::-webkit-scrollbar{display:none !important}
+    #barrage-ui .gacha-terminal.gacha-simple{
+      display:grid !important;
+      grid-template-rows:auto auto auto auto minmax(190px,1fr) !important;
+      gap:9px !important;
+      min-height:100% !important;
+      height:auto !important;
+      padding:10px !important;
+      overflow:visible !important;
+      background:linear-gradient(180deg,rgba(16,31,38,.90),rgba(5,10,13,.94)) !important;
+      border:1px solid rgba(238,247,255,.22) !important;
+      border-top:4px solid var(--tone-cyan,#8df5ff) !important;
+      box-shadow:0 18px 36px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.07) !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px) !important;
+    }
+    #barrage-ui .gacha-simple-banner{
+      min-width:0 !important;
+      min-height:92px !important;
+      padding:13px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 96px !important;
+      gap:10px !important;
+      align-items:stretch !important;
+      border:1px solid rgba(238,247,255,.20) !important;
+      border-left:4px solid var(--tone-cyan,#8df5ff) !important;
+      background:linear-gradient(116deg,rgba(141,245,255,.13) 0 28%,transparent 28%),rgba(7,17,22,.86) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+    }
+    #barrage-ui .gacha-simple-banner :is(b,strong,span),
+    #barrage-ui .gacha-simple-wallet small{
+      display:block !important;
+      min-width:0 !important;
+      margin:0 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-align:left !important;
+    }
+    #barrage-ui .gacha-simple-banner b{
+      color:rgba(238,247,255,.78) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .gacha-simple-banner strong{
+      margin-top:7px !important;
+      color:#fff !important;
+      font-size:34px !important;
+      line-height:.92 !important;
+      font-weight:950 !important;
+      text-shadow:0 1px 0 #000,0 0 18px rgba(141,245,255,.20) !important;
+    }
+    #barrage-ui .gacha-simple-banner span{
+      margin-top:7px !important;
+      color:rgba(238,247,255,.84) !important;
+      font-size:11px !important;
+      line-height:1 !important;
+      font-weight:850 !important;
+    }
+    #barrage-ui .gacha-simple-wallet{
+      min-width:0 !important;
+      display:grid !important;
+      align-content:center !important;
+      justify-items:end !important;
+      gap:6px !important;
+      padding-left:10px !important;
+      border-left:1px solid rgba(238,247,255,.16) !important;
+    }
+    #barrage-ui .gacha-simple-wallet small{
+      color:rgba(238,247,255,.70) !important;
+      font-size:9px !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .gacha-simple-wallet .token-number{
+      color:#fff !important;
+      font-size:19px !important;
+    }
+    #barrage-ui .gacha-simple-roll{
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 128px !important;
+      gap:8px !important;
+      align-items:stretch !important;
+    }
+    #barrage-ui .gacha-simple-result{
+      display:grid !important;
+      grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr) !important;
+      gap:8px !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple .signal-cost-card{
+      width:auto !important;
+      min-width:0 !important;
+      height:58px !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple .signal-search-button{
+      width:128px !important;
+      min-width:128px !important;
+    }
+    #barrage-ui .skill-reroll-row{
+      display:grid !important;
+      grid-template-columns:132px minmax(0,1fr) !important;
+      align-items:center !important;
+      gap:10px !important;
+      margin:8px 0 0 !important;
+      min-height:38px !important;
+    }
+    #barrage-ui .skill-reroll-row button{
+      height:38px !important;
+      min-height:38px !important;
+      padding:0 10px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:7px !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--tone-cyan,#8df5ff)) !important;
+      box-shadow:4px 4px 0 rgba(0,0,0,.45),0 0 18px rgba(141,245,255,.18) !important;
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px) !important;
+    }
+    #barrage-ui .skill-reroll-row button:disabled{
+      color:rgba(238,247,255,.66) !important;
+      background:rgba(238,247,255,.10) !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .skill-reroll-row :is(b,span,small){
+      min-width:0 !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      letter-spacing:0 !important;
+    }
+    #barrage-ui .skill-reroll-row b{
+      font-size:11px !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .skill-reroll-row small{
+      color:rgba(238,247,255,.82) !important;
+      font-size:9px !important;
+      font-weight:850 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .settings-screen .settings-toggle-row,
+    #barrage-ui .settings-screen .settings-danger-row{
+      min-height:118px !important;
+      grid-template-rows:auto auto auto 38px !important;
+      align-content:start !important;
+    }
+    #barrage-ui .settings-screen .settings-toggle-row button,
+    #barrage-ui .settings-screen .settings-danger-row button{
+      width:100% !important;
+      height:36px !important;
+      min-height:36px !important;
+      margin-top:2px !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,#8df5ff)) !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px) !important;
+    }
+    #barrage-ui .settings-screen .settings-danger-row button{
+      color:#fff !important;
+      background:linear-gradient(90deg,#ff3b62,#ff7a3d) !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .page-header{
+        left:10px !important;
+        right:10px !important;
+        height:54px !important;
+        grid-template-columns:50px minmax(0,1fr) !important;
+        gap:8px !important;
+      }
+      #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .page-back,
+      #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .page-title{
+        height:54px !important;
+        min-height:54px !important;
+      }
+      #barrage-ui .gacha-screen .gacha-panel{
+        top:74px !important;
+        left:10px !important;
+        right:10px !important;
+      }
+      #barrage-ui .gacha-terminal.gacha-simple{
+        grid-template-rows:auto auto auto auto minmax(176px,1fr) !important;
+        gap:7px !important;
+        padding:8px !important;
+      }
+      #barrage-ui .gacha-simple-banner{
+        min-height:80px !important;
+        padding:11px !important;
+        grid-template-columns:minmax(0,1fr) 82px !important;
+      }
+      #barrage-ui .gacha-simple-banner strong{
+        font-size:27px !important;
+      }
+      #barrage-ui .gacha-simple-roll{
+        grid-template-columns:minmax(0,1fr) 116px !important;
+      }
+      #barrage-ui .gacha-terminal.gacha-simple .signal-search-button{
+        width:116px !important;
+        min-width:116px !important;
+      }
+      #barrage-ui .skill-reroll-row{
+        grid-template-columns:116px minmax(0,1fr) !important;
+        gap:7px !important;
+      }
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
       #barrage-ui .brand-lockup,
@@ -26608,6 +29788,8 @@ function createUi(){
       #barrage-ui .store-offer-card,
       #barrage-ui .store-offer-card::before,
       #barrage-ui .store-category-tab.active,
+      #barrage-ui .dead-screen::after,
+      #barrage-ui .dead-screen.on :is(.gameover-card,.gameover-title,.gameover-summary,.gameover-result-grid,.gameover-log,.gameover-actions),
       #barrage-ui .game-xp-track::after,
       #barrage-ui .game-meter-track::after,
       #barrage-ui .game-wave-track::after,
@@ -26694,14 +29876,16 @@ function renderUi2(){
   const gachaResult = gachaActive ? renderGachaResult() : '';
   const tokenReward = deadActive ? calculateTokenReward() : 0;
   const bossHud = bossHpInfo();
+  const basicPickerOpen = isBasicPickerActive();
   ui.root.innerHTML = `
     <div class="screen home-screen ${state.mode==='home'?'on':''}" data-screen="home">
       <div class="ui-stage home-hub">
         <div class="home-header">
           <div class="brand-lockup"><span>BARRAGE</span><small>PIPE ASSAULT</small></div>
-          <div class="wallet-chip">${tokenAmount(state.tokens, 'wallet-token')}</div>
+          <div class="wallet-chip"><b>TOKEN</b>${walletTokenAmount('wallet-token')}</div>
         </div>
         <button class="home-settings-button" data-action="settings" aria-label="オプション" title="オプション">&#9881;</button>
+        <div class="home-token-readout" aria-label="トークン残量"><b>TOKEN</b>${walletTokenAmount('home-token')}</div>
         <div class="hangar-visual" data-action="garage" role="button" tabindex="0" aria-label="ガレージを開く">
           <div class="home-dots"></div>
           <div class="hollow-tape"></div>
@@ -26727,7 +29911,7 @@ function renderUi2(){
         <div class="home-actions">
           <button class="action-tile action-start" data-action="start"><b>スタート</b><span>READY</span></button>
           <button class="action-tile" data-action="store" style="--accent:#d8e2ea"><b>ストア</b><span>機体とパーツ</span></button>
-          <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>アップグレード</b><span>ベース性能</span></button>
+          <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>ステータス</b><span>恒久強化</span></button>
           <button class="action-tile" data-action="gacha" style="--accent:#d8e2ea"><b>ガチャ</b><span>スキンとクロマコート</span></button>
           <button class="action-tile" data-action="ranking" style="--accent:#8eefff"><b>ランキング</b><span>ハイスコア記録</span></button>
         </div>
@@ -26783,7 +29967,7 @@ function renderUi2(){
       <div class="ui-stage page-stage">
         <div class="page-header">
           <div class="page-title glass-panel">
-            <h1>シグナルサーチ</h1>
+            <h1>ガチャ</h1>
             <p>${tokenAmount(GACHA_COST)} / SKIN CHANNEL</p>
           </div>
           <button class="page-back" data-action="home">戻る</button>
@@ -26797,8 +29981,8 @@ function renderUi2(){
       <div class="ui-stage page-stage">
         <div class="page-header">
           <div class="page-title glass-panel">
-            <h1>アップグレード</h1>
-            <p>${tokenAmount(state.tokens)} / PERMANENT PROGRAM</p>
+            <h1>ステータス</h1>
+            <p>${walletTokenAmount()} / STATUS PROGRAM</p>
           </div>
           <button class="page-back" data-action="home">戻る</button>
         </div>
@@ -26814,14 +29998,14 @@ function renderUi2(){
             <h1>オプション</h1>
             <p>環境ステータス / ローカル保存</p>
           </div>
-          <button class="page-back" data-action="home">戻る</button>
+          <button class="page-back" data-action="closeSettings">戻る</button>
         </div>
         <div class="settings-panel">
           ${state.mode === 'settings' ? renderSettingsPanel() : ''}
         </div>
       </div>
     </div>
-    <div class="hud game-hud ${state.mode==='play'||state.mode==='levelup'||state.mode==='basicUpgrade'?'on':''} ${state.mode==='levelup'||state.mode==='basicUpgrade'?'leveling':''} ${visibleHp() / visibleHpMax() < .30 ? 'critical' : ''} ${state.basicPoints > 0 ? 'has-bp' : ''} ${bossHud.visible ? 'has-boss' : ''}" data-ref="hud">
+    <div class="hud game-hud ${state.mode==='play'||state.mode==='levelup'||state.mode==='basicUpgrade'?'on':''} ${state.mode==='levelup'||state.mode==='basicUpgrade'?'leveling':''} ${visibleHp() / visibleHpMax() < .30 ? 'critical' : ''} ${state.basicPoints > 0 ? 'has-bp' : ''} ${basicPickerOpen ? 'basic-open' : ''} ${bossHud.visible ? 'has-boss' : ''}" data-ref="hud">
       <div class="damage-vignette" data-ref="damageVignette" aria-hidden="true"></div>
       <div class="hit-confirm" data-ref="hitConfirm" aria-hidden="true"><span data-ref="hitConfirmText">${state.hitConfirmText || 'HIT'}</span></div>
       <div class="touch-stick" data-ref="touchStick" aria-hidden="true"><i></i><b></b></div>
@@ -26853,10 +30037,12 @@ function renderUi2(){
           ${renderSpecialSlotsHud()}
         </div>
         <div class="game-bars">
-          <div class="game-meter is-hp" style="--meter-a:#ff3b62;--meter-b:#ffc3ce">
-            <b>HP</b>
-            <div class="game-meter-track"><i data-ref="hp" style="width:${hpFillPercent()}%"></i></div>
-            <span data-ref="hpText">${Math.ceil(visibleHp())}/${visibleHpMax()}</span>
+          <div class="game-meter is-hp ${basicPickerOpen ? 'is-basic-picker' : ''}" style="--meter-a:#ff3b62;--meter-b:#ffc3ce">
+            ${basicPickerOpen ? renderHudBasicUpgradeStrip() : `
+              <b>HP</b>
+              <div class="game-meter-track"><i data-ref="hp" style="width:${hpFillPercent()}%"></i></div>
+              <span data-ref="hpText">${Math.ceil(visibleHp())}/${visibleHpMax()}</span>
+            `}
           </div>
         </div>
         <div class="game-console">
@@ -26866,7 +30052,7 @@ function renderUi2(){
             <div class="game-chip"><b>BP</b><span data-ref="bpChip">${state.basicPoints}</span></div>
             <div class="game-chip"><b>TK</b><span>${tokenAmount(tokenReward, 'token-gain', '+', 'tokenPreview')}</span></div>
           </div>
-          <button class="game-upgrade" data-ref="skillControl" data-action="openUpgrade">基礎強化 ${state.basicPoints}</button>
+          <button class="game-upgrade" data-ref="skillControl" data-action="openUpgrade">${basicPickerOpen ? '閉じる' : 'アップグレード'} ${state.basicPoints}</button>
         </div>
       </div>
     </div>
@@ -26874,13 +30060,19 @@ function renderUi2(){
       <div class="level-dialog glass-panel">
         <div class="level-head">
           <div>
-            <div class="level-title">特殊強化</div>
+            <div class="level-title">スキル</div>
             <div class="level-note">武装・弾種・コア・防御・領域から選択</div>
           </div>
           <div class="level-sp">SP ${state.skillPoints}</div>
         </div>
-        <div class="level-special-slots" aria-label="取得中の特殊強化">
+        <div class="level-special-slots" aria-label="取得中のスキル">
           ${renderSpecialSlotsHud()}
+        </div>
+        <div class="skill-reroll-row">
+          <button data-action="rerollSkill" ${canSpendTokens(skillRerollCost()) ? '' : 'disabled'}>
+            <b>リロール</b><span>${tokenAmount(skillRerollCost(), 'button-token')}</span>
+          </button>
+          <small>同じラン中に使うほどコスト上昇</small>
         </div>
         <div class="upgrade-grid">
           ${state.upgradeOptions.map(id => renderSpecialUpgradeCard(id)).join('')}
@@ -26891,7 +30083,7 @@ function renderUi2(){
       <div class="basic-dialog glass-panel">
         <div class="basic-head">
           <div>
-            <div class="level-title">基礎強化</div>
+            <div class="level-title">アップグレード</div>
             <div class="level-note">BPでラン中のステータスを強化</div>
           </div>
         </div>
@@ -26906,27 +30098,46 @@ function renderUi2(){
     </div>
     <div class="screen modal-screen ${state.mode==='pause'?'on':''}">
       <div class="ui-stage">
-        <div class="dialog-card glass-panel">
+        <div class="dialog-card glass-panel pause-dialog">
           <div class="dialog-title">ポーズ</div>
-          <div class="dialog-actions">
+          <div class="dialog-actions pause-actions">
             <button data-action="resume">再開</button>
+            <button data-action="settings">設定</button>
             <button data-action="home">ホーム</button>
           </div>
         </div>
       </div>
     </div>
-    <div class="screen modal-screen ${state.mode==='dead'?'on':''}">
+    <div class="screen modal-screen dead-screen ${state.mode==='dead'?'on':''}">
       <div class="ui-stage">
-        <div class="dialog-card glass-panel">
-          <div class="dialog-title">ゲームオーバー</div>
-          <div class="result-grid">
-            <div class="result-stat"><b>スコア</b><span>${formatNumber(state.score)}</span></div>
-            <div class="result-stat"><b>ウェーブ</b><span>${state.wave}</span></div>
-            <div class="result-stat"><b>獲得</b><span>${tokenAmount(state.runTokenGain, 'token-gain', '+')}</span></div>
+        <div class="dialog-card glass-panel gameover-card">
+          <div class="gameover-signal"><span>RUN TERMINATED</span><b>RUN LOG</b></div>
+          <div class="gameover-title" aria-label="GAMEOVER">GAMEOVER</div>
+          <div class="gameover-summary">
+            <div class="gameover-score">
+              <b>SCORE</b>
+              <strong>${formatNumber(state.score)}</strong>
+              <span>BEST ${formatNumber(state.highScore)}</span>
+            </div>
+            <div class="gameover-rank">
+              <b>WAVE</b>
+              <strong>${state.wave}</strong>
+              <span>Lv.${state.level} / ${state.kills} KILLS</span>
+            </div>
           </div>
-          <div class="dialog-actions">
-            <button data-action="start">リトライ</button>
-            <button data-action="home">ホーム</button>
+          <div class="result-grid gameover-result-grid">
+            <div class="result-stat"><b>SURVIVE</b><span>${formatRunTime(state.runTime)}</span></div>
+            <div class="result-stat"><b>TOKEN</b><span>${tokenAmount(state.runTokenGain, 'token-gain', '+')}</span></div>
+            <div class="result-stat"><b>BEST</b><span>${state.bestWave}</span></div>
+          </div>
+          <div class="gameover-log">
+            <b>AFTER ACTION</b>
+            <span>機体ロスト / 戦闘ログ保存完了</span>
+            <i></i>
+          </div>
+          <div class="dialog-actions gameover-actions">
+            <button class="gameover-retry" data-action="start"><b>リトライ</b><span>RETRY RUN</span></button>
+            <button data-action="home"><b>ホーム</b><span>HANGAR</span></button>
           </div>
         </div>
       </div>
@@ -26979,7 +30190,21 @@ function renderSettingsPanel(){
       <strong>${motion}%</strong>
     </div>
   `;
-  return summary + rows.map(row => row.control ? renderControlModeRow(row) : `
+  const systemActions = `
+    <div class="settings-row settings-toggle-row" style="--accent:#ffd36a">
+      <b>デモ機能</b>
+      <span>トークン無制限 ${hasUnlimitedTokens() ? 'ON' : 'OFF'}</span>
+      <small>購入・ガチャ・リロールのトークン消費を止めます。</small>
+      <button class="${hasUnlimitedTokens() ? 'active' : ''}" data-action="toggleUnlimitedTokens">${hasUnlimitedTokens() ? 'OFFにする' : 'ONにする'}</button>
+    </div>
+    <div class="settings-row settings-danger-row" style="--accent:#ff3b62">
+      <b>保存データ</b>
+      <span>データ初期化</span>
+      <small>進行状況、所持品、ランキングをリセットします。</small>
+      <button data-action="resetData">初期化</button>
+    </div>
+  `;
+  return summary + systemActions + rows.map(row => row.control ? renderControlModeRow(row) : `
     <div class="settings-row" style="--accent:${row.color}">
       <b>${row.label}</b>
       <span>${escapeHtml(row.value)}</span>
@@ -27046,7 +30271,7 @@ function renderShipShowroom(kind){
   const ownedParts = PART_DEFS.filter(part => partOwned(part.id)).length;
   const active = kind === 'store' ? 'ストア' : 'ガレージ';
   const sub = kind === 'store'
-    ? `${tokenAmount(state.tokens, 'showroom-token')} / 機体 ${ownedShips}/${SHIP_DEFS.length} / パーツ ${ownedParts}/${PART_DEFS.length}`
+    ? `${walletTokenAmount('showroom-token')} / 機体 ${ownedShips}/${SHIP_DEFS.length} / パーツ ${ownedParts}/${PART_DEFS.length}`
     : `${ship.name} / ${equippedPartCount()} 装備中`;
   return `
     <div class="ship-showroom-ui" style="--accent:${ship.color}">
@@ -27069,7 +30294,7 @@ function renderStoreMarket(){
   return `
     <div class="store-compact">
       <div class="compact-stats">
-        <span><b>${tokenAmount(state.tokens, 'compact-token')}</b><small>TOKEN</small></span>
+        <span><b>${walletTokenAmount('compact-token')}</b><small>TOKEN</small></span>
         <span><b>${ownedShips}/${SHIP_DEFS.length}</b><small>FRAME</small></span>
         <span><b>${ownedParts}/${PART_DEFS.length}</b><small>PARTS</small></span>
       </div>
@@ -27101,7 +30326,7 @@ function renderStorePartColumn(type){
 function renderStoreShipCard(ship){
   const owned = shipOwned(ship.id);
   const selected = currentShip().id === ship.id;
-  const canBuy = !owned && state.tokens >= ship.cost;
+  const canBuy = !owned && canSpendTokens(ship.cost);
   const buttonLabel = selected ? '使用中' : owned ? '選択' : tokenAmount(ship.cost, 'button-token');
   const action = owned ? `equipShip:${ship.id}` : `buyShip:${ship.id}`;
   return `
@@ -27122,7 +30347,7 @@ function renderStorePartCard(part){
 function renderStorePartChip(part){
   const owned = partOwned(part.id);
   const cost = partCost(part);
-  const canBuy = !owned && state.tokens >= cost;
+  const canBuy = !owned && canSpendTokens(cost);
   const action = owned ? 'garage' : `buyPart:${part.id}`;
   const label = owned ? '装備へ' : tokenAmount(cost, 'button-token');
   return `
@@ -27218,8 +30443,8 @@ function renderShipShowroomV2(kind){
   const totalSlots = PART_TYPES.reduce((sum, type) => sum + shipSlotCount(type, ship), 0);
   const previewingLocked = kind === 'store' && !shipOwned(ship.id);
   const sub = kind === 'store'
-    ? `${previewingLocked ? 'PREVIEW / LOCKED' : 'PREVIEW / OWNED'} / ${tokenAmount(state.tokens, 'showroom-token')} / FRAME ${ownedShips}/${SHIP_DEFS.length}`
-    : `${equippedPartCount()}/${totalSlots} PARTS EQUIPPED`;
+    ? `${previewingLocked ? 'PREVIEW / LOCKED' : 'PREVIEW / OWNED'} / ${walletTokenAmount('showroom-token')} / FRAME ${ownedShips}/${SHIP_DEFS.length}`
+    : `${equippedPartCount()}/${totalSlots} パーツ装備中`;
   /*
   const note = fullDef.tier === 'advanced'
     ? `${parent?.name || 'BASE'} MAXで解放 / 青天井`
@@ -27237,8 +30462,8 @@ function renderShipShowroomV2(kind){
         ${renderShowroomPartChipsV2(ship)}
       </div>
       <div class="showroom-tabs">
-        <button class="${kind === 'store' ? 'active' : ''}" ${kind === 'store' ? 'disabled' : ''} data-action="store">BUY</button>
-        <button class="${kind === 'garage' ? 'active' : ''}" ${kind === 'garage' ? 'disabled' : ''} data-action="garage">EQUIP</button>
+        <button class="${kind === 'store' ? 'active' : ''}" ${kind === 'store' ? 'disabled' : ''} data-action="store">購入</button>
+        <button class="${kind === 'garage' ? 'active' : ''}" ${kind === 'garage' ? 'disabled' : ''} data-action="garage">装備</button>
       </div>
     </div>
   `;
@@ -27263,7 +30488,7 @@ function renderShowroomPartChipsV2(ship = currentShip()){
 
 function renderCommerceBottomDock(active){
   const items = [
-    ['home', '戻る'],
+    ['home', 'ホーム'],
     ['store', 'ストア'],
     ['garage', 'ガレージ'],
     ['gacha', 'ガチャ']
@@ -27286,7 +30511,7 @@ function renderStoreMarketV2(){
   return `
     <div class="store-compact store-v2 store-market-v3">
       <div class="compact-stats">
-        <span><b>${tokenAmount(state.tokens, 'compact-token')}</b><small>TOKEN</small></span>
+        <span><b>${walletTokenAmount('compact-token')}</b><small>TOKEN</small></span>
         <span><b>${ownedShips}/${SHIP_DEFS.length}</b><small>FRAME</small></span>
         <span><b>${ownedParts}/${STORE_TOTAL_PARTS}</b><small>PARTS</small></span>
       </div>
@@ -27355,7 +30580,7 @@ function renderStoreShipOffer(ship){
   const owned = shipOwned(ship.id);
   const equipped = currentShip().id === ship.id;
   const selected = storePreviewShip().id === ship.id;
-  const canBuy = !owned && state.tokens >= ship.cost;
+  const canBuy = !owned && canSpendTokens(ship.cost);
   const action = owned ? `equipShip:${ship.id}` : `buyShip:${ship.id}`;
   const buttonLabel = equipped ? '使用中' : owned ? '装備' : tokenAmount(ship.cost, 'button-token');
   return `
@@ -27380,7 +30605,7 @@ function renderStoreShipOffer(ship){
 function renderStorePartOffer(part){
   const owned = partOwned(part.id);
   const cost = partCost(part);
-  const canBuy = !owned && state.tokens >= cost;
+  const canBuy = !owned && canSpendTokens(cost);
   const action = owned ? 'garage' : `buyPart:${part.id}`;
   const label = owned ? '装備へ' : tokenAmount(cost, 'button-token');
   return `
@@ -27447,20 +30672,20 @@ function renderGaragePanelV2(){
   return `
     <div class="garage-compact garage-v2">
       <section class="compact-section loadout-compact">
-        <div class="compact-head"><b>EQUIP PARTS</b><span>${equippedPartCount()}/${totalSlots} equipped / reflected above</span></div>
+        <div class="compact-head"><b>パーツ装備</b><span>${equippedPartCount()}/${totalSlots} 装備中 / 上の機体に反映</span></div>
         <div class="garage-slot-board">
           ${renderGarageLoadoutBoard()}
         </div>
       </section>
       <section class="compact-section">
-        <div class="compact-head"><b>FRAME SELECT</b><span>${ownedShipCount()}/${SHIP_DEFS.length}</span></div>
+        <div class="compact-head"><b>機体選択</b><span>${ownedShipCount()}/${SHIP_DEFS.length}</span></div>
         <div class="garage-ship-rail">
           ${renderGarageShipPicker()}
         </div>
       </section>
       <div class="garage-quick-actions">
-        <button data-action="store">BUY PARTS</button>
-        <button data-action="gacha">GACHA</button>
+        <button data-action="store">ストアへ</button>
+        <button data-action="gacha">ガチャへ</button>
       </div>
     </div>
   `;
@@ -27508,14 +30733,14 @@ function renderHomeUpgradePaths(){
   const activeBuys = HOME_UPGRADE_PATHS.filter(path => {
     const active = homeUpgradeLevel(path.base.id) >= HOME_UPGRADE_CAP ? path.advanced : path.base;
     const cost = homeUpgradeCost(active.id);
-    return isHomeUpgradeUnlocked(active.id) && !isHomeUpgradeMaxed(active.id) && Number.isFinite(cost) && state.tokens >= cost;
+    return isHomeUpgradeUnlocked(active.id) && !isHomeUpgradeMaxed(active.id) && canSpendTokens(cost);
   }).length;
   return `
     <div class="upgrade-overview">
       <div class="upgrade-overview-main">
-        <b>BASE PROGRAM</b>
+        <b>STATUS PROGRAM</b>
         <strong>Lv.${totalLevel}</strong>
-        <span>${tokenAmount(state.tokens, 'upgrade-wallet')}</span>
+        <span>${walletTokenAmount('upgrade-wallet')}</span>
       </div>
       <div class="upgrade-overview-stat"><b>${baseTotal}/${HOME_UPGRADE_PATHS.length * HOME_UPGRADE_CAP}</b><span>BASE CAP</span></div>
       <div class="upgrade-overview-stat"><b>${advancedOpen}/${HOME_UPGRADE_PATHS.length}</b><span>LIMIT</span></div>
@@ -27541,7 +30766,7 @@ function renderHomeUpgradeCard(def, path = null){
   const unlocked = isHomeUpgradeUnlocked(def.id);
   const maxed = isHomeUpgradeMaxed(def.id);
   const cost = homeUpgradeCost(def.id);
-  const canBuy = unlocked && !maxed && Number.isFinite(cost) && state.tokens >= cost;
+  const canBuy = unlocked && !maxed && canSpendTokens(cost);
   const tierLabel = fullDef.tier === 'base' ? `${lv}/${HOME_UPGRADE_CAP}` : `Lv.${lv}`;
   const buttonLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : `UP ${formatNumber(cost)}`;
   const note = fullDef.tier === 'base' ? '上限あり' : `${homeUpgradeDef(fullDef.parent).name} 10/10で解放`;
@@ -27571,7 +30796,7 @@ function renderSpecialSlotsHud(){
     const def = selected[index];
     if(!def){
       return `
-        <div class="special-slot empty" style="--accent:#d8e2ea" aria-label="特殊強化スロット ${index + 1} 空き">
+        <div class="special-slot empty" style="--accent:#d8e2ea" aria-label="スキルスロット ${index + 1} 空き">
           <span class="special-slot-placeholder">${index + 1}</span>
           <small></small>
         </div>
@@ -27615,6 +30840,45 @@ function renderRunBasicUpgradePaths(){
         return renderRunBasicUpgradeCard(visible);
       }).join('')}
     </div>
+  `;
+}
+
+function isBasicPickerActive(){
+  return state.mode === 'play' && state.basicPickerOpen && state.basicPoints > 0;
+}
+
+function renderHudBasicUpgradeStrip(){
+  return `
+    <div class="hud-basic-picker" aria-label="Basic upgrade selector">
+      <div class="hud-basic-track">
+        ${RUN_BASIC_PATHS.map(path => {
+          const visible = isRunBasicMaxed(path.base) ? BASIC_SKILL_DEFS_BY_ID[path.advanced] : BASIC_SKILL_DEFS_BY_ID[path.base];
+          return renderHudBasicUpgradeCard(visible);
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderHudBasicUpgradeCard(node){
+  const fullDef = BASIC_SKILL_DEFS_BY_ID[node?.id];
+  if(!fullDef) return '';
+  const lv = runBasicLevel(fullDef.id);
+  const unlocked = isRunBasicUnlocked(fullDef.id);
+  const maxed = isRunBasicMaxed(fullDef.id);
+  const cost = runBasicUpgradeCost(fullDef.id);
+  const canBuy = unlocked && !maxed && Number.isFinite(cost) && state.basicPoints >= cost;
+  const tierLabel = fullDef.tier === 'advanced' ? `Lv.${lv}` : `${lv}/${fullDef.cap || RUN_BASIC_CAP}`;
+  const costLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : `${cost}BP`;
+  const icon = fullDef.icon || fullDef.pathTag || fullDef.tag || 'UP';
+  return `
+    <button class="hud-basic-card ${!unlocked ? 'locked' : ''} ${maxed ? 'maxed' : ''} ${!canBuy ? 'disabled' : ''}" type="button" ${canBuy ? '' : 'disabled'} data-action="buyRunBasic:${fullDef.id}" style="--accent:${colorCss(fullDef.color)}" title="${escapeHtml(fullDef.name)}">
+      <i>${escapeHtml(icon)}</i>
+      <span><b>${escapeHtml(fullDef.pathTag || fullDef.tag || 'UP')}</b><strong>${escapeHtml(fullDef.name)}</strong></span>
+      <em>${escapeHtml(tierLabel)}</em>
+      <small>${escapeHtml(fullDef.text || '')}</small>
+      <mark>${escapeHtml(costLabel)}</mark>
+    </button>
   `;
 }
 
@@ -27705,53 +30969,43 @@ function renderSupplyPanel(equippedSummary, gachaResult){
   const lastItem = state.lastGacha ? cosmeticItem(state.lastGacha.id) : null;
   const lastRarity = lastItem ? COSMETIC_RARITY_BY_ID[lastItem.rarity] : null;
   const lastAccent = lastRarity?.color || '#8eefff';
-  const ready = state.tokens >= GACHA_COST;
+  const ready = canSpendTokens(GACHA_COST);
   return `
-    <div class="gacha-terminal ${state.lastGacha ? 'has-result' : 'idle'}" style="--last-accent:${lastAccent}">
-      <div class="signal-banner">
-        <div class="signal-copy">
-          <b>CHROMA SIGNAL</b>
-          <strong>SKIN SEARCH</strong>
-          <span>外装データ / 弾スキン / クロマコート</span>
+    <div class="gacha-terminal gacha-simple ${state.lastGacha ? 'has-result' : 'idle'}" style="--last-accent:${lastAccent}">
+      <section class="gacha-simple-banner">
+        <div>
+          <b>SKIN CHANNEL</b>
+          <strong>ガチャ</strong>
+          <span>弾スキン、装甲、クロマコートを抽選</span>
         </div>
-        <div class="signal-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
-        <div class="signal-tape" aria-hidden="true">
-          <i></i><i></i><span></span>
+        <div class="gacha-simple-wallet">
+          <small>所持</small>
+          ${walletTokenAmount('signal-wallet')}
         </div>
-        <div class="signal-guarantee">
-          <b>SYNC</b>
-          <strong>${ready ? 'READY' : 'LOW'}</strong>
-          <span>${ownedUnique}/${COSMETIC_ITEMS.length} SIGNALS</span>
-        </div>
-      </div>
-      <div class="signal-channel-row">
-        <span class="active"><b>EXCLUSIVE</b><em>SKIN</em></span>
-        <span><b>STABLE</b><em>COAT</em></span>
-        <span><b>ARCHIVE</b><em>${ownedTotal} LOG</em></span>
-      </div>
-      <div class="signal-console">
+      </section>
+      <section class="gacha-simple-roll">
         <div class="signal-cost-card">
-          <b>MASTER TAPE</b>
+          <b>1回</b>
           <strong>${tokenAmount(GACHA_COST, 'supply-cost')}</strong>
-          <span>${tokenAmount(state.tokens, 'signal-wallet')} 所持</span>
+          <span>${ownedUnique}/${COSMETIC_ITEMS.length} 種 / ${ownedTotal} 個</span>
         </div>
         <button class="gacha-roll signal-search-button" ${ready ? '' : 'disabled'} data-action="rollGacha">
-          <b>SIGNAL SEARCH</b>
-          <span>1回抽選</span>
+          <b>抽選する</b>
+          <span>${ready ? 'READY' : 'TOKEN不足'}</span>
         </button>
-      </div>
-      <div class="signal-reveal-grid">
+      </section>
+      <section class="gacha-simple-result">
         ${gachaResult}
         <div class="supply-odds">
           ${COSMETIC_RARITIES.map(rarity => `<span style="--accent:${rarity.color}"><b>${rarity.name}</b><em>${rarity.weight}</em></span>`).join('')}
         </div>
-      </div>
+      </section>
       <section class="supply-section equipped-section">
-        <div class="garage-section-head"><b>装備中シグナル</b><span>ACTIVE LOADOUT</span></div>
+        <div class="garage-section-head"><b>装備中</b><span>ACTIVE</span></div>
         <div class="equipped-grid">${equippedSummary}</div>
       </section>
       <section class="supply-section inventory-section">
-        <div class="garage-section-head"><b>シグナルアーカイブ</b><span>INVENTORY</span></div>
+        <div class="garage-section-head"><b>所持一覧</b><span>INVENTORY</span></div>
         <div class="cosmetic-list">${renderCosmeticInventory()}</div>
       </section>
     </div>
@@ -27763,9 +31017,9 @@ function renderGachaResult(){
     return `
       <div class="gacha-result empty">
         <div class="result-rank">--</div>
-        <b>NO SIGNAL</b>
-        <span>受信待機</span>
-        <small>テープを同期してシグナルを受信</small>
+        <b>READY</b>
+        <span>未抽選</span>
+        <small>抽選すると結果がここに表示されます</small>
       </div>
     `;
   }
@@ -27826,7 +31080,12 @@ function totalHomeUpgradeLevel(){
 }
 
 function updateHud(){
-  if(state.mode !== 'play' || uiDirty) return;
+  if((state.mode !== 'play' && state.mode !== 'levelup') || uiDirty) return;
+  if(state.basicPickerOpen && state.basicPoints <= 0){
+    state.basicPickerOpen = false;
+    renderUi2();
+    return;
+  }
   const now = performance.now();
   if(now < state.nextHudAt) return;
   state.nextHudAt = now + HUD_UPDATE_INTERVAL_MS;
@@ -27834,7 +31093,8 @@ function updateHud(){
   const hp = visibleHp();
   const maxHp = visibleHpMax();
   const bossHud = bossHpInfo();
-  const hudClass = `hud game-hud on${hp / maxHp < .30 ? ' critical' : ''}${state.basicPoints > 0 ? ' has-bp' : ''}${bossHud.visible ? ' has-boss' : ''}`;
+  const basicPickerOpen = isBasicPickerActive();
+  const hudClass = `hud game-hud on${state.mode === 'levelup' ? ' leveling' : ''}${hp / maxHp < .30 ? ' critical' : ''}${state.basicPoints > 0 ? ' has-bp' : ''}${basicPickerOpen ? ' basic-open' : ''}${bossHud.visible ? ' has-boss' : ''}`;
   if(ui.refs.hud && hudCache.hudClass !== hudClass){
     hudCache.hudClass = hudClass;
     ui.refs.hud.className = hudClass;
@@ -27849,7 +31109,7 @@ function updateHud(){
   setHudText('xpLabel', state.level);
   setHudText('xpText', `${Math.floor(state.xp)}/${threshold}`);
   updateBossHud(bossHud);
-  setHudText('skillControl', `基礎強化 ${state.basicPoints}`);
+  setHudText('skillControl', `${basicPickerOpen ? '閉じる' : 'アップグレード'} ${state.basicPoints}`);
 }
 
 function updateBossHud(info = bossHpInfo()){
@@ -27932,6 +31192,18 @@ function setHudWidth(ref, value){
   ui.refs[ref].style.width = next;
 }
 
+function openSettings(){
+  const fromRun = state.mode === 'pause' || state.mode === 'play' || state.mode === 'levelup' || state.mode === 'basicUpgrade' || state.mode === 'crash';
+  state.settingsReturnMode = fromRun ? 'pause' : 'home';
+  setMode('settings');
+}
+
+function closeSettings(){
+  const returnMode = state.settingsReturnMode === 'pause' ? 'pause' : 'home';
+  state.settingsReturnMode = 'home';
+  setMode(returnMode);
+}
+
 function handleAction(action){
   if(action === 'start') startRun();
   else if(action === 'store') setMode('store');
@@ -27939,9 +31211,13 @@ function handleAction(action){
   else if(action === 'homeUpgrade') setMode('homeUpgrade');
   else if(action === 'ranking') setMode('ranking');
   else if(action === 'gacha') setMode('gacha');
-  else if(action === 'settings') setMode('settings');
+  else if(action === 'settings') openSettings();
+  else if(action === 'closeSettings') closeSettings();
+  else if(action === 'resetData') resetSaveData();
+  else if(action === 'toggleUnlimitedTokens') setUnlimitedTokens(!hasUnlimitedTokens());
   else if(action.startsWith('setControlMode:')) setControlMode(action.slice(15));
   else if(action === 'rollGacha') rollGacha();
+  else if(action === 'rerollSkill') rerollSkillOptions();
   else if(action.startsWith('setStoreCategory:')) setStoreCategory(action.slice(17));
   else if(action.startsWith('previewShip:')) previewStoreShip(action.slice(12));
   else if(action.startsWith('buyShip:')) buyShip(action.slice(8));
@@ -27955,10 +31231,14 @@ function handleAction(action){
   else if(action.startsWith('buyHome:')) buyHomeUpgrade(action.slice(8));
   else if(action.startsWith('buyRunBasic:')) buyRunBasicUpgrade(action.slice(12));
   else if(action.startsWith('pickUpgrade:')) applyRunUpgrade(action.slice(12));
-  else if(action === 'openUpgrade' && state.mode === 'play') setMode('basicUpgrade');
+  else if(action === 'openUpgrade' && state.mode === 'play') {
+    state.basicPickerOpen = state.basicPoints > 0 && !state.basicPickerOpen;
+    renderUi2();
+  }
   else if(action === 'pause' && state.mode === 'play') setMode('pause');
   else if(action === 'resume' && (state.mode === 'pause' || state.mode === 'basicUpgrade')) setMode('play');
   else if(action === 'home') {
+    state.settingsReturnMode = 'home';
     clearRunObjects();
     setMode('home');
   }
@@ -28018,6 +31298,7 @@ function setMode(mode){
     markHomeShipPartsDirty();
   }
   if(mode !== 'play'){
+    state.basicPickerOpen = false;
     activePointer = null;
     state.pointer = 0;
     resetTurnHold();
@@ -28038,6 +31319,7 @@ function startRun(){
   resetTurnHold();
   resetTouchStick();
   clearRunObjects();
+  state.settingsReturnMode = 'home';
   state.mode = 'play';
   applySceneVisualMode('play');
   state.wave = 1;
@@ -28046,7 +31328,9 @@ function startRun(){
   state.xp = 0;
   state.level = 1;
   state.skillPoints = 0;
+  state.skillRerolls = 0;
   state.basicPoints = 0;
+  state.basicPickerOpen = false;
   state.basicPointMeter = 0;
   state.statLevels = freshStatMap();
   state.specialUpgrades = freshSpecialUpgradeMap();
@@ -28075,6 +31359,8 @@ function startRun(){
   state.spawnTimer = .45;
   state.bossAlive = false;
   state.nextHudAt = 0;
+  state.deathTimer = 0;
+  state.deathSaved = false;
   uiDirty = true;
   renderUi2();
   syncCanvasVisibility();
@@ -28089,6 +31375,7 @@ function clearRunObjects(){
   particles.length = 0;
   bulletsDirty = true;
   particlesDirty = true;
+  particleSyncClock = 0;
   bulletMesh.count = 0;
   bulletGlowMesh.count = 0;
   particleMesh.count = 0;
@@ -28103,7 +31390,7 @@ function bindInput(){
     if(e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.keyboard = -1;
     if(e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.keyboard = 1;
     if(e.key === 'Enter' && (state.mode === 'home' || state.mode === 'dead')) startRun();
-    if(e.key === 'Escape') state.mode === 'play' ? setMode('pause') : state.mode === 'pause' ? setMode('play') : null;
+    if(e.key === 'Escape') state.mode === 'play' ? setMode('pause') : state.mode === 'pause' ? setMode('play') : state.mode === 'settings' ? closeSettings() : null;
   });
   window.addEventListener('keyup', e => {
     if(['ArrowLeft','a','A','ArrowRight','d','D'].includes(e.key)) state.keyboard = 0;
@@ -28387,7 +31674,7 @@ function syncCanvasVisibility(){
 
 function loop(now){
   const canvasVisible = CANVAS_VISIBLE_MODES.has(state.mode);
-  const active3dMode = state.mode === 'play' || state.mode === 'home' || state.mode === 'store' || state.mode === 'garage';
+  const active3dMode = state.mode === 'play' || state.mode === 'levelup' || state.mode === 'crash' || state.mode === 'home' || state.mode === 'store' || state.mode === 'garage';
   if(document.hidden){
     setTimeout(() => requestAnimationFrame(loop), 500);
     state.last = now;
@@ -28425,10 +31712,12 @@ function update(dt, t){
   state.input = clamp(state.keyboard + state.pointer, -1, 1);
   if(state.mode === 'home' || state.mode === 'store' || state.mode === 'garage'){
     updateHomePreview(dt, t);
-  }else if(state.mode === 'play'){
+  }else if(state.mode === 'play' || state.mode === 'levelup'){
     updatePlay(dt, t);
     updateStage(dt, t);
     updateParticles(dt);
+  }else if(state.mode === 'crash'){
+    updateDeathCrash(dt, t);
   }
   updateHud();
   updateDamageHudEffect();
@@ -28488,9 +31777,62 @@ function updatePlay(dt, t){
   updateCombat(dt, t);
   syncBulletInstances();
   if(state.hp <= 0){
-    saveRun();
-    setMode('dead');
+    beginDeathCrash();
   }
+}
+
+function beginDeathCrash(){
+  if(state.mode === 'crash' || state.deathSaved) return;
+  if(activePointer !== null) canvas.releasePointerCapture?.(activePointer);
+  activePointer = null;
+  state.pointer = 0;
+  resetTurnHold();
+  resetTouchStick();
+  state.hp = 0;
+  state.deathTimer = 1.18;
+  state.deathSaved = false;
+  state.mode = 'crash';
+  state.hurtFlash = Math.max(state.hurtFlash || 0, 1);
+  state.playerHitFlash = Math.max(state.playerHitFlash || 0, 1);
+  state.shake = Math.max(state.shake, .92);
+  state.hitConfirm = 0;
+  triggerPlayerDamageEffect({angle:state.roll, z:PLAYER_Z, t:0}, {taken:42});
+  for(let i=0;i<3;i++){
+    spawnPlayerDamageBurst(normalizeAngle(state.roll + (i - 1) * .18), PLAYER_Z + (i - 1) * .08, i === 1 ? 0xffd36a : 0xff3b62, false);
+  }
+  uiDirty = true;
+  renderUi2();
+  syncCanvasVisibility();
+}
+
+function finishDeathCrash(){
+  if(state.deathSaved) return;
+  state.deathSaved = true;
+  saveRun();
+  setMode('dead');
+}
+
+function updateDeathCrash(dt, t){
+  updateStage(dt, t);
+  updateParticles(dt);
+  state.hurtFlash = Math.max(0, (state.hurtFlash || 0) - dt * 1.18);
+  state.playerHitFlash = Math.max(0, (state.playerHitFlash || 0) - dt * 1.55);
+  state.shake = Math.max(0, (state.shake || 0) - dt * 1.05);
+  state.deathTimer = Math.max(0, (state.deathTimer || 0) - dt);
+  const progress = 1 - clamp(state.deathTimer / 1.18, 0, 1);
+  const shudder = Math.sin(t * 58) * (1 - progress) * .035;
+  player.root.visible = true;
+  player.root.position.z = PLAYER_Z + progress * .82;
+  player.root.rotation.x = -.13 + progress * .45;
+  player.root.rotation.y = Math.sin(t * 18) * progress * .22;
+  player.root.rotation.z = shudder + progress * 1.15;
+  player.root.scale.setScalar(PLAYER_VISUAL_SCALE * Math.max(.18, 1 - progress * .48));
+  if(progress > .38 && Math.random() < .48){
+    spawnPlayerDamageBurst(normalizeAngle(state.roll + (Math.random() - .5) * .50), PLAYER_Z + (Math.random() - .5) * .24, Math.random() < .45 ? 0xffd36a : 0xff3b62, false);
+  }
+  syncBulletInstances();
+  syncParticleInstances();
+  if(state.deathTimer <= 0) finishDeathCrash();
 }
 
 function applySceneVisualMode(mode){
@@ -28616,6 +31958,12 @@ function updateHomePreview(dt, t){
     coreVisual.scale.setScalar(corePulse);
   }
   updateSkinKitAnimation(homeShip.skinKit, t);
+  updateAfterburnerAnimation(
+    homeShip.afterburners,
+    t,
+    AFTERBURNER_PREVIEW_BASE + Math.min(.55, Math.abs(homeShipDrag.velocity) * .16) + transitionArc * .18,
+    transitionBank
+  );
 
   ambient.intensity += (1.7 - ambient.intensity) * Math.min(1, dt * 4.8);
   keyLight.intensity += (22 - keyLight.intensity) * Math.min(1, dt * 4.8);
@@ -28646,12 +31994,11 @@ function updatePlayerDamageVisual(t){
   player.hitShield.visible = visible;
   if(!visible) return;
   const material = player.hitShield.material;
-  if(material?.color) material.color.setHex(state.hurtFlashColor || 0xff3b62);
+  setMaterialColorHexCached(material, state.hurtFlashColor || 0xff3b62);
   if(material){
-    material.opacity = Math.min(.72, .18 + hit * .58);
-    material.needsUpdate = true;
+    setMaterialOpacityCached(material, Math.min(.72, .18 + hit * .58));
   }
-  player.hitShield.scale.setScalar(.72 + (1 - hit) * .96 + hit * .10);
+  player.hitShield.scale.setScalar(1.05 + (1 - hit) * .68 + hit * .18);
   player.hitShield.rotation.z = t * (state.hurtEvade ? -2.1 : 2.8);
 }
 
@@ -28687,6 +32034,12 @@ function updateStage(dt, t){
     coreVisual.scale.setScalar(playerCorePulse);
   }
   updateSkinKitAnimation(player.skinKit, t);
+  updateAfterburnerAnimation(
+    player.afterburners,
+    t,
+    AFTERBURNER_PLAY_BASE + Math.min(.70, Math.abs(state.rollVel) * 2.2) + Math.abs(state.input) * .16 + specialUpgradeLevel('afterburnerCore') * .12,
+    -state.input
+  );
   updatePlayerDamageVisual(t);
 
   if(state.shake > 0){
@@ -28721,6 +32074,7 @@ function updateBullets(dt){
     b.prevZ = b.z;
     b.prevAngle = b.angle;
     b.prevRadial = b.radial ?? BULLET_TARGET_RADIAL;
+    b.prevVisualAngle = b.visualAngle ?? b.angle;
     b.prevVisualRadial = b.visualRadial ?? b.muzzleRadial ?? PLAYER_RADIAL;
     b.prevVisualZ = b.visualZ ?? b.z;
     b.z -= b.speed * dt;
@@ -28728,7 +32082,20 @@ function updateBullets(dt){
     b.radial = b.targetRadial ?? BULLET_TARGET_RADIAL;
     b.visualRadial = b.prevVisualRadial + (b.radial - b.prevVisualRadial) * Math.min(1, dt * BULLET_VISUAL_RADIAL_SETTLE);
     b.visualZ = b.prevVisualZ + (b.z - b.prevVisualZ) * Math.min(1, dt * BULLET_VISUAL_Z_SETTLE);
-    if(b.angleVelocity){
+    const launchDistance = Math.max(0, (b.muzzleZ ?? b.prevZ ?? b.z) - b.z);
+    const straightDistance = b.muzzleStraightDistance ?? BULLET_MUZZLE_STRAIGHT_DISTANCE;
+    const rampDistance = b.groupingRampDistance ?? BULLET_GROUPING_RAMP_DISTANCE;
+    const ramp = smoothstep(clamp((launchDistance - straightDistance) / Math.max(.001, rampDistance), 0, 1));
+    const muzzleAngle = b.muzzleAngle ?? b.originAngle ?? b.angle;
+    const aimAngle = b.aimAngle ?? b.angle;
+    if(ramp < 1){
+      b.angle = interpolateAngle(muzzleAngle, aimAngle, ramp);
+      b.groupingReleased = false;
+    }else if(!b.groupingReleased){
+      b.angle = aimAngle;
+      b.groupingReleased = true;
+    }
+    if(b.groupingReleased && b.angleVelocity){
       const nextAngle = normalizeAngle(b.angle + b.angleVelocity * dt);
       const spread = signedAngleDelta(nextAngle, b.originAngle ?? b.angle);
       const limit = Math.max(0, b.spreadLimit || 0);
@@ -28738,9 +32105,12 @@ function updateBullets(dt){
       }else{
         b.angle = nextAngle;
       }
-      b.sin = Math.sin(b.angle);
-      b.cos = Math.cos(b.angle);
     }
+    b.sin = Math.sin(b.angle);
+    b.cos = Math.cos(b.angle);
+    b.visualAngle = interpolateAngle(b.prevVisualAngle, b.angle, Math.min(1, dt * BULLET_VISUAL_ANGLE_SETTLE));
+    b.visualSin = Math.sin(b.visualAngle);
+    b.visualCos = Math.cos(b.visualAngle);
     if(b.life <= 0 || b.z < PIPE_Z_FAR){
       removeBullet(i);
     }
@@ -28750,6 +32120,7 @@ function updateBullets(dt){
 
 function updateEnemies(dt, t, syncVisuals = true){
   const stasisLevel = specialUpgradeLevel('stasisAura');
+  if(syncVisuals) enemyHpBarScreenUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
   for(let i=enemies.length-1;i>=0;i--){
     const e = enemies[i];
     e.prevZ = e.z;
@@ -28760,15 +32131,15 @@ function updateEnemies(dt, t, syncVisuals = true){
       : 1;
     if(e.boss){
       e.z += (e.targetZ - e.z) * Math.min(1, dt * .55 * stasisSlow);
-      e.angle += Math.sin(t * .55 + e.phase) * dt * .09;
+      updateBossChase(e, dt, t, stasisSlow);
       e.fire -= dt;
       if(e.fire <= 0){
-        e.fire = Math.max(.55, 1.25 - state.wave * .006);
+        e.fire = Math.max(.95, BOSS_ATTACK_FIRE_INTERVAL - state.wave * .004);
         spawnBossShard(e);
       }
     }else{
       e.z += e.speed * dt * stasisSlow;
-      e.angle += Math.sin(t * e.wobble + e.phase) * dt * e.drift;
+      if(e.drift) e.angle += Math.sin(t * e.wobble + e.phase) * dt * e.drift;
     }
     if(e.recoilVel){
       e.z -= e.recoilVel * dt;
@@ -28778,10 +32149,13 @@ function updateEnemies(dt, t, syncVisuals = true){
     e.sin = Math.sin(e.angle);
     e.cos = Math.cos(e.angle);
     const rollDistance = angleDistance(e.angle, state.roll);
-    const visible = rollDistance < ENEMY_VISIBLE_ARC || (e.boss && e.z <= BOSS_SIGHT_Z);
+    const visible = rollDistance < ENEMY_RENDER_ARC || (e.boss && e.z <= BOSS_SIGHT_Z);
     e.root.visible = visible;
     e.hitFlash = Math.max(0, (e.hitFlash || 0) - dt * 5.8);
     e.hitCue = Math.max(0, (e.hitCue || 0) - dt * HIT_CONFIRM_DECAY);
+    e.hpBarTimer = Math.max(0, (e.hpBarTimer || 0) - dt);
+    e.hpBarPulse = Math.max(0, (e.hpBarPulse || 0) - dt * ENEMY_HP_BAR_PULSE_DECAY);
+    if(!visible) hideEnemyHpBar(e);
     if(syncVisuals && visible){
       setPipePositionFromTrig(e.root, e.sin, e.cos, e.z, e.radial ?? (e.boss ? .68 : .88));
       const presence = enemyDepthPresence(e);
@@ -28792,6 +32166,7 @@ function updateEnemies(dt, t, syncVisuals = true){
       animateEnemyObject(e, dt, t);
       syncBossAttackVisual(e, t, presence);
       syncEnemyHitVisual(e, t, presence);
+      syncEnemyHpBar(e, dt, t, presence);
       e.root.rotation.x += dt * e.spinX;
       e.root.rotation.y += dt * e.spinY;
       e.root.rotation.z += dt * e.spinZ;
@@ -28826,6 +32201,19 @@ function updateEnemies(dt, t, syncVisuals = true){
   }
 }
 
+function updateBossChase(boss, dt, t, stasisSlow = 1){
+  const targetAngle = normalizeAngle(state.roll + state.rollVel * BOSS_CHASE_LEAD_TIME);
+  const delta = signedAngleDelta(targetAngle, boss.angle);
+  const gap = Math.abs(delta);
+  const chaseRate = BOSS_CHASE_TURN_SPEED + Math.min(BOSS_CHASE_CATCHUP_TURN, gap * .34);
+  const maxStep = chaseRate * dt * stasisSlow;
+  const chaseStep = clamp(delta, -maxStep, maxStep);
+  const wobbleFade = 1 - clamp(gap / .75, 0, 1) * .65;
+  const wobble = Math.sin(t * .55 + boss.phase) * dt * BOSS_CHASE_WOBBLE * wobbleFade;
+  boss.angle = normalizeAngle(boss.angle + chaseStep + wobble);
+  boss.chaseGap = gap;
+}
+
 function hitEnemyWithBullets(enemy, enemyIndex){
   for(let i=bullets.length-1;i>=0;i--){
     const b = bullets[i];
@@ -28833,8 +32221,10 @@ function hitEnemyWithBullets(enemy, enemyIndex){
     const impact = bulletEnemyImpact(enemy, b);
     if(!impact) continue;
     const hitDamage = Math.max(1, Math.ceil(b.damage * specialTargetDamageMultiplier(enemy)));
+    const hpBefore = Math.max(0, enemy.hp);
     enemy.hp -= hitDamage;
     if(enemy.boss) state.nextHudAt = 0;
+    revealEnemyHpBar(enemy, hpBefore, hitDamage);
     enemy.recoilVel = Math.max(enemy.recoilVel || 0, enemy.boss ? 2.2 : Math.min(8.2, 4.8 + hitDamage * .022));
     triggerEnemyHit(enemy, b.crit ? 0xffd36a : enemy.type.color, b.crit ? 2 : 1, {
       angle: impact.angle,
@@ -28992,7 +32382,7 @@ function enemyCollisionRadius(enemy){
 }
 
 function bulletCollisionRadius(bullet){
-  return BULLET_COLLISION_RADIUS * (bullet.crit ? 1.15 : 1) * (bullet.pierce > 0 ? 1.06 : 1) * specialBulletRadiusMultiplier();
+  return BULLET_COLLISION_RADIUS * (bullet.radiusMult || 1) * (bullet.crit ? 1.15 : 1) * (bullet.pierce > 0 ? 1.06 : 1) * specialBulletRadiusMultiplier();
 }
 
 function bulletCollisionPathRadial(radial){
@@ -29010,32 +32400,65 @@ function enemyHitAngleWindow(enemy){
 }
 
 function enemyPlayerImpact(enemy){
-  const zPad = enemyPlayerZWindow(enemy);
+  const hitBox = enemyPlayerHitBox(enemy);
+  const zPad = hitBox.z;
   const startZ = enemy.prevZ ?? enemy.z;
   if(!zRangesOverlap(startZ, enemy.z, PLAYER_Z, PLAYER_Z, zPad)) return null;
-  const dz = enemy.z - startZ;
-  const t = Math.abs(dz) > HIT_SWEEP_EPSILON
-    ? clamp((PLAYER_Z - startZ) / dz, 0, 1)
-    : 0;
-  const impactZ = startZ + dz * t;
-  if(Math.abs(impactZ - PLAYER_Z) > zPad) return null;
-  const enemyAngle = interpolateAngle(enemy.prevAngle ?? enemy.angle, enemy.angle, t);
-  const playerAngle = interpolateAngle(state.prevRoll ?? state.roll, state.roll, t);
-  const angleGap = Math.abs(signedAngleDelta(enemyAngle, playerAngle));
-  if(angleGap > enemyPlayerAngleWindow(enemy)) return null;
-  return {angle: enemyAngle, z: impactZ, t};
+
+  const enemyStartAngle = enemy.prevAngle ?? enemy.angle;
+  const enemyEndAngle = enemy.angle;
+  const playerStartAngle = normalizeAngle(state.prevRoll ?? state.roll);
+  const playerEndAngle = normalizeAngle(state.roll);
+  const laneScale = PIPE_RADIUS * enemyPlayerLaneRadial(enemy);
+  const startX = signedAngleDelta(enemyStartAngle, playerStartAngle) * laneScale;
+  const endX = signedAngleDelta(enemyEndAngle, playerEndAngle) * laneScale;
+  const startZGap = startZ - PLAYER_Z;
+  const endZGap = enemy.z - PLAYER_Z;
+  const dx = endX - startX;
+  const dz = endZGap - startZGap;
+  const nx0 = startX / hitBox.x;
+  const nz0 = startZGap / hitBox.z;
+  const ndx = dx / hitBox.x;
+  const ndz = dz / hitBox.z;
+  const denom = ndx * ndx + ndz * ndz;
+  const t = denom > HIT_SWEEP_EPSILON ? clamp(-(nx0 * ndx + nz0 * ndz) / denom, 0, 1) : 0;
+  const laneX = startX + dx * t;
+  const zGap = startZGap + dz * t;
+  if((laneX / hitBox.x) ** 2 + (zGap / hitBox.z) ** 2 > 1) return null;
+
+  const enemyAngle = interpolateAngle(enemyStartAngle, enemyEndAngle, t);
+  return {angle: enemyAngle, z: PLAYER_Z + zGap, t};
 }
 
 function enemyPlayerZWindow(enemy){
-  if(enemy.boss) return 1.35;
-  if(enemy.bossShard) return BOSS_ATTACK_PLAYER_Z_WINDOW;
-  return clamp(.48 + (enemy.radius || 1) * .18, .58, .92);
+  return enemyPlayerHitBox(enemy).z;
 }
 
 function enemyPlayerAngleWindow(enemy){
-  if(enemy.boss) return .34;
-  if(enemy.bossShard) return BOSS_ATTACK_PLAYER_ANGLE_WINDOW;
-  return clamp(.125 + (enemy.radius || 1) * .045, .17, .27);
+  const hitBox = enemyPlayerHitBox(enemy);
+  return hitBox.x / Math.max(1, PIPE_RADIUS * enemyPlayerLaneRadial(enemy));
+}
+
+function enemyPlayerLaneRadial(enemy){
+  if(enemy?.boss) return .68;
+  return PLAYER_HURTBOX_LANE_RADIAL;
+}
+
+function enemyPlayerHitBox(enemy){
+  if(enemy?.boss){
+    return {x:2.70, z:1.12};
+  }
+  if(enemy?.bossShard){
+    return {
+      x: Math.min(1.28, Math.max(.94, BOSS_ATTACK_PLAYER_ANGLE_WINDOW * PIPE_RADIUS * PLAYER_HURTBOX_LANE_RADIAL * .58)),
+      z: BOSS_ATTACK_PLAYER_Z_WINDOW * .82
+    };
+  }
+  const enemyRadius = Math.max(.2, enemyCollisionRadius(enemy));
+  return {
+    x: PLAYER_HURTBOX_LATERAL + clamp(enemyRadius * .28, .26, .48),
+    z: clamp(PLAYER_HURTBOX_Z_BASE + enemyRadius * .10, .42, .58)
+  };
 }
 
 function enemyPassedPlayer(enemy){
@@ -29071,17 +32494,27 @@ function triggerPlayerDamageEffect(impact = null, options = {}){
   const evaded = !!options.evaded;
   const color = evaded ? 0x1ed6ff : 0xff3b62;
   const amount = Math.max(0, Number(options.taken) || 0);
+  const visualImpact = playerDamageImpactPoint(impact);
   state.hurtFlashColor = color;
   state.hurtFlashRgb = colorRgbCss(color);
   state.hurtEvade = evaded;
-  state.hurtFlash = Math.max(state.hurtFlash || 0, evaded ? .48 : .94);
-  state.playerHitFlash = Math.max(state.playerHitFlash || 0, evaded ? .36 : 1);
-  state.shake = Math.max(state.shake, evaded ? .25 : Math.min(.88, .58 + amount * .014));
-  spawnPlayerDamageBurst(impact?.angle ?? state.roll, impact?.z ?? PLAYER_Z - .26, color, evaded);
+  state.hurtFlash = Math.max(state.hurtFlash || 0, evaded ? .56 : 1.15);
+  state.playerHitFlash = Math.max(state.playerHitFlash || 0, evaded ? .42 : 1.18);
+  state.shake = Math.max(state.shake, evaded ? .30 : Math.min(1.04, .70 + amount * .018));
+  spawnPlayerDamageBurst(visualImpact.angle, visualImpact.z, color, evaded);
+}
+
+function playerDamageImpactPoint(impact = null){
+  const rawAngle = Number.isFinite(impact?.angle) ? impact.angle : state.roll;
+  const rawZ = Number.isFinite(impact?.z) ? impact.z : PLAYER_Z;
+  return {
+    angle: normalizeAngle(state.roll + signedAngleDelta(rawAngle, state.roll) * .58),
+    z: clamp(rawZ, PLAYER_Z - .18, PLAYER_Z + .20)
+  };
 }
 
 function spawnPlayerDamageBurst(angle, z, color, evaded = false){
-  const count = Math.max(0, Math.min(MAX_PARTICLES - particles.length, evaded ? (VISUAL_LOW_POWER ? 5 : 7) : (VISUAL_LOW_POWER ? 8 : 12)));
+  const count = Math.max(0, Math.min(MAX_PARTICLES - particles.length, evaded ? (VISUAL_LOW_POWER ? 6 : 8) : (VISUAL_LOW_POWER ? 10 : 16)));
   const palette = evaded ? [0x9cf5ff, 0x1ed6ff, 0xf4fbff] : [color, 0xffd36a, 0xf4fbff, 0xff7a3d];
   for(let i=0;i<count;i++){
     const particleAngle = normalizeAngle(angle + (Math.random() - .5) * (evaded ? .64 : .92));
@@ -29091,14 +32524,14 @@ function spawnPlayerDamageBurst(angle, z, color, evaded = false){
       angle: particleAngle,
       sin: Math.sin(particleAngle),
       cos: Math.cos(particleAngle),
-      z: z + (Math.random() - .5) * (evaded ? .72 : 1.05),
-      radial: PLAYER_RADIAL + .08 + Math.random() * .14,
+      z: z + (Math.random() - .5) * (evaded ? .48 : .66),
+      radial: PLAYER_RADIAL + .03 + Math.random() * .11,
       va: (Math.random() - .5) * (evaded ? 1.25 : 1.85),
       vz: (Math.random() - .5) * (evaded ? 8.5 : 12) - (evaded ? 0 : 4.5),
       vr: (evaded ? .22 : .50) + Math.random() * (evaded ? .34 : .62),
       life,
       maxLife: life,
-      size: (evaded ? .90 : 1.22) + (i < 3 ? .58 : 0) + Math.random() * .24
+      size: (evaded ? .98 : 1.44) + (i < 4 ? .72 : 0) + Math.random() * .32
     });
   }
   particlesDirty = true;
@@ -29115,38 +32548,115 @@ function fireShot(){
   const gatling = specialUpgradeLevel('barrelGatling');
 
   if(shotgun > 0){
-    for(const offset of SHOTGUN_OFFSETS) pushBullet(offset, baseDamage, speed, life, .70, .84, .46);
+    for(const baseSpread of SHOTGUN_SCATTER_SPREADS){
+      const scatter = shotgunScatterTrajectory(baseSpread);
+      pushBullet(0, baseDamage, speed, life, .50 + Math.random() * .055, .76 + Math.random() * .16, .38 + Math.random() * .10, PLAYER_RADIAL, scatter.velocity, scatter.limit, {
+        groupingKind: 'shotgun'
+      });
+    }
   }else if(sniper > 0){
-    pushBullet(0, baseDamage, speed, life, 2.65, 1.55, 1.46);
+    pushBullet(0, baseDamage, speed, life, 2.65, 1.55, 1.46, PLAYER_RADIAL, 0, 0, {
+      groupingKind: 'sniper'
+    });
   }else if(multishot > 0){
-    for(const spread of MULTISHOT_SPREADS) pushBullet(0, baseDamage, speed, life, .58, 1, .96, PLAYER_RADIAL, spread, MULTISHOT_SPREAD_LIMIT);
+    for(const spread of MULTISHOT_SPREADS) pushBullet(0, baseDamage, speed, life, .58, 1, .96, PLAYER_RADIAL, spread, MULTISHOT_SPREAD_LIMIT, {
+      groupingKind: 'multishot'
+    });
   }else if(doubleBarrel > 0){
     const offsets = DOUBLE_BARREL_OFFSETS[Math.min(2, doubleBarrel - 1)] || DOUBLE_BARREL_OFFSETS[0];
     const damageMult = Math.max(.56, .72 - (doubleBarrel - 1) * .08);
-    for(const offset of offsets) pushBullet(offset, baseDamage, speed, life, damageMult, 1.03, 1);
+    for(const offset of offsets) pushBullet(offset, baseDamage, speed, life, damageMult, 1.03, 1, PLAYER_RADIAL, 0, 0, {
+      groupingKind: 'double'
+    });
   }else if(gatling > 0){
-    pushBullet(0, baseDamage, speed, life, .58, 1.10, .92);
+    const scatter = gatlingScatterTrajectory();
+    pushBullet(scatter.offset, baseDamage, speed, life, .58, 1.10, .92, PLAYER_RADIAL, scatter.velocity, scatter.limit, {
+      groupingKind: 'gatling',
+      radiusMult: .68,
+      visualSizeMult: .64,
+      trailScaleMult: .72
+    });
   }else{
-    pushBullet(0, baseDamage, speed, life);
+    pushBullet(0, baseDamage, speed, life, 1, 1, 1, PLAYER_RADIAL, 0, 0, {
+      groupingKind: 'default'
+    });
   }
   bulletsDirty = true;
 }
 
-function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedMult = 1, lifeMult = 1, radial = PLAYER_RADIAL, angleVelocity = 0, spreadLimit = 0){
+function shotgunScatterTrajectory(baseSpread){
+  const spread = clamp(baseSpread + (Math.random() - .5) * SHOTGUN_SCATTER_JITTER, -SHOTGUN_SCATTER_LIMIT, SHOTGUN_SCATTER_LIMIT);
+  const sign = Math.sign(spread) || (Math.random() < .5 ? -1 : 1);
+  const limit = clamp(Math.abs(spread), .028, SHOTGUN_SCATTER_LIMIT);
+  return {
+    velocity: sign * limit * (1.55 + Math.random() * .65),
+    limit
+  };
+}
+
+function gatlingScatterTrajectory(){
+  const sign = Math.random() < .5 ? -1 : 1;
+  const limit = GATLING_SCATTER_MIN + Math.random() * (GATLING_SCATTER_MAX - GATLING_SCATTER_MIN);
+  return {
+    offset: (Math.random() - .5) * GATLING_MUZZLE_JITTER,
+    velocity: sign * limit * (1.70 + Math.random() * 1.10),
+    limit
+  };
+}
+
+function randomGroupingDeviation(){
+  return ((Math.random() + Math.random() + Math.random()) / 3 - .5) * 2;
+}
+
+function bulletGroupingDeviation(kind = 'default', options = null){
+  const profile = BULLET_GROUPING_PROFILES[kind] || BULLET_GROUPING_PROFILES.default;
+  const statBonus = Math.min(
+    BULLET_GROUPING_STAT_BONUS_CAP,
+    statLevel('range') * .0025 + statLevel('bulletSpeed') * .0018 + specialUpgradeLevel('focusLens') * .026
+  );
+  const movementJitter = Math.min(.048, Math.abs(state.input || 0) * BULLET_GROUPING_MOVE_JITTER + Math.abs(state.rollVel || 0) * .018);
+  const grouping = clamp((options?.grouping ?? profile.grouping) + statBonus - movementJitter * 1.35, BULLET_GROUPING_MIN, BULLET_GROUPING_MAX);
+  const looseness = 1 - grouping;
+  const baseJitter = options?.groupingJitter ?? profile.jitter;
+  const jitter = baseJitter * (.72 + looseness * .86) + movementJitter;
+  return {
+    grouping,
+    jitter,
+    angleError: randomGroupingDeviation() * jitter
+  };
+}
+
+function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedMult = 1, lifeMult = 1, radial = PLAYER_RADIAL, angleVelocity = 0, spreadLimit = 0, bulletOptions = null){
   if(!reserveBulletSlot()) return;
   const muzzleDrift = playerMuzzleAngleDrift(radial);
-  const angle = normalizeAngle(state.roll + angleOffset + muzzleDrift);
+  const muzzleAngle = normalizeAngle(state.roll + angleOffset + muzzleDrift);
+  const grouping = bulletGroupingDeviation(bulletOptions?.groupingKind, bulletOptions);
+  const aimAngle = normalizeAngle(muzzleAngle + grouping.angleError);
+  const angle = muzzleAngle;
+  const effectiveSpreadLimit = spreadLimit ? Math.max(spreadLimit, Math.abs(grouping.angleError) + spreadLimit) : 0;
   const crit = Math.random() < (critChance() + cosmeticBuff('crit'));
   const pierce = bulletPierceCount();
   const boreVisual = 1 + specialUpgradeLevel('wideBore') * .09;
   const focusTrail = 1 + specialUpgradeLevel('focusLens') * .035;
+  const visualSizeMult = bulletOptions?.visualSizeMult ?? 1;
+  const trailScaleMult = bulletOptions?.trailScaleMult ?? 1;
   const spawnZ = BULLET_MUZZLE_Z;
   bullets.push({
     angle,
-    originAngle: angle,
-    prevAngle: angle,
+    originAngle: muzzleAngle,
+    muzzleAngle,
+    aimAngle,
+    prevAngle: muzzleAngle,
+    visualAngle: muzzleAngle,
+    prevVisualAngle: muzzleAngle,
     angleVelocity,
-    spreadLimit,
+    spreadLimit: effectiveSpreadLimit,
+    grouping: grouping.grouping,
+    groupingJitter: grouping.jitter,
+    groupingError: grouping.angleError,
+    muzzleStraightDistance: bulletOptions?.muzzleStraightDistance ?? BULLET_MUZZLE_STRAIGHT_DISTANCE,
+    groupingRampDistance: bulletOptions?.groupingRampDistance ?? BULLET_GROUPING_RAMP_DISTANCE,
+    groupingReleased: false,
     sin: Math.sin(angle),
     cos: Math.cos(angle),
     z: spawnZ,
@@ -29163,20 +32673,18 @@ function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedM
     speed: speed * speedMult,
     damage: Math.ceil(baseDamage * damageMult * (crit ? critDamageMult() : 1)),
     crit,
-    visualSize: (crit ? 1.18 : 1) * (damageMult > 2 ? 1.25 : damageMult < .75 ? .98 : 1) * (pierce > 0 ? 1.08 : 1) * boreVisual,
-    trailScale: (speedMult > 1.25 ? 1.20 : 1) * (lifeMult > 1.35 ? 1.18 : 1) * (angleVelocity ? .92 : 1) * focusTrail,
+    radiusMult: bulletOptions?.radiusMult ?? 1,
+    visualSize: (crit ? 1.18 : 1) * (damageMult > 2 ? 1.25 : damageMult < .75 ? .98 : 1) * (pierce > 0 ? 1.08 : 1) * boreVisual * visualSizeMult,
+    trailScale: (speedMult > 1.25 ? 1.20 : 1) * (lifeMult > 1.35 ? 1.18 : 1) * (angleVelocity ? .92 : 1) * focusTrail * trailScaleMult,
     life: life * lifeMult,
     pierce,
     hitEnemies: pierce > 0 ? new Set() : null
   });
-  spawnMuzzleFlash(angle, spawnZ, radial, crit);
+  spawnMuzzleFlash(muzzleAngle, spawnZ, radial, crit);
 }
 
 function playerMuzzleAngleDrift(radial = PLAYER_RADIAL){
-  const shipX = player?.root?.position?.x ?? 0;
-  const targetX = (Number(state.input) || 0) * PLAYER_DRIFT_SCALE;
-  const visualX = shipX + (targetX - shipX) * .55;
-  return clamp(visualX / Math.max(1, PIPE_RADIUS * Math.max(.16, radial)), -.045, .045);
+  return 0;
 }
 
 function spawnMuzzleFlash(angle, z, radial, crit = false){
@@ -29233,13 +32741,16 @@ function spawnEnemy(offset = 0){
   const root = acquireEnemyObject(type, false);
   tintEnemyObject(root, type.color, type.color, .72);
   const wavePower = Math.pow(1.035, state.wave - 1);
+  const enemyHp = Math.ceil(type.hp * wavePower * (1 + state.wave * .022) * ENEMY_HP_MULT);
   const enemy = {
     root,
     type,
     boss:false,
     angle: randomPipeAngle() + offset,
     z: PIPE_Z_FAR + 24 - Math.random() * 18,
-    hp: Math.ceil(type.hp * wavePower * (1 + state.wave * .022) * ENEMY_HP_MULT),
+    hp: enemyHp,
+    maxHp: enemyHp,
+    initialHp: enemyHp,
     damage: Math.ceil(type.damage * (1 + state.wave * .018)),
     speed: 12.5 + Math.min(8.5, state.wave * .11) + Math.random() * 2.2,
     radius: type.radius * ENEMY_HITBOX_MULT,
@@ -29278,6 +32789,7 @@ function spawnBoss(){
     targetZ: BOSS_TARGET_Z,
     hp: bossHp,
     maxHp: bossHp,
+    initialHp: bossHp,
     damage: 42 + Math.floor(state.wave * 1.2),
     radius:1.4 * ENEMY_HITBOX_MULT,
     radial:.68,
@@ -29285,6 +32797,7 @@ function spawnBoss(){
     speed:0,
     phase:Math.random() * TAU,
     fire:1.4,
+    chaseGap:0,
     spinX:.30,
     spinY:.48,
     spinZ:.22
@@ -29304,29 +32817,32 @@ function spawnBoss(){
 function spawnBossShard(boss){
   for(let i=-1;i<=1;i++){
     if(enemies.length >= MAX_ENEMIES) return;
-    const type = {...ENEMY_TYPES[1], color:i === 0 ? 0xf4fbff : 0xffd36a};
-    const root = acquireEnemyObject(ENEMY_TYPES[1], false);
-    tintEnemyObject(root, type.color, i === 0 ? 0xff3b62 : 0xff7a3d, 1.28);
+    const type = {...ENEMY_TYPES[0], color:i === 0 ? 0xfff0b8 : 0xffd36a, radius:.64};
+    const root = acquireEnemyObject(ENEMY_TYPES[0], false);
+    tintEnemyObject(root, type.color, 0xff7a3d, 1.55);
+    const shardHp = Math.ceil((8 + state.wave * .6) * BOSS_SHARD_HP_MULT);
     const shard = {
       root,
       type,
       boss:false,
       bossShard:true,
-      angle: boss.angle + i * .28 + (Math.random() - .5) * .16,
+      angle: boss.angle + i * BOSS_ATTACK_LANE_SPACING + (Math.random() - .5) * BOSS_ATTACK_LANE_JITTER,
       z: boss.z + 2.6,
-      hp: Math.ceil((8 + state.wave * .6) * BOSS_SHARD_HP_MULT),
+      hp: shardHp,
+      maxHp: shardHp,
+      initialHp: shardHp,
       damage: Math.ceil(18 + state.wave * .4),
-      speed: 22.5 + Math.min(7.2, state.wave * .075),
-      radius:BOSS_ATTACK_HIT_RADIUS,
+      speed: 19.5 + Math.min(5.4, state.wave * .055),
+      radius:BOSS_ATTACK_HIT_RADIUS * .92,
       radial:.88,
-      baseScale:BOSS_ATTACK_VISUAL_SCALE,
+      baseScale:BOSS_ATTACK_VISUAL_SCALE * 1.62,
       attackLane:i,
       phase:Math.random() * TAU,
-      drift:.018,
-      wobble:.58,
-      spinX:.95,
-      spinY:.44,
-      spinZ:2.10
+      drift:0,
+      wobble:0,
+      spinX:.28,
+      spinY:.18,
+      spinZ:.62
     };
     shard.prevAngle = shard.angle;
     shard.prevZ = shard.z;
@@ -29343,28 +32859,28 @@ function spawnBossShard(boss){
 }
 
 function spawnBossAttackCue(angle, startZ, laneIndex = 0){
-  const count = VISUAL_LOW_POWER ? 5 : 7;
+  const count = VISUAL_LOW_POWER ? 7 : 10;
   const available = Math.max(0, Math.min(MAX_PARTICLES - particles.length, count));
   const cueAngle = normalizeAngle(angle);
-  const colors = [0x8df5ff, 0xf4fbff, 0xff3b62, 0xffd36a];
+  const colors = laneIndex === 0 ? [0xf4fbff, 0x8df5ff, 0xffd36a] : [0xffd36a, 0xf4fbff, 0xff7a3d];
   for(let i=0;i<available;i++){
     const laneT = (i + 1) / (count + 1);
-    const life = .62 + laneT * .26;
-    const particleAngle = cueAngle + (Math.random() - .5) * .018;
+    const life = .72 + laneT * .34;
+    const particleAngle = cueAngle + (Math.random() - .5) * .010;
     particles.push({
-      color: colors[(i + laneIndex + 3) % colors.length],
+      color: colors[i % colors.length],
       angle: particleAngle,
       sin: Math.sin(particleAngle),
       cos: Math.cos(particleAngle),
       z: startZ + (PLAYER_Z - startZ) * laneT,
-      radial: .82 + laneT * .075,
-      va: (Math.random() - .5) * .075,
-      vz: 2.8 + laneT * 2.2,
-      vr: .006 + laneT * .014,
+      radial: .84 + laneT * .050,
+      va: (Math.random() - .5) * .040,
+      vz: 1.8 + laneT * 1.8,
+      vr: .004 + laneT * .010,
       life,
       maxLife: life,
-      size: 1.32 - laneT * .24,
-      minScale: .18
+      size: 1.46 - laneT * .20,
+      minScale: .24
     });
   }
   particlesDirty = true;
@@ -29383,6 +32899,10 @@ function acquireEnemyObject(type, boss = false){
     root.userData.opacity = null;
     root.userData.attackCueActive = false;
     if(root.userData.core) root.userData.core.visible = true;
+    if(root.userData.hpBar){
+      root.userData.hpBar.visible = false;
+      root.userData.hpBar.userData.owner = null;
+    }
     for(const part of root.userData.attackParts || []) part.visible = false;
     for(const part of root.userData.hitParts || []) part.visible = false;
   }
@@ -29390,6 +32910,7 @@ function acquireEnemyObject(type, boss = false){
 }
 
 function releaseEnemyObject(enemy){
+  hideEnemyHpBar(enemy);
   enemyRoot.remove(enemy.root);
   const key = enemy.boss ? 'boss' : enemy.type.id;
   const pool = enemyPools.get(key) || [];
@@ -29527,7 +33048,268 @@ function addEnemyHitCue(root, boss = false){
   core.renderOrder = 20;
   core.userData.hitRole = 'core';
   root.userData.hitParts = [halo, ring, cross, core];
+  root.userData.hitVisualParts = {halo, ring, cross, core};
   root.add(halo, ring, cross, core);
+}
+
+function makeEnemyHpBar(){
+  const group = new THREE.Group();
+  group.visible = false;
+  group.frustumCulled = false;
+  group.renderOrder = 28;
+
+  const plane = new THREE.PlaneGeometry(1, 1);
+  const highDetail = ENEMY_HP_BAR_DETAIL_LEVEL >= 2;
+  let halo = null;
+  if(highDetail){
+    halo = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({
+      color:0x8df5ff,
+      transparent:true,
+      opacity:.18,
+      depthWrite:false,
+      depthTest:false,
+      fog:false,
+      blending:THREE.AdditiveBlending
+    }));
+    halo.scale.set(1.18, 1.85, 1);
+    halo.position.z = -.006;
+    halo.renderOrder = 27;
+  }
+
+  const shadow = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({
+    color:0x000000,
+    transparent:true,
+    opacity:.92,
+    depthWrite:false,
+    depthTest:false,
+    fog:false
+  }));
+  shadow.scale.set(1.10, 1.34, 1);
+  shadow.position.z = -.003;
+  shadow.renderOrder = 27;
+
+  const back = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({
+    color:0x03070a,
+    transparent:true,
+    opacity:.94,
+    depthWrite:false,
+    depthTest:false,
+    fog:false
+  }));
+  back.scale.set(1, 1.02, 1);
+  back.renderOrder = 28;
+
+  const ghost = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({
+    color:0xffd36a,
+    transparent:true,
+    opacity:.54,
+    depthWrite:false,
+    depthTest:false,
+    fog:false
+  }));
+  ghost.position.z = .003;
+  ghost.scale.set(1, .64, 1);
+  ghost.renderOrder = 29;
+
+  const fill = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({
+    color:0x36f39b,
+    transparent:true,
+    opacity:1,
+    depthWrite:false,
+    depthTest:false,
+    fog:false
+  }));
+  fill.position.z = .006;
+  fill.scale.set(1, .64, 1);
+  fill.renderOrder = 30;
+
+  let fillGlow = null;
+  let sheen = null;
+  if(highDetail){
+    fillGlow = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({
+      color:0x36f39b,
+      transparent:true,
+      opacity:.38,
+      depthWrite:false,
+      depthTest:false,
+      fog:false,
+      blending:THREE.AdditiveBlending
+    }));
+    fillGlow.position.z = .008;
+    fillGlow.scale.set(1, 1.08, 1);
+    fillGlow.renderOrder = 31;
+
+    sheen = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({
+      color:0xf4fbff,
+      transparent:true,
+      opacity:.42,
+      depthWrite:false,
+      depthTest:false,
+      fog:false
+    }));
+    sheen.position.set(0, .18, .011);
+    sheen.scale.set(1, .18, 1);
+    sheen.renderOrder = 32;
+  }
+
+  const frame = new THREE.LineSegments(makeHpBarFrameGeometry(), new THREE.LineBasicMaterial({
+    color:0xf4fbff,
+    transparent:true,
+    opacity:.98,
+    depthWrite:false,
+    depthTest:false,
+    fog:false
+  }));
+  frame.position.z = .014;
+  frame.renderOrder = 33;
+
+  let ticks = null;
+  if(highDetail){
+    const tickGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-.25, -.31, .014), new THREE.Vector3(-.25, .31, .014),
+      new THREE.Vector3(.25, -.31, .014), new THREE.Vector3(.25, .31, .014)
+    ]);
+    ticks = new THREE.LineSegments(tickGeometry, new THREE.LineBasicMaterial({
+      color:0xf4fbff,
+      transparent:true,
+      opacity:.22,
+      depthWrite:false,
+      depthTest:false,
+      fog:false
+    }));
+    ticks.renderOrder = 34;
+  }
+
+  if(halo) group.add(halo);
+  group.add(shadow, back, ghost);
+  if(fillGlow) group.add(fillGlow);
+  group.add(fill);
+  if(sheen) group.add(sheen);
+  group.add(frame);
+  if(ticks) group.add(ticks);
+  group.userData = {halo, shadow, back, ghost, fillGlow, fill, sheen, frame, ticks, owner:null};
+  return group;
+}
+
+function makeHpBarFrameGeometry(){
+  const points = [
+    new THREE.Vector3(-.50, -.36, 0), new THREE.Vector3(.50, -.36, 0),
+    new THREE.Vector3(.50, -.36, 0), new THREE.Vector3(.50, .36, 0),
+    new THREE.Vector3(.50, .36, 0), new THREE.Vector3(-.50, .36, 0),
+    new THREE.Vector3(-.50, .36, 0), new THREE.Vector3(-.50, -.36, 0),
+    new THREE.Vector3(-.46, -.48, 0), new THREE.Vector3(-.34, -.36, 0),
+    new THREE.Vector3(.34, .36, 0), new THREE.Vector3(.46, .48, 0)
+  ];
+  return new THREE.BufferGeometry().setFromPoints(points);
+}
+
+function ensureEnemyHpBar(enemy){
+  const root = enemy?.root;
+  if(!root) return null;
+  if(!root.userData.hpBar){
+    root.userData.hpBar = makeEnemyHpBar();
+    enemyHpBarRoot.add(root.userData.hpBar);
+  }
+  const bar = root.userData.hpBar;
+  bar.userData.owner = enemy;
+  return bar;
+}
+
+function hideEnemyHpBar(enemy){
+  const bar = enemy?.root?.userData?.hpBar;
+  if(bar){
+    bar.visible = false;
+    bar.userData.owner = null;
+  }
+  if(enemy){
+    enemy.hpBarTimer = 0;
+    enemy.hpBarPulse = 0;
+  }
+}
+
+function revealEnemyHpBar(enemy, hpBefore = null, damage = 0){
+  if(!enemy?.root || enemy.hp <= 0) return;
+  const maxHp = enemyMaxHp(enemy);
+  const currentRatio = clamp(enemy.hp / maxHp, 0, 1);
+  const beforeValue = hpBefore == null ? enemy.hp : hpBefore;
+  const beforeRatio = clamp(beforeValue / maxHp, 0, 1);
+  enemy.hpBarTimer = enemy.boss ? ENEMY_HP_BAR_VISIBLE_TIME + .85 : ENEMY_HP_BAR_VISIBLE_TIME;
+  enemy.hpBarPulse = 1;
+  enemy.hpBarGhostRatio = Math.max(enemy.hpBarGhostRatio ?? currentRatio, beforeRatio, currentRatio);
+  enemy.hpBarDamage = Math.max(enemy.hpBarDamage || 0, Number(damage) || 0);
+  ensureEnemyHpBar(enemy);
+}
+
+function enemyMaxHp(enemy){
+  return Math.max(1, Math.ceil(Number(enemy?.maxHp ?? enemy?.initialHp ?? enemy?.type?.hp ?? enemy?.hp) || 1));
+}
+
+function enemyHpBarColor(enemy, ratio){
+  if(ratio <= .30) return 0xff3b62;
+  if(ratio <= .58) return 0xffd36a;
+  if(enemy?.boss) return 0xff7a3d;
+  return colorHexValue(enemy?.type?.color ?? 0x36f39b);
+}
+
+function syncEnemyHpBar(enemy, dt, t, presence){
+  if(!enemy?.root?.userData?.hpBar && !(enemy?.hpBarTimer > 0)) return;
+  const bar = ensureEnemyHpBar(enemy);
+  if(!bar) return;
+  if(!(enemy.hpBarTimer > 0) || enemy.hp <= 0 || !enemy.root.visible){
+    hideEnemyHpBar(enemy);
+    return;
+  }
+
+  const maxHp = enemyMaxHp(enemy);
+  const ratio = clamp(enemy.hp / maxHp, 0, 1);
+  const ghostRatio = Math.max(ratio, enemy.hpBarGhostRatio ?? ratio);
+  enemy.hpBarGhostRatio = Math.max(ratio, ghostRatio - dt * ENEMY_HP_BAR_GHOST_DECAY);
+
+  const fade = clamp(enemy.hpBarTimer / ENEMY_HP_BAR_FADE_TIME, 0, 1);
+  const pulse = clamp(enemy.hpBarPulse || 0, 0, 1);
+  const alpha = fade * Math.max(ENEMY_HP_BAR_MIN_ALPHA, presence);
+  const bodyScale = Math.max(.28, enemy.root.scale.x || 1);
+  const distanceBoost = 1 + clamp((PLAYER_Z - enemy.z) / 120, 0, 1) * .98;
+  const width = (enemy.boss ? 6.80 : enemy.bossShard ? 3.34 : 4.86) * distanceBoost * (1 + pulse * .10);
+  const height = (enemy.boss ? .62 : enemy.bossShard ? .46 : .54) * (1 + pulse * .18);
+  const offset = bodyScale * (enemy.boss ? 2.26 : enemy.bossShard ? 1.50 : 1.34) + .76;
+
+  enemy.root.getWorldPosition(enemyHpBarWorldPosition);
+  enemyHpBarScreenUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+  bar.position.copy(enemyHpBarWorldPosition).addScaledVector(enemyHpBarScreenUp, offset);
+  bar.quaternion.copy(camera.quaternion);
+  bar.scale.set(width, height, 1);
+  bar.visible = true;
+
+  const data = bar.userData;
+  const fillRatio = Math.max(.060, ratio);
+  const delayedRatio = Math.max(fillRatio, enemy.hpBarGhostRatio);
+  data.fill.scale.x = fillRatio;
+  data.fill.position.x = -.5 + fillRatio * .5;
+  if(data.fillGlow){
+    data.fillGlow.scale.x = fillRatio;
+    data.fillGlow.position.x = -.5 + fillRatio * .5;
+  }
+  data.ghost.scale.x = delayedRatio;
+  data.ghost.position.x = -.5 + delayedRatio * .5;
+  if(data.sheen){
+    data.sheen.scale.x = fillRatio;
+    data.sheen.position.x = -.5 + fillRatio * .5;
+  }
+
+  const hpColor = enemyHpBarColor(enemy, ratio);
+  setMaterialColorHexCached(data.fill.material, hpColor);
+  setMaterialColorHexCached(data.fillGlow?.material, hpColor);
+  setMaterialColorHexCached(data.halo?.material, ratio <= .30 ? 0xff3b62 : enemy?.boss ? 0xffd36a : 0x8df5ff);
+  setMaterialOpacityCached(data.shadow.material, .82 * alpha);
+  setMaterialOpacityCached(data.back.material, .94 * alpha);
+  setMaterialOpacityCached(data.ghost.material, .68 * alpha * clamp((delayedRatio - ratio) * 3.7 + .32, .26, 1));
+  setMaterialOpacityCached(data.fill.material, Math.min(1, (.96 + pulse * .10) * alpha));
+  setMaterialOpacityCached(data.fillGlow?.material, Math.min(.76, (.32 + pulse * .34) * alpha));
+  setMaterialOpacityCached(data.halo?.material, Math.min(.58, (.16 + pulse * .28) * alpha));
+  setMaterialOpacityCached(data.sheen?.material, (.38 + pulse * .34) * alpha);
+  setMaterialOpacityCached(data.frame.material, Math.min(1, (.90 + pulse * .18) * alpha));
+  setMaterialOpacityCached(data.ticks?.material, .38 * alpha);
 }
 
 function addBossAttackCue(root){
@@ -29565,6 +33347,7 @@ function addBossAttackCue(root){
   core.renderOrder = 16;
   core.userData.attackRole = 'core';
   root.userData.attackParts = [halo, blade, band, ring, outerBand, outer, needle, core];
+  root.userData.attackVisualParts = {halo, blade, band, ring, outerBand, outer, needle, core};
   root.add(halo, blade, band, ring, outerBand, outer, needle, core);
 }
 
@@ -29781,7 +33564,11 @@ function updateParticles(dt){
   }
   if(changed){
     particlesDirty = true;
-    syncParticleInstances();
+    particleSyncClock += dt;
+    if(!particles.length || PARTICLE_SYNC_INTERVAL <= 0 || particleSyncClock >= PARTICLE_SYNC_INTERVAL){
+      particleSyncClock = 0;
+      syncParticleInstances();
+    }
   }
 }
 
@@ -29840,6 +33627,9 @@ function syncBulletInstances(){
   }
   for(let i=0;i<count;i++){
     const b = bullets[i];
+    const renderAngle = b.visualAngle ?? b.angle;
+    const renderSin = b.visualSin ?? Math.sin(renderAngle);
+    const renderCos = b.visualCos ?? Math.cos(renderAngle);
     const renderRadial = b.visualRadial ?? b.muzzleRadial ?? b.radial;
     const renderZ = b.visualZ ?? b.z;
     const distanceBoost = 1 + clamp((PLAYER_Z - renderZ) / 132, 0, 1) * .58;
@@ -29847,16 +33637,16 @@ function syncBulletInstances(){
     const trailScale = b.trailScale || 1;
     bulletMatrix.makeScale(.92 * coreScale, .92 * coreScale, 1.62 * coreScale * trailScale);
     bulletMatrix.setPosition(
-      b.sin * PIPE_RADIUS * renderRadial,
-      -b.cos * PIPE_RADIUS * renderRadial,
+      renderSin * PIPE_RADIUS * renderRadial,
+      -renderCos * PIPE_RADIUS * renderRadial,
       renderZ
     );
     bulletMesh.setMatrixAt(i, bulletMatrix);
     const glowScale = coreScale * (b.crit ? 1.34 : 1);
     bulletGlowMatrix.makeScale(2.35 * glowScale, 2.35 * glowScale, 4.9 * glowScale * trailScale);
     bulletGlowMatrix.setPosition(
-      b.sin * PIPE_RADIUS * renderRadial,
-      -b.cos * PIPE_RADIUS * renderRadial,
+      renderSin * PIPE_RADIUS * renderRadial,
+      -renderCos * PIPE_RADIUS * renderRadial,
       renderZ + .10
     );
     bulletGlowMesh.setMatrixAt(i, bulletGlowMatrix);
@@ -29989,18 +33779,15 @@ function syncEnemyHitVisual(enemy, t, presence){
     part.visible = true;
     const material = part.material;
     const roleColor = role === 'core' ? 0xf4fbff : role === 'cross' ? 0xfff0b8 : color;
-    if(material?.color) material.color.setHex(roleColor);
+    setMaterialColorHexCached(material, roleColor);
     if(material?.opacity !== undefined){
       const base = material.userData?.baseOpacity ?? (role === 'halo' ? .70 : .95);
       const roleBoost = role === 'cross' ? 1.20 : role === 'core' ? 1.35 : 1;
-      material.opacity = Math.min(1, base * roleBoost * (.18 + fade * 1.10) * Math.max(.56, presence));
-      material.needsUpdate = true;
+      setMaterialOpacityCached(material, Math.min(1, base * roleBoost * (.18 + fade * 1.10) * Math.max(.56, presence)));
     }
   }
-  const halo = parts.find(part => part.userData?.hitRole === 'halo');
-  const ring = parts.find(part => part.userData?.hitRole === 'ring');
-  const cross = parts.find(part => part.userData?.hitRole === 'cross');
-  const core = parts.find(part => part.userData?.hitRole === 'core');
+  const roleParts = enemy.root.userData?.hitVisualParts || {};
+  const {halo, ring, cross, core} = roleParts;
   if(halo){
     halo.scale.setScalar((enemy.boss ? 1.38 : 1.06) * expand);
     halo.rotation.z = -t * 4.8 + enemy.phase;
@@ -30031,39 +33818,33 @@ function syncBossAttackVisual(enemy, t, presence){
   }
   data.attackCueActive = true;
   const danger = clamp((enemy.z - (BOSS_TARGET_Z - 6)) / Math.max(1, PLAYER_Z - (BOSS_TARGET_Z - 6)), 0, 1);
-  const pulse = .5 + .5 * Math.sin(t * 18 + enemy.phase);
+  const pulse = .5 + .5 * Math.sin(t * 12 + enemy.phase);
   const lane = Number(enemy.attackLane) || 0;
   for(const part of parts){
-    part.visible = true;
     const role = part.userData?.attackRole || '';
-    const hot = lane === 0 ? 0xff3b62 : 0xffd36a;
-    let colorMix = pulse > .54 ? hot : 0x8df5ff;
-    if(role === 'halo') colorMix = pulse > .44 ? hot : 0x8df5ff;
-    else if(role === 'blade' || role === 'needle') colorMix = pulse > .40 ? 0xf4fbff : 0x8df5ff;
-    else if(role === 'band') colorMix = pulse > .52 ? 0xfff0b8 : hot;
-    else if(role === 'outerBand') colorMix = pulse > .46 ? 0x8df5ff : hot;
-    else if(role === 'core') colorMix = pulse > .38 ? 0xf4fbff : 0xfff0b8;
-    else if(role === 'outer') colorMix = pulse > .48 ? 0x8df5ff : 0xffd36a;
+    if(role !== 'halo' && role !== 'ring' && role !== 'core'){
+      part.visible = false;
+      continue;
+    }
+    part.visible = true;
+    const hot = 0xffd36a;
+    let colorMix = pulse > .50 ? hot : 0xf4fbff;
+    if(role === 'halo') colorMix = pulse > .48 ? hot : 0xf4fbff;
+    else if(role === 'ring') colorMix = pulse > .42 ? 0xf4fbff : hot;
+    else if(role === 'core') colorMix = 0xfff0b8;
     const material = part.material;
-    if(material?.color) material.color.setHex(colorMix);
+    setMaterialColorHexCached(material, colorMix);
     if(material?.opacity !== undefined){
       const base = material.userData?.baseOpacity ?? 1;
-      const roleBoost = role === 'core' ? 1.54 : role === 'blade' || role === 'needle' ? 1.48 : role === 'band' ? .82 : role === 'outerBand' ? .48 : .38;
-      material.opacity = Math.min(1, base * roleBoost * Math.max(.58, presence) * (.56 + danger * .34 + pulse * .22));
-      material.needsUpdate = true;
+      const roleBoost = role === 'core' ? 1.72 : role === 'ring' ? 1.18 : .82;
+      setMaterialOpacityCached(material, Math.min(1, base * roleBoost * Math.max(.66, presence) * (.64 + danger * .26 + pulse * .18)));
     }
   }
-  const halo = parts.find(part => part.userData?.attackRole === 'halo') || parts[0];
-  const blade = parts.find(part => part.userData?.attackRole === 'blade');
-  const band = parts.find(part => part.userData?.attackRole === 'band');
-  const ring = parts.find(part => part.userData?.attackRole === 'ring') || parts[1];
-  const outerBand = parts.find(part => part.userData?.attackRole === 'outerBand');
-  const outer = parts.find(part => part.userData?.attackRole === 'outer') || parts[2];
-  const needle = parts.find(part => part.userData?.attackRole === 'needle');
-  const core = parts.find(part => part.userData?.attackRole === 'core') || parts[3];
+  const roleParts = data.attackVisualParts || {};
+  const {halo = parts[0], blade, band, ring = parts[1], outerBand, outer = parts[2], needle, core = parts[3]} = roleParts;
   if(halo){
-    halo.scale.setScalar(.92 + danger * .24 + pulse * .05);
-    halo.rotation.z = -t * 2.2 + enemy.phase;
+    halo.scale.setScalar(1.24 + danger * .22 + pulse * .08);
+    halo.rotation.z = -t * 1.4 + enemy.phase;
   }
   if(blade){
     blade.scale.set(.74 + danger * .18, 1.04 + danger * .44 + pulse * .10, 1);
@@ -30074,8 +33855,8 @@ function syncBossAttackVisual(enemy, t, presence){
     band.rotation.z = t * 3.4 - enemy.phase;
   }
   if(ring){
-    ring.scale.setScalar(1.00 + danger * .23 + pulse * .08);
-    ring.rotation.z = t * 4.0 + enemy.phase;
+    ring.scale.setScalar(1.34 + danger * .28 + pulse * .12);
+    ring.rotation.z = t * 2.2 + enemy.phase;
   }
   if(outerBand){
     outerBand.scale.setScalar(.90 + danger * .18 + pulse * .05);
@@ -30090,7 +33871,7 @@ function syncBossAttackVisual(enemy, t, presence){
     needle.rotation.z = blade?.rotation.z ?? enemy.phase;
   }
   if(core){
-    core.scale.setScalar(1.02 + danger * .30 + pulse * .22);
+    core.scale.setScalar(1.72 + danger * .28 + pulse * .20);
   }
 }
 
@@ -30116,16 +33897,28 @@ function clamp(v, min, max){
 }
 
 function formatNumber(n){
+  if(n === Infinity || n === '∞') return '∞';
   const v = Math.floor(Number(n) || 0);
   if(v >= 1000000) return `${(v/1000000).toFixed(1)}M`;
   if(v >= 10000) return `${Math.floor(v/1000)}K`;
   return v.toLocaleString('ja-JP');
 }
 
+function formatRunTime(seconds){
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return `${minutes}:${String(rest).padStart(2, '0')}`;
+}
+
 function tokenAmount(value, className = '', prefix = '', ref = ''){
   const extraClass = className ? ` ${className}` : '';
   const refAttr = ref ? ` data-ref="${ref}"` : '';
   return `<span class="token-value${extraClass}"><i class="token-diamond" aria-hidden="true"></i><span class="token-number"${refAttr}>${prefix}${formatNumber(value)}</span></span>`;
+}
+
+function walletTokenAmount(className = '', ref = ''){
+  return tokenAmount(hasUnlimitedTokens() ? '∞' : state.tokens, className, '', ref);
 }
 
 function colorCss(color){
@@ -30139,7 +33932,7 @@ function colorRgbCss(color){
 }
 
 function render(t){
-  if(state.mode !== 'play' && state.mode !== 'home' && state.mode !== 'store' && state.mode !== 'garage'){
+  if(state.mode !== 'play' && state.mode !== 'levelup' && state.mode !== 'crash' && state.mode !== 'home' && state.mode !== 'store' && state.mode !== 'garage'){
     return;
   }
   renderer.render(scene, camera);
