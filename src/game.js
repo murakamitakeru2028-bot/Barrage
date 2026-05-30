@@ -21,9 +21,9 @@ const CAMERA_LOOK_Y = -PIPE_RADIUS * .77;
 const CAMERA_LOOK_Z = -24.5;
 const ENEMY_VISIBLE_ARC = 2.25;
 const ENEMY_FADE_DISTANCE = 148;
-const BOSS_FADE_DISTANCE = 122;
-const BOSS_SIGHT_Z = -230;
-const BOSS_TARGET_Z = -42;
+const BOSS_FADE_DISTANCE = 150;
+const BOSS_SIGHT_Z = -250;
+const BOSS_TARGET_Z = -60;
 const BOSS_VISUAL_SCALE = 2.02;
 const CONTROL_TURN_SPEED = 0.178;
 const CONTROL_RESPONSE = 5.9;
@@ -33,8 +33,11 @@ const PLAYER_DRIFT_SCALE = .12;
 const LOW_POWER_DEVICE = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
 const SMALL_SCREEN = Math.min(window.innerWidth || W, window.innerHeight || H) <= 520;
 const VISUAL_LOW_POWER = LOW_POWER_DEVICE || SMALL_SCREEN;
-const RENDER_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.55 : 1.25) : SMALL_SCREEN ? 1.90 : 1.50;
-const RENDER_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 720000 : 900000) : SMALL_SCREEN ? 1100000 : 1500000;
+const HIGH_DETAIL_CANVAS_MODES = new Set(['home', 'store', 'garage']);
+const RENDER_PLAY_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.65 : 1.35) : SMALL_SCREEN ? 2.05 : 1.60;
+const RENDER_SHOWROOM_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 2.05 : 1.70) : SMALL_SCREEN ? 2.45 : 1.80;
+const RENDER_PLAY_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1050000 : 1050000) : SMALL_SCREEN ? 1350000 : 1600000;
+const RENDER_SHOWROOM_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1550000 : 1300000) : SMALL_SCREEN ? 2200000 : 1850000;
 const RENDER_QUALITY_MIN = LOW_POWER_DEVICE ? .82 : .88;
 const RENDER_QUALITY_DROP_FRAME_MS = LOW_POWER_DEVICE ? 23.5 : 21.5;
 const RENDER_QUALITY_RAISE_FRAME_MS = LOW_POWER_DEVICE ? 16.5 : 15.2;
@@ -49,6 +52,9 @@ const MAX_BULLETS = LOW_POWER_DEVICE ? 72 : 128;
 const MAX_PARTICLES = VISUAL_LOW_POWER ? 36 : 48;
 const ENEMY_POOL_LIMIT = LOW_POWER_DEVICE ? 24 : 34;
 const ENEMY_DETAIL_Z = VISUAL_LOW_POWER ? -74 : -92;
+const PLAYER_HIT_FLASH_DECAY = 3.2;
+const PLAYER_HIT_CORE_DECAY = 5.0;
+const HIT_CONFIRM_DECAY = 1.9;
 const BULLET_HIT_Z_PAD = .22;
 const BULLET_HIT_ANGLE_PAD = .020;
 const HIT_SWEEP_EPSILON = 0.0001;
@@ -64,6 +70,9 @@ const BULLET_COLLISION_RADIUS = .42;
 const ENEMY_SIZE_BOOST = 2.05;
 const ENEMY_SIZE_MULT = 1.62 * ENEMY_SIZE_BOOST;
 const ENEMY_HITBOX_MULT = 1.20 * ENEMY_SIZE_BOOST;
+const ENEMY_HP_MULT = 1.18;
+const BOSS_HP_MULT = 1.12;
+const BOSS_SHARD_HP_MULT = 1.08;
 const STAGE_Z_SEGMENTS = VISUAL_LOW_POWER ? 28 : 34;
 const STAGE_ARC_SEGMENTS = VISUAL_LOW_POWER ? 32 : 38;
 const STAGE_RING_COUNT = VISUAL_LOW_POWER ? 22 : 28;
@@ -324,6 +333,36 @@ const DEFAULT_COSMETICS = {
   armorSkin: 'armor_slate',
   shipCoat: 'coat_origin'
 };
+const COAT_VISUAL_PROFILES = {
+  coat_origin: {hull:0x06111d, wing:0x0c1a2b, line:0x82d7ff, trim:0xd8e2ea, hot:0x8eefff, engine:0x1ed6ff, metalness:.82, roughness:.20, glow:1.00, decalScale:1.00},
+  coat_forest: {hull:0x061611, wing:0x11352b, line:0x36f39b, trim:0xc8ffd4, hot:0x9dffd9, engine:0x36f39b, metalness:.76, roughness:.24, glow:1.08, decalScale:1.02},
+  coat_sunset: {hull:0x1f100d, wing:0x451c12, line:0xff7a3d, trim:0xffe0a3, hot:0xffd36a, engine:0xff7a3d, metalness:.78, roughness:.22, glow:1.14, decalScale:1.03},
+  coat_glacier: {hull:0x07141f, wing:0x123450, line:0x9cf5ff, trim:0xf4fbff, hot:0x6eeeff, engine:0x9cf5ff, metalness:.84, roughness:.14, glow:1.16, decalScale:1.04},
+  coat_neon: {hull:0x080b17, wing:0x211b47, line:0xb8a7ff, trim:0x8eefff, hot:0xff4fa3, engine:0xb8a7ff, metalness:.80, roughness:.16, glow:1.24, decalScale:1.05},
+  coat_ember: {hull:0x180b08, wing:0x4c1d12, line:0xffd36a, trim:0xfff0b8, hot:0xff3b62, engine:0xff7a3d, metalness:.74, roughness:.26, glow:1.22, decalScale:1.06},
+  coat_astral: {hull:0x080d20, wing:0x142b55, line:0xf4fbff, trim:0x9cf5ff, hot:0xb8a7ff, engine:0x8eefff, metalness:.86, roughness:.12, glow:1.30, decalScale:1.08},
+  coat_legend: {hull:0x07080f, wing:0x2a173b, line:0xffd36a, trim:0xf7fbff, hot:0xff7a3d, engine:0xb8a7ff, metalness:.90, roughness:.11, glow:1.38, decalScale:1.10}
+};
+const ARMOR_VISUAL_PROFILES = {
+  armor_slate: {plate:0xf6f9fa, panel:0x102436, trim:0xd8e2ea, secondary:0x8eefff, glass:0x9cf5ff, metalness:.66, roughness:.15, glow:.48},
+  armor_mint: {plate:0xdaf8ef, panel:0x12382f, trim:0x9dffd9, secondary:0x36f39b, glass:0xc8ffd4, metalness:.60, roughness:.18, glow:.55},
+  armor_cobalt: {plate:0xdcecff, panel:0x102b66, trim:0x82d7ff, secondary:0xb8a7ff, glass:0x9cf5ff, metalness:.68, roughness:.14, glow:.58},
+  armor_crimson: {plate:0xffdce4, panel:0x551624, trim:0xff9aae, secondary:0xff3b62, glass:0xffc4d0, metalness:.64, roughness:.18, glow:.62},
+  armor_quartz: {plate:0xf7fbff, panel:0x2c4058, trim:0xffffff, secondary:0x8eefff, glass:0xe9fbff, metalness:.72, roughness:.10, glow:.68},
+  armor_nova: {plate:0xffedd2, panel:0x563116, trim:0xffd36a, secondary:0xff7a3d, glass:0xfff0b8, metalness:.66, roughness:.16, glow:.72},
+  armor_seraph: {plate:0xf7f3ff, panel:0x352859, trim:0xf4fbff, secondary:0xb8a7ff, glass:0xf1fbff, metalness:.74, roughness:.10, glow:.82},
+  armor_eclipse: {plate:0xe8f0ff, panel:0x101a32, trim:0xffd36a, secondary:0xb8a7ff, glass:0xd8e2ea, metalness:.78, roughness:.11, glow:.88}
+};
+const BULLET_VISUAL_PROFILES = {
+  bullet_aqua: {shot:0x9cf5ff, glow:0x1ed6ff, core:0x8eefff, flare:.32, pulse:1.00},
+  bullet_lime: {shot:0xc8ffd4, glow:0x36f39b, core:0x9dffd9, flare:.34, pulse:1.03},
+  bullet_amber: {shot:0xffe0a3, glow:0xffd36a, core:0xfff0b8, flare:.38, pulse:1.07},
+  bullet_rose: {shot:0xff9aae, glow:0xff3b62, core:0xffc4d0, flare:.40, pulse:1.08},
+  bullet_prism: {shot:0xf1fbff, glow:0xb8a7ff, core:0xffffff, flare:.42, pulse:1.10},
+  bullet_void: {shot:0xb8a7ff, glow:0x673dff, core:0xe4dcff, flare:.46, pulse:1.12},
+  bullet_solar: {shot:0xfff0b8, glow:0xff7a3d, core:0xfff6cf, flare:.50, pulse:1.15},
+  bullet_aurora: {shot:0xffffff, glow:0x36f39b, core:0xf4fbff, flare:.54, pulse:1.18}
+};
 const DOUBLE_BARREL_OFFSETS = [
   [-.035, .035],
   [-.065, 0, .065],
@@ -381,6 +420,15 @@ const state = {
   spawnTimer: 0,
   bossAlive: false,
   shake: 0,
+  hurtFlash: 0,
+  hurtFlashColor: 0xff3b62,
+  hurtFlashRgb: '255,59,98',
+  hurtEvade: false,
+  playerHitFlash: 0,
+  hitConfirm: 0,
+  hitConfirmRgb: '255,211,106',
+  hitConfirmCrit: false,
+  hitConfirmText: 'HIT',
   last: 0,
   highScore: 0,
   bestWave: 1,
@@ -440,7 +488,8 @@ scene.add(rimLight);
 
 const shared = makeSharedAssets();
 const bulletMesh = makeBulletMesh();
-bulletRoot.add(bulletMesh);
+const bulletGlowMesh = makeBulletGlowMesh();
+bulletRoot.add(bulletGlowMesh, bulletMesh);
 const particleMesh = makeParticleMesh();
 particleRoot.add(particleMesh);
 const stage = makeStage();
@@ -454,6 +503,7 @@ const bullets = [];
 const particles = [];
 const enemyPools = new Map();
 const bulletMatrix = new THREE.Matrix4();
+const bulletGlowMatrix = new THREE.Matrix4();
 const particleMatrix = new THREE.Matrix4();
 const particleColor = new THREE.Color();
 const enemyFlashColor = new THREE.Color(0xffffff);
@@ -607,6 +657,58 @@ function applyUiPreviewMode(){
     state.mode = 'settings';
   }else if(preview === 'pause'){
     state.mode = 'pause';
+  }else if(preview === 'boss'){
+    state.mode = 'play';
+    applySceneVisualMode('play');
+    state.wave = Math.max(state.wave, 10);
+    state.maxHp = safeHpMax();
+    state.hp = state.maxHp;
+    state.roll = 0;
+    state.prevRoll = 0;
+    clearRunObjects();
+    spawnBoss();
+    const boss = enemies.find(enemy => enemy.boss);
+    if(boss){
+      boss.z = BOSS_TARGET_Z;
+      boss.prevZ = boss.z;
+      boss.angle = 0;
+      boss.prevAngle = boss.angle;
+      boss.sin = Math.sin(boss.angle);
+      boss.cos = Math.cos(boss.angle);
+      boss.spawnZ = BOSS_SIGHT_Z;
+      setPipePositionFromTrig(boss.root, boss.sin, boss.cos, boss.z, boss.radial);
+      applyEnemyVisual(boss, 0);
+      spawnBossShard(boss);
+    }
+  }else if(preview === 'hit'){
+    state.mode = 'play';
+    applySceneVisualMode('play');
+    state.wave = Math.max(state.wave, 3);
+    state.maxHp = safeHpMax();
+    state.hp = state.maxHp;
+    state.roll = 0;
+    state.prevRoll = 0;
+    clearRunObjects();
+    spawnEnemy(0);
+    const target = enemies[0];
+    if(target){
+      target.z = -48;
+      target.prevZ = target.z;
+      target.angle = 0;
+      target.prevAngle = target.angle;
+      target.sin = Math.sin(target.angle);
+      target.cos = Math.cos(target.angle);
+      target.hp = Math.max(target.hp, 999);
+      target.spawnZ = PIPE_Z_FAR + 24;
+      target.hitFlash = 1;
+      target.hitCue = 1;
+      target.hitCueColor = 0xffd36a;
+      setPipePositionFromTrig(target.root, target.sin, target.cos, target.z, target.radial);
+      applyEnemyVisual(target, 0);
+      const previewBullet = {crit:false, pierce:0, z:target.z, prevZ:target.z + 1};
+      triggerHitConfirm(target, previewBullet, target.type.color);
+      spawnBulletImpact(target, previewBullet, target.angle, target.z, target.type.color, 2);
+    }
   }else if(preview === 'dead'){
     state.mode = 'dead';
     state.score = Math.max(state.score, 12840);
@@ -986,6 +1088,24 @@ function hpFillPercent(){
   return visibleHp() / visibleHpMax() * 100;
 }
 
+function activeBoss(){
+  return enemies.find(enemy => enemy?.boss) || null;
+}
+
+function bossHpInfo(){
+  const boss = activeBoss();
+  const visible = state.mode === 'play' && state.bossAlive && !!boss;
+  const max = Math.max(1, Math.ceil(Number(boss?.maxHp ?? boss?.initialHp ?? boss?.hp) || 1));
+  const hp = visible ? Math.max(0, Math.min(max, Math.ceil(Number(boss.hp) || 0))) : 0;
+  return {
+    visible,
+    name: boss?.type?.name || 'BOSS',
+    hp,
+    max,
+    percent: visible ? hp / max * 100 : 0
+  };
+}
+
 function regenPerSecond(){
   return statLevel('regen') * .45;
 }
@@ -1299,49 +1419,153 @@ function colorHexValue(color, fallback = 0x8eefff){
   return fallback;
 }
 
+function blendHex(a, b, amount = .5){
+  const color = new THREE.Color(colorHexValue(a));
+  color.lerp(new THREE.Color(colorHexValue(b)), clamp(amount, 0, 1));
+  return color.getHex();
+}
+
+function cosmeticVisualState(){
+  const bulletItem = equippedCosmetic('bulletSkin');
+  const armorItem = equippedCosmetic('armorSkin');
+  const coatItem = equippedCosmetic('shipCoat');
+  const bullet = {...(BULLET_VISUAL_PROFILES[bulletItem.id] || bulletItem.colors || {})};
+  const armor = {...(ARMOR_VISUAL_PROFILES[armorItem.id] || armorItem.colors || {})};
+  const coat = {...(COAT_VISUAL_PROFILES[coatItem.id] || coatItem.colors || {})};
+  bullet.shot = colorHexValue(bullet.shot ?? bulletItem.colors?.shot, 0x9cf5ff);
+  bullet.glow = colorHexValue(bullet.glow ?? bulletItem.colors?.glow, 0x1ed6ff);
+  bullet.core = colorHexValue(bullet.core ?? bullet.glow, bullet.glow);
+  bullet.flare = bullet.flare ?? .34;
+  bullet.pulse = bullet.pulse ?? 1;
+  armor.plate = colorHexValue(armor.plate ?? armorItem.colors?.plate, 0xf6f9fa);
+  armor.panel = colorHexValue(armor.panel ?? armorItem.colors?.panel, 0x102436);
+  armor.trim = colorHexValue(armor.trim ?? armor.plate, 0xd8e2ea);
+  armor.secondary = colorHexValue(armor.secondary ?? bullet.glow, bullet.glow);
+  armor.glass = colorHexValue(armor.glass ?? bullet.shot, bullet.shot);
+  armor.metalness = armor.metalness ?? .66;
+  armor.roughness = armor.roughness ?? .15;
+  armor.glow = armor.glow ?? .52;
+  coat.hull = colorHexValue(coat.hull ?? coatItem.colors?.hull, 0x06111d);
+  coat.wing = colorHexValue(coat.wing ?? coatItem.colors?.wing, 0x0c1a2b);
+  coat.line = colorHexValue(coat.line ?? coatItem.colors?.line, 0x82d7ff);
+  coat.trim = colorHexValue(coat.trim ?? armor.trim, armor.trim);
+  coat.hot = colorHexValue(coat.hot ?? bullet.glow, bullet.glow);
+  coat.engine = colorHexValue(coat.engine ?? bullet.glow, bullet.glow);
+  coat.metalness = coat.metalness ?? .80;
+  coat.roughness = coat.roughness ?? .18;
+  coat.glow = coat.glow ?? 1;
+  coat.decalScale = coat.decalScale ?? 1;
+  return {bulletItem, armorItem, coatItem, bullet, armor, coat};
+}
+
+function applyMeshFinish(material, color, options = {}){
+  if(!material) return;
+  if(material.color) material.color.setHex(colorHexValue(color));
+  if(material.emissive && options.emissive != null) material.emissive.setHex(colorHexValue(options.emissive));
+  if(options.emissiveIntensity != null && material.emissiveIntensity !== undefined) material.emissiveIntensity = options.emissiveIntensity;
+  if(options.metalness != null && material.metalness !== undefined) material.metalness = options.metalness;
+  if(options.roughness != null && material.roughness !== undefined) material.roughness = options.roughness;
+  if(options.opacity != null && material.opacity !== undefined){
+    material.opacity = options.opacity;
+    material.transparent = options.opacity < 1 || material.transparent;
+  }
+  material.needsUpdate = true;
+}
+
+function applyLineFinish(material, color, opacity){
+  if(!material) return;
+  if(material.color) material.color.setHex(colorHexValue(color));
+  if(opacity != null && material.opacity !== undefined){
+    material.opacity = opacity;
+    material.transparent = opacity < 1 || material.transparent;
+  }
+  material.needsUpdate = true;
+}
+
+function applySkinKitVisual(kit, visual, frameAccent = null){
+  if(!kit?.groups || !visual) return;
+  const activeId = visual.coatItem?.id || DEFAULT_COSMETICS.shipCoat;
+  for(const [id, group] of Object.entries(kit.groups)){
+    group.visible = id === activeId;
+  }
+  const frameMix = frameAccent == null ? visual.coat.line : blendHex(visual.coat.line, frameAccent, .22);
+  applyMeshFinish(kit.materials.accent, frameMix, {emissive:visual.coat.line, emissiveIntensity:.72 * visual.coat.glow, opacity:.90});
+  applyMeshFinish(kit.materials.hot, blendHex(visual.coat.hot, visual.armor.secondary, .24), {emissive:visual.coat.hot, emissiveIntensity:.86 * visual.coat.glow, opacity:.86});
+  applyMeshFinish(kit.materials.plate, blendHex(visual.armor.plate, visual.coat.trim, .32), {emissive:visual.armor.secondary, emissiveIntensity:.24 + visual.armor.glow * .22, opacity:.82});
+  applyMeshFinish(kit.materials.glow, visual.bullet.core, {opacity:.40 + visual.bullet.flare * .42});
+  applyLineFinish(kit.materials.line, frameMix, .62 + visual.coat.glow * .10);
+  applyLineFinish(kit.materials.softLine, blendHex(visual.armor.trim, visual.bullet.glow, .35), .36 + visual.armor.glow * .18);
+  kit.root.scale.setScalar(visual.coat.decalScale || 1);
+  kit.root.visible = true;
+}
+
+function updateSkinKitAnimation(kit, t){
+  if(!kit?.root?.visible) return;
+  const pulse = .78 + Math.sin(t * 3.2) * .10;
+  if(kit.materials?.glow){
+    kit.materials.glow.opacity = Math.max(.30, pulse);
+    kit.materials.glow.needsUpdate = true;
+  }
+  for(const ring of kit.rings || []){
+    ring.rotation.z += .010 + Math.sin(t * .7) * .002;
+  }
+}
+
+function applyPlayerCosmeticFinish(visual = cosmeticVisualState(), frameAccent = colorHexValue(currentShip().color)){
+  if(!shared?.materials || !visual) return;
+  const coatLine = blendHex(visual.coat.line, frameAccent, .18);
+  const coreColor = blendHex(visual.bullet.core, frameAccent, .18);
+  applyMeshFinish(shared.materials.shot, visual.bullet.core || visual.bullet.shot);
+  applyMeshFinish(shared.materials.bulletGlow, visual.bullet.glow, {opacity:Math.min(.78, .48 + visual.bullet.flare * .55)});
+  applyMeshFinish(shared.materials.shotGlow, visual.bullet.glow, {opacity:Math.min(.64, .34 + visual.bullet.flare * .38)});
+  applyMeshFinish(shared.materials.player, visual.coat.hull, {emissive:blendHex(visual.coat.hull, visual.coat.line, .46), emissiveIntensity:.62 * visual.coat.glow, metalness:visual.coat.metalness, roughness:visual.coat.roughness});
+  applyMeshFinish(shared.materials.playerEngine, blendHex(visual.coat.hull, visual.coat.engine, .16), {emissive:visual.coat.engine, emissiveIntensity:.24 + visual.bullet.flare * .42, metalness:.82, roughness:.20});
+  applyMeshFinish(shared.materials.playerWing, visual.coat.wing, {emissive:blendHex(visual.coat.wing, visual.coat.line, .45), emissiveIntensity:.50 * visual.coat.glow, metalness:Math.max(.62, visual.coat.metalness - .06), roughness:visual.coat.roughness + .03});
+  applyMeshFinish(shared.materials.playerPlate, visual.armor.plate, {emissive:blendHex(visual.armor.panel, visual.armor.secondary, .44), emissiveIntensity:visual.armor.glow, metalness:visual.armor.metalness, roughness:visual.armor.roughness});
+  applyMeshFinish(shared.materials.playerPanel, visual.armor.panel, {emissive:blendHex(visual.armor.panel, visual.coat.line, .42), emissiveIntensity:visual.armor.glow * .92, metalness:Math.max(.62, visual.armor.metalness), roughness:visual.armor.roughness + .03});
+  applyMeshFinish(shared.materials.playerGlass, blendHex(visual.armor.glass, visual.bullet.shot, .48), {emissive:visual.bullet.glow, emissiveIntensity:1.20 * visual.bullet.pulse, opacity:.82});
+  applyMeshFinish(shared.materials.playerCore, coreColor);
+  applyMeshFinish(shared.materials.playerGold, visual.armor.trim, {opacity:.88});
+  applyMeshFinish(shared.materials.playerRose, visual.coat.hot, {opacity:.82});
+  applyLineFinish(shared.materials.playerEdge, coatLine, .72);
+  applyLineFinish(shared.materials.playerGoldLine, visual.armor.trim, .70);
+  applyLineFinish(shared.materials.playerRoseLine, blendHex(visual.coat.hot, visual.bullet.glow, .35), .64);
+  applyLineFinish(shared.materials.railCyan, coatLine, .48);
+  applySkinKitVisual(player?.skinKit, visual, frameAccent);
+}
+
+function applyHomeShipCosmeticFinish(ship = visualPreviewShip(), visual = cosmeticVisualState()){
+  if(!homeShip?.materials || !visual) return;
+  const frameAccent = colorHexValue(ship?.color || visual.coat.line);
+  const coatLine = blendHex(visual.coat.line, frameAccent, .22);
+  applyMeshFinish(homeShip.materials.hull, visual.coat.hull, {emissive:blendHex(visual.coat.hull, visual.coat.line, .50), emissiveIntensity:1.02 * visual.coat.glow, metalness:visual.coat.metalness, roughness:visual.coat.roughness});
+  applyMeshFinish(homeShip.materials.engine, blendHex(visual.coat.hull, visual.coat.engine, .18), {emissive:visual.coat.engine, emissiveIntensity:.26 + visual.bullet.flare * .36, metalness:.82, roughness:.20});
+  applyMeshFinish(homeShip.materials.wing, visual.coat.wing, {emissive:blendHex(visual.coat.wing, visual.coat.line, .48), emissiveIntensity:.70 * visual.coat.glow, metalness:Math.max(.62, visual.coat.metalness - .06), roughness:visual.coat.roughness + .02});
+  applyMeshFinish(homeShip.materials.plate, visual.armor.plate, {emissive:blendHex(visual.armor.panel, visual.armor.secondary, .45), emissiveIntensity:visual.armor.glow * .58, metalness:visual.armor.metalness, roughness:visual.armor.roughness});
+  applyMeshFinish(homeShip.materials.panel, visual.armor.panel, {emissive:blendHex(visual.armor.panel, visual.coat.line, .45), emissiveIntensity:visual.armor.glow, metalness:Math.max(.62, visual.armor.metalness), roughness:visual.armor.roughness + .02});
+  applyMeshFinish(homeShip.materials.core, blendHex(visual.bullet.core, frameAccent, .16));
+  applyMeshFinish(homeShip.materials.glass, blendHex(visual.armor.glass, visual.bullet.shot, .46), {emissive:visual.bullet.glow, emissiveIntensity:1.65 * visual.bullet.pulse, opacity:.84});
+  applyLineFinish(homeShip.materials.edge, coatLine, .70);
+  applyLineFinish(homeShip.materials.goldLine, visual.armor.trim, .66);
+  applyLineFinish(homeShip.materials.roseLine, blendHex(visual.coat.hot, visual.bullet.glow, .34), .62);
+  applySkinKitVisual(homeShip.skinKit, visual, frameAccent);
+}
+
 function applyHomeShipFrameAccent(ship){
   if(!homeShip?.materials || !ship) return;
   const accent = colorHexValue(ship.color);
-  applyColor(homeShip.materials.core, accent);
-  applyColor(homeShip.materials.glass, accent);
-  applyLineColor(homeShip.materials.edge, accent);
-  applyLineColor(homeShip.materials.roseLine, accent);
-  if(homeShip.materials.glass?.emissive) homeShip.materials.glass.emissive.setHex(accent);
-  if(homeShip.materials.panel?.emissive) homeShip.materials.panel.emissive.setHex(accent);
+  const visual = cosmeticVisualState();
+  applyHomeShipCosmeticFinish(ship, visual);
+  applyColor(homeShip.materials.core, blendHex(visual.bullet.core, accent, .18));
+  if(homeShip.materials.glass?.emissive) homeShip.materials.glass.emissive.setHex(blendHex(visual.bullet.glow, accent, .14));
+  if(homeShip.materials.panel?.emissive) homeShip.materials.panel.emissive.setHex(blendHex(visual.armor.secondary, accent, .16));
 }
 
 function applyCosmetics(){
   if(!shared?.materials) return;
-  const bullet = equippedCosmetic('bulletSkin');
-  const armor = equippedCosmetic('armorSkin');
-  const coat = equippedCosmetic('shipCoat');
-  const armorColors = armor.id === 'armor_slate'
-    ? {plate:0xf6f9fa, panel:0x102436}
-    : armor.colors;
-  const coatColors = coat.id === 'coat_origin'
-    ? {hull:0x06111d, wing:0x0c1a2b, line:0x82d7ff}
-    : coat.colors;
-
-  applyColor(shared.materials.shot, bullet.colors.shot);
-  applyColor(shared.materials.shotGlow, bullet.colors.glow);
-  applyColor(shared.materials.playerPlate, armorColors.plate);
-  applyColor(shared.materials.playerPanel, armorColors.panel);
-  applyColor(shared.materials.player, coatColors.hull);
-  applyColor(shared.materials.playerEngine, coatColors.hull);
-  applyColor(shared.materials.playerWing, coatColors.wing);
-  applyLineColor(shared.materials.playerEdge, coatColors.line);
-  applyLineColor(shared.materials.railCyan, coatColors.line);
-
-  if(homeShip?.materials){
-    applyColor(homeShip.materials.hull, coatColors.hull);
-    applyColor(homeShip.materials.engine, coatColors.hull);
-    applyColor(homeShip.materials.wing || homeShip.materials.hull, coatColors.wing);
-    applyColor(homeShip.materials.plate, armorColors.plate);
-    applyColor(homeShip.materials.panel, armorColors.panel);
-    applyColor(homeShip.materials.core, bullet.colors.glow);
-    applyColor(homeShip.materials.glass, bullet.colors.shot);
-    applyLineColor(homeShip.materials.edge, coatColors.line);
-  }
+  const visual = cosmeticVisualState();
+  applyPlayerCosmeticFinish(visual);
+  applyHomeShipCosmeticFinish(visualPreviewShip(), visual);
   markHomeShipPartsDirty();
   syncHomeShipParts(true);
 }
@@ -1422,6 +1646,7 @@ function syncPlayerShipVariant(){
   for(const [id, group] of Object.entries(player.variantVisuals)){
     group.visible = id === DEFAULT_SHIP_ID || id === ship.id;
   }
+  applyPlayerCosmeticFinish(cosmeticVisualState(), accent);
 }
 
 function makeSharedAssets(){
@@ -1432,8 +1657,13 @@ function makeSharedAssets(){
     railRose: new THREE.LineBasicMaterial({ color:0xff3b62, transparent:true, opacity:.30 }),
     ring: new THREE.LineBasicMaterial({ color:0x82d7ff, transparent:true, opacity:.28 }),
     ringHot: new THREE.LineBasicMaterial({ color:0xffd36a, transparent:true, opacity:.46 }),
-    shot: new THREE.MeshBasicMaterial({ color:0x9cf5ff }),
+    shot: new THREE.MeshBasicMaterial({ color:0xf4fbff, fog:false }),
+    bulletGlow: new THREE.MeshBasicMaterial({ color:0x1ed6ff, transparent:true, opacity:.58, depthWrite:false, depthTest:false, blending:THREE.AdditiveBlending, fog:false }),
     shotGlow: new THREE.MeshBasicMaterial({ color:0x1ed6ff, transparent:true, opacity:.32 }),
+    bossAttackGlow: new THREE.MeshBasicMaterial({ color:0xff7a3d, transparent:true, opacity:.86, depthWrite:false, depthTest:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, fog:false }),
+    bossAttackLine: new THREE.LineBasicMaterial({ color:0xfff0b8, transparent:true, opacity:1.0, depthWrite:false, depthTest:false, fog:false }),
+    hitGlow: new THREE.MeshBasicMaterial({ color:0xffd36a, transparent:true, opacity:.70, depthWrite:false, depthTest:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, fog:false }),
+    hitLine: new THREE.LineBasicMaterial({ color:0xf4fbff, transparent:true, opacity:.95, depthWrite:false, depthTest:false, fog:false }),
     particle: new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:.58, depthWrite:false, fog:false, vertexColors:true }),
     player: new THREE.MeshStandardMaterial({ color:0x06111d, metalness:.82, roughness:.21, emissive:0x073247, emissiveIntensity:.74, side:THREE.DoubleSide }),
     playerEngine: new THREE.MeshStandardMaterial({ color:0x04101a, metalness:.82, roughness:.24, emissive:0x041923, emissiveIntensity:.24, side:THREE.DoubleSide }),
@@ -1488,12 +1718,14 @@ function makeSharedAssets(){
   coreMaterials.set('boss', new THREE.MeshBasicMaterial({ color:0xffd36a, fog:false }));
 
   const geometries = {
-    shot: new THREE.SphereGeometry(.095, 8, 5),
+    shot: new THREE.SphereGeometry(.118, SMALL_SCREEN ? 14 : 10, SMALL_SCREEN ? 8 : 6),
+    bulletGlow: new THREE.SphereGeometry(.118, SMALL_SCREEN ? 14 : 10, SMALL_SCREEN ? 8 : 6),
     engineFlare: new THREE.SphereGeometry(.20, 10, 6),
     particle: new THREE.SphereGeometry(.050, 5, 4),
     enemyCore: new THREE.SphereGeometry(.24, 9, 6),
     enemyBlade: new THREE.BoxGeometry(.13, .58, .14),
     enemySpike: new THREE.ConeGeometry(.13, .48, 3, 1),
+    hitCross: makeHitCrossGeometry(.92),
     bossBlade: new THREE.BoxGeometry(.26, 1.18, .18),
     bossCore: new THREE.OctahedronGeometry(.58, 0),
     orb: new THREE.IcosahedronGeometry(.55, 1),
@@ -1516,6 +1748,16 @@ function makeBulletMesh(){
   const mesh = new THREE.InstancedMesh(shared.geometries.shot, shared.materials.shot, MAX_BULLETS);
   mesh.count = 0;
   mesh.frustumCulled = false;
+  mesh.renderOrder = 8;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  return mesh;
+}
+
+function makeBulletGlowMesh(){
+  const mesh = new THREE.InstancedMesh(shared.geometries.bulletGlow, shared.materials.bulletGlow, MAX_BULLETS);
+  mesh.count = 0;
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 7;
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   return mesh;
 }
@@ -1659,6 +1901,141 @@ function addShipRail(root, from, to, width, material, y = .18, thickness = .020)
   mesh.position.y = y;
   root.add(mesh);
   return mesh;
+}
+
+function makeSkinKitMaterial(color, opacity = .86){
+  return new THREE.MeshStandardMaterial({
+    color,
+    metalness:.58,
+    roughness:.14,
+    emissive:color,
+    emissiveIntensity:.42,
+    transparent:true,
+    opacity,
+    depthWrite:false,
+    side:THREE.DoubleSide,
+    polygonOffset:true,
+    polygonOffsetFactor:-2,
+    polygonOffsetUnits:-2,
+    fog:false
+  });
+}
+
+function makeShipSkinKit(parent, options = {}){
+  const root = new THREE.Group();
+  root.name = 'ship-skin-kit';
+  parent.add(root);
+  const y = options.y ?? .252;
+  const lineY = y + .018;
+  const materials = {
+    accent: makeSkinKitMaterial(0x8eefff, .88),
+    hot: makeSkinKitMaterial(0xffd36a, .82),
+    plate: makeSkinKitMaterial(0xf4fbff, .76),
+    glow: new THREE.MeshBasicMaterial({color:0x8eefff, transparent:true, opacity:.58, depthWrite:false, blending:THREE.AdditiveBlending, fog:false}),
+    line: new THREE.LineBasicMaterial({color:0x8eefff, transparent:true, opacity:.68, depthWrite:false, fog:false}),
+    softLine: new THREE.LineBasicMaterial({color:0xd8e2ea, transparent:true, opacity:.42, depthWrite:false, fog:false})
+  };
+  const groups = {};
+  const rings = [];
+  const mirrorPoints = points => points.map(([x, z]) => [-x, z]).reverse();
+  const groupFor = id => {
+    const group = new THREE.Group();
+    group.visible = false;
+    root.add(group);
+    groups[id] = group;
+    return group;
+  };
+  const addPlate = (group, points, material = materials.accent, thickness = .012, yOffset = y) => {
+    const mesh = new THREE.Mesh(makePlateGeometry(points, thickness), material);
+    mesh.position.y = yOffset;
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 12), materials.softLine);
+    mesh.add(edges);
+    group.add(mesh);
+    return mesh;
+  };
+  const addSymPlate = (group, points, material = materials.accent, thickness = .012, yOffset = y) => {
+    addPlate(group, points, material, thickness, yOffset);
+    addPlate(group, mirrorPoints(points), material, thickness, yOffset);
+  };
+  const addLine = (group, points, material = materials.line, yOffset = lineY) => {
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points.map(([x, z]) => new THREE.Vector3(x, yOffset, z))), material);
+    group.add(line);
+    return line;
+  };
+  const addSymLine = (group, points, material = materials.line, yOffset = lineY) => {
+    addLine(group, points, material, yOffset);
+    addLine(group, mirrorPoints(points), material, yOffset);
+  };
+  const addDot = (group, x, z, radius = .030, material = materials.glow, yOffset = lineY + .010) => {
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(radius, 10, 6), material);
+    dot.position.set(x, yOffset, z);
+    dot.scale.y = .55;
+    group.add(dot);
+    return dot;
+  };
+  const addRing = (group, x, z, radius = .18, material = materials.line, yOffset = lineY + .006) => {
+    const ring = new THREE.Line(makeRingCircleGeometry(radius, VISUAL_LOW_POWER ? 28 : 40), material);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(x, yOffset, z);
+    group.add(ring);
+    rings.push(ring);
+    return ring;
+  };
+
+  let group = groupFor('coat_origin');
+  addPlate(group, [[-.035,-1.50],[.035,-1.50],[.026,.72],[-.026,.72]], materials.plate, .010);
+  addSymLine(group, [[.20,-.70],[.26,-.14],[.18,.54]], materials.softLine);
+  addDot(group, -.92, .24, .026);
+  addDot(group, .92, .24, .026);
+
+  group = groupFor('coat_forest');
+  addSymLine(group, [[.12,-1.18],[.34,-.54],[.26,.10],[.52,.56],[.36,.94]], materials.line);
+  addSymPlate(group, [[.28,-.60],[.44,-.46],[.36,-.28],[.18,-.40]], materials.accent, .014);
+  addSymPlate(group, [[.46,.34],[.74,.48],[.62,.68],[.36,.54]], materials.hot, .014);
+  for(const [x, z] of [[-.34,-.54],[.34,-.54],[-.52,.56],[.52,.56],[0,.92]]) addDot(group, x, z, .026);
+
+  group = groupFor('coat_sunset');
+  addSymPlate(group, [[.10,-1.36],[.24,-1.10],[.18,-.38],[.04,-.52]], materials.hot, .018);
+  addSymPlate(group, [[.38,-.16],[.92,.02],[.80,.24],[.34,.12]], materials.accent, .018);
+  addSymLine(group, [[.22,.42],[.44,.90],[.30,1.18]], materials.line);
+  addDot(group, 0, -.90, .040, materials.glow);
+
+  group = groupFor('coat_glacier');
+  addPlate(group, [[0,-1.58],[.090,-1.08],[.055,-.32],[0,-.12],[-.055,-.32],[-.090,-1.08]], materials.plate, .014);
+  addSymPlate(group, [[.18,-.34],[.70,-.20],[.90,.08],[.64,.24],[.26,.12]], materials.accent, .012);
+  addSymLine(group, [[.18,.16],[.72,.44],[.46,.84]], materials.softLine);
+  addRing(group, 0, -.20, .25, materials.line);
+
+  group = groupFor('coat_neon');
+  addLine(group, [[0,-1.72],[.12,-1.02],[-.08,-.42],[.14,.24],[0,.92]], materials.line);
+  addLine(group, [[0,-1.72],[-.12,-1.02],[.08,-.42],[-.14,.24],[0,.92]], materials.hot);
+  addSymPlate(group, [[.32,-.30],[1.04,-.08],[.94,.10],[.26,-.08]], materials.accent, .012);
+  addSymLine(group, [[.40,.24],[.86,.48],[.58,.78]], materials.hot);
+  addRing(group, 0, -.24, .30, materials.hot);
+
+  group = groupFor('coat_ember');
+  addSymPlate(group, [[.18,-.84],[.36,-.60],[.30,-.12],[.12,-.24]], materials.hot, .018);
+  addSymPlate(group, [[.52,.34],[.92,.58],[.72,.88],[.42,.62]], materials.accent, .018);
+  addSymLine(group, [[.24,.64],[.38,1.10]], materials.hot);
+  for(const x of [-.34, 0, .34]) addDot(group, x, 1.06, .034, materials.glow);
+
+  group = groupFor('coat_astral');
+  addRing(group, 0, -.22, .34, materials.line);
+  addRing(group, -.46, .26, .16, materials.softLine);
+  addRing(group, .46, .26, .16, materials.softLine);
+  addLine(group, [[-.46,.26],[-.10,-.05],[0,-.22],[.18,.30],[.46,.26]], materials.line);
+  for(const [x, z, r] of [[0,-.22,.044],[-.46,.26,.034],[.46,.26,.034],[-.70,.68,.026],[.70,.68,.026]]) addDot(group, x, z, r, materials.glow);
+
+  group = groupFor('coat_legend');
+  addPlate(group, [[-.060,-1.60],[.060,-1.60],[.045,.96],[-.045,.96]], materials.hot, .014);
+  addSymPlate(group, [[.18,-.62],[.92,-.34],[1.22,.02],[.66,.18],[.28,-.04]], materials.accent, .016);
+  addSymPlate(group, [[.26,.28],[1.10,.56],[.86,.88],[.34,.60]], materials.plate, .016);
+  addRing(group, 0, -.22, .38, materials.hot);
+  addRing(group, 0, -.22, .25, materials.line);
+  addSymLine(group, [[.18,-1.18],[.40,-.70],[.26,.82]], materials.hot);
+  addDot(group, 0, -.22, .052, materials.glow);
+
+  return {root, groups, rings, materials};
 }
 
 function makePlayer(){
@@ -1806,6 +2183,22 @@ function makePlayer(){
   aura.position.z = .18;
   root.add(aura);
 
+  const hitShieldMaterial = new THREE.MeshBasicMaterial({
+    color:0xff3b62,
+    transparent:true,
+    opacity:0,
+    depthWrite:false,
+    depthTest:false,
+    side:THREE.DoubleSide,
+    blending:THREE.AdditiveBlending,
+    fog:false
+  });
+  const hitShield = new THREE.Mesh(new THREE.RingGeometry(.46, .94, SMALL_SCREEN ? 72 : 56, 1), hitShieldMaterial);
+  hitShield.rotation.x = Math.PI / 2;
+  hitShield.position.set(0, .288, -.02);
+  hitShield.visible = false;
+  root.add(hitShield);
+
   const variantVisuals = {[DEFAULT_SHIP_ID]: bodyRoot};
   const makeVariant = id => {
     const group = new THREE.Group();
@@ -1911,7 +2304,8 @@ function makePlayer(){
   addVariantEngine(ultima, .32, 1.00, .082, .40, -.036, .98);
   addVariantEngine(ultima, 0, 1.16, .068, .34, -.034, .90);
 
-  return {root, body:mainBody, wings:leftWing, rightWing, core, aura, nose, variantVisuals, animatedCoreVisuals};
+  const skinKit = makeShipSkinKit(root, {y:.252});
+  return {root, body:mainBody, wings:leftWing, rightWing, core, aura, nose, hitShield, variantVisuals, animatedCoreVisuals, skinKit};
 }
 
 function makeHomePreviewShip(){
@@ -2295,7 +2689,8 @@ function makeHomePreviewShip(){
   underGlow.scale.set(1.25, .58, 1);
   bodyRoot.add(underGlow);
 
-  return {root, core, materials, partVisuals, variantVisuals, animatedCoreVisuals};
+  const skinKit = makeShipSkinKit(root, {y:.292});
+  return {root, core, materials, partVisuals, variantVisuals, animatedCoreVisuals, skinKit};
 }
 
 function makeRingCircleGeometry(radius, steps){
@@ -2305,6 +2700,18 @@ function makeRingCircleGeometry(radius, steps){
     pts.push(new THREE.Vector3(Math.cos(a)*radius, Math.sin(a)*radius, 0));
   }
   return new THREE.BufferGeometry().setFromPoints(pts);
+}
+
+function makeHitCrossGeometry(radius){
+  const r = Math.max(.1, radius);
+  const short = r * .42;
+  const points = [
+    new THREE.Vector3(-r, 0, 0), new THREE.Vector3(r, 0, 0),
+    new THREE.Vector3(0, -r, 0), new THREE.Vector3(0, r, 0),
+    new THREE.Vector3(-short, -short, 0), new THREE.Vector3(short, short, 0),
+    new THREE.Vector3(-short, short, 0), new THREE.Vector3(short, -short, 0)
+  ];
+  return new THREE.BufferGeometry().setFromPoints(points);
 }
 
 function createUi(){
@@ -14212,7 +14619,7 @@ function createUi(){
       overflow-x:auto !important;
       overflow-y:hidden !important;
       padding:6px 2px 8px !important;
-      scroll-snap-type:x proximity !important;
+      scroll-snap-type:none !important;
       scrollbar-width:none !important;
     }
     #barrage-ui :is(.store-ship-rail,.garage-ship-rail)::-webkit-scrollbar,
@@ -17950,7 +18357,7 @@ function createUi(){
     #barrage-ui.motion-switch::before{
       background:
         linear-gradient(102deg,transparent 0 18%,rgba(102,247,255,.18) 18% 24%,rgba(242,251,251,.70) 24% 31%,rgba(102,247,255,.18) 31% 38%,transparent 38% 100%) !important;
-      mix-blend-mode:screen !important;
+      mix-blend-mode:normal !important;
       animation:uiModeWipe 320ms cubic-bezier(.16,1,.3,1) both !important;
     }
     #barrage-ui.motion-switch::after{
@@ -21445,6 +21852,193 @@ function createUi(){
     #barrage-ui .game-hud.on :is(.game-xp-track i,.game-meter-track i,.game-wave-track i){
       box-shadow:0 0 14px rgba(141,245,255,.32) !important;
     }
+    #barrage-ui .game-hud .boss-hp{
+      position:fixed !important;
+      z-index:2 !important;
+      left:50% !important;
+      top:calc(92px + env(safe-area-inset-top)) !important;
+      width:clamp(226px,74vw,390px) !important;
+      height:48px !important;
+      padding:8px 12px 10px !important;
+      transform:translateX(-50%) translateY(-8px) !important;
+      opacity:0 !important;
+      pointer-events:none !important;
+      color:#fff !important;
+      border:1px solid rgba(255,211,106,.58) !important;
+      border-left:4px solid #ff3b62 !important;
+      background:
+        linear-gradient(118deg,rgba(255,59,98,.24) 0 15%,transparent 15%),
+        linear-gradient(180deg,rgba(18,9,14,.92),rgba(5,7,10,.88)) !important;
+      box-shadow:0 12px 28px rgba(0,0,0,.42),0 0 24px rgba(255,59,98,.16),inset 0 1px 0 rgba(255,255,255,.10) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+      transition:opacity .16s ease,transform .16s ease !important;
+    }
+    #barrage-ui .game-hud .boss-hp.on{
+      opacity:1 !important;
+      transform:translateX(-50%) translateY(0) !important;
+    }
+    #barrage-ui .game-hud .boss-hp::before{
+      content:"" !important;
+      position:absolute !important;
+      left:11px !important;
+      right:11px !important;
+      top:6px !important;
+      height:1px !important;
+      background:linear-gradient(90deg,#ff3b62,#ffd36a,transparent) !important;
+      opacity:.86 !important;
+    }
+    #barrage-ui .game-hud .boss-hp-head{
+      position:relative !important;
+      display:flex !important;
+      justify-content:space-between !important;
+      align-items:center !important;
+      gap:10px !important;
+      height:16px !important;
+      margin-bottom:6px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-hud .boss-hp-head b,
+    #barrage-ui .game-hud .boss-hp-head span{
+      color:#fff !important;
+      font-size:11px !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 14px rgba(255,59,98,.36) !important;
+    }
+    #barrage-ui .game-hud .boss-hp-head b{
+      max-width:58% !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      color:#ffd36a !important;
+    }
+    #barrage-ui .game-hud .boss-hp-track{
+      position:relative !important;
+      height:11px !important;
+      border:1px solid rgba(255,255,255,.26) !important;
+      background:
+        repeating-linear-gradient(90deg,rgba(255,255,255,.10) 0 13px,rgba(0,0,0,.34) 13px 15px),
+        rgba(0,0,0,.54) !important;
+      box-shadow:inset 0 0 12px rgba(0,0,0,.56) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud .boss-hp-track i{
+      display:block !important;
+      height:100% !important;
+      background:linear-gradient(90deg,#ff3b62,#ff7a3d,#ffd36a) !important;
+      box-shadow:0 0 18px rgba(255,59,98,.48),inset 0 1px 0 rgba(255,255,255,.36) !important;
+      transition:width .12s ease-out !important;
+    }
+    #barrage-ui .game-hud .damage-vignette{
+      position:fixed !important;
+      inset:0 !important;
+      z-index:1 !important;
+      pointer-events:none !important;
+      opacity:var(--damage-alpha,0) !important;
+      mix-blend-mode:screen !important;
+      background:
+        radial-gradient(circle at 50% 57%,rgba(255,255,255,.18),transparent 15%),
+        radial-gradient(circle at 50% 54%,rgba(var(--damage-color,255,59,98),.34),transparent 43%),
+        linear-gradient(90deg,rgba(var(--damage-color,255,59,98),.34),transparent 18%,transparent 82%,rgba(var(--damage-color,255,59,98),.34)),
+        linear-gradient(180deg,rgba(var(--damage-color,255,59,98),.16),transparent 25%,transparent 73%,rgba(var(--damage-color,255,59,98),.18)) !important;
+      transition:none !important;
+    }
+    #barrage-ui .game-hud .damage-vignette::before,
+    #barrage-ui .game-hud .damage-vignette::after{
+      content:"" !important;
+      position:absolute !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-hud .damage-vignette::before{
+      inset:10px !important;
+      border:1px solid rgba(var(--damage-color,255,59,98),.52) !important;
+      clip-path:polygon(18px 0,calc(100% - 18px) 0,100% 18px,100% calc(100% - 18px),calc(100% - 18px) 100%,18px 100%,0 calc(100% - 18px),0 18px) !important;
+      box-shadow:inset 0 0 28px rgba(var(--damage-color,255,59,98),.28),0 0 24px rgba(var(--damage-color,255,59,98),.18) !important;
+      transform:scale(calc(1 + var(--damage-alpha,0) * .024)) !important;
+    }
+    #barrage-ui .game-hud .damage-vignette::after{
+      inset:0 !important;
+      opacity:.32 !important;
+      background:
+        repeating-linear-gradient(90deg,transparent 0 18px,rgba(var(--damage-color,255,59,98),.34) 18px 20px,transparent 20px 36px),
+        repeating-linear-gradient(0deg,transparent 0 12px,rgba(255,255,255,.10) 12px 13px,transparent 13px 25px) !important;
+      transform:translateX(-16px) !important;
+    }
+    #barrage-ui .game-hud.is-hit .damage-vignette::after{
+      animation:damageSweep .24s ease-out both !important;
+    }
+    #barrage-ui .game-hud.is-evade .damage-vignette{
+      mix-blend-mode:screen !important;
+    }
+    @keyframes damageSweep{
+      0%{transform:translateX(-28px);opacity:.52}
+      100%{transform:translateX(22px);opacity:.14}
+    }
+    #barrage-ui .game-hud .hit-confirm{
+      position:fixed !important;
+      left:50% !important;
+      top:48% !important;
+      width:clamp(74px,20vw,98px) !important;
+      aspect-ratio:1 !important;
+      display:grid !important;
+      place-items:center !important;
+      z-index:3 !important;
+      pointer-events:none !important;
+      opacity:0 !important;
+      transform:translate(-50%,-50%) scale(var(--hit-scale,1)) !important;
+      color:rgb(var(--hit-color,255,211,106)) !important;
+      mix-blend-mode:screen !important;
+      filter:drop-shadow(0 0 18px rgba(var(--hit-color,255,211,106),.78)) drop-shadow(0 2px 3px rgba(0,0,0,.78)) !important;
+      transition:none !important;
+    }
+    #barrage-ui .game-hud .hit-confirm::before,
+    #barrage-ui .game-hud .hit-confirm::after{
+      content:"" !important;
+      position:absolute !important;
+      inset:0 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-hud .hit-confirm::before{
+      border:3px solid rgba(var(--hit-color,255,211,106),.95) !important;
+      border-radius:50% !important;
+      background:radial-gradient(circle,rgba(var(--hit-color,255,211,106),.22),transparent 58%) !important;
+      box-shadow:inset 0 0 24px rgba(var(--hit-color,255,211,106),.36),0 0 30px rgba(var(--hit-color,255,211,106),.62) !important;
+    }
+    #barrage-ui .game-hud .hit-confirm::after{
+      background:
+        linear-gradient(90deg,transparent 0 43%,rgba(255,255,255,1) 43% 57%,transparent 57%),
+        linear-gradient(0deg,transparent 0 43%,rgba(255,255,255,1) 43% 57%,transparent 57%),
+        radial-gradient(circle,rgba(var(--hit-color,255,211,106),.86) 0 14%,transparent 15%) !important;
+      transform:scale(.46) !important;
+      opacity:.74 !important;
+    }
+    #barrage-ui .game-hud .hit-confirm span{
+      position:relative !important;
+      transform:none !important;
+      font-size:clamp(12px,3.1vw,15px) !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      line-height:1 !important;
+      color:#fff !important;
+      padding:6px 10px !important;
+      min-width:46px !important;
+      text-align:center !important;
+      background:rgba(3,7,9,.82) !important;
+      border:1px solid rgba(var(--hit-color,255,211,106),.86) !important;
+      box-shadow:0 0 18px rgba(var(--hit-color,255,211,106),.46),inset 0 1px 0 rgba(255,255,255,.18) !important;
+      text-shadow:0 0 12px rgba(var(--hit-color,255,211,106),.95),0 1px 2px rgba(0,0,0,1) !important;
+    }
+    #barrage-ui .game-hud.is-hit-confirm .hit-confirm::before{
+      animation:hitConfirmRing .20s ease-out both !important;
+    }
+    #barrage-ui .game-hud.is-hit-crit .hit-confirm{
+      width:clamp(88px,24vw,126px) !important;
+      filter:drop-shadow(0 0 18px rgba(255,211,106,.78)) drop-shadow(0 2px 3px rgba(0,0,0,.76)) !important;
+    }
+    @keyframes hitConfirmRing{
+      0%{transform:scale(.72);opacity:1}
+      100%{transform:scale(1.18);opacity:.28}
+    }
     #barrage-ui .modal-screen .dialog-card,
     #barrage-ui .modal-screen .game-pause{
       border-color:var(--tone-line) !important;
@@ -21453,10 +22047,3842 @@ function createUi(){
         linear-gradient(180deg,rgba(18,36,42,.95),rgba(5,10,12,.96)) !important;
       box-shadow:0 18px 36px rgba(0,0,0,.50),inset 0 1px 0 rgba(255,255,255,.08) !important;
     }
+    /* UI placement and finish v8: cleaner mobile hierarchy for showroom pages. */
+    #barrage-ui{
+      --ui-polish-edge:clamp(12px,3.6vw,16px);
+      --ui-polish-dock-h:clamp(52px,6.8vh,58px);
+      --ui-polish-gap:8px;
+      --ui-polish-panel:rgba(6,11,13,.94);
+      --ui-polish-panel-2:rgba(13,24,29,.96);
+      --ui-polish-line:rgba(238,247,255,.24);
+      --ui-polish-hot:rgba(142,239,255,.66);
+      --ui-polish-amber:rgba(255,211,106,.72);
+    }
+    #barrage-ui .home-screen .home-actions{
+      gap:9px !important;
+    }
+    #barrage-ui .home-screen .home-actions .action-tile:not(.action-start){
+      border-left:3px solid color-mix(in srgb,var(--tile-accent,var(--tone-cyan)) 66%,rgba(238,247,255,.18)) !important;
+      background:
+        linear-gradient(120deg,color-mix(in srgb,var(--tile-accent,var(--tone-cyan)) 24%,transparent) 0 18%,transparent 18% 78%,rgba(255,255,255,.055) 78% 81%,transparent 81%),
+        linear-gradient(180deg,#172a31,#081216) !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .page-title{
+      top:10px !important;
+      right:var(--ui-polish-edge) !important;
+      height:60px !important;
+      min-height:60px !important;
+      padding:11px 15px !important;
+      border-left:4px solid var(--ui-polish-hot) !important;
+      background:
+        linear-gradient(118deg,rgba(142,239,255,.14) 0 17%,transparent 17% 76%,rgba(255,211,106,.07) 76% 79%,transparent 79%),
+        linear-gradient(180deg,var(--ui-polish-panel-2),var(--ui-polish-panel)) !important;
+      box-shadow:0 14px 30px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .page-title h1{
+      font-size:clamp(21px,5.4vw,22px) !important;
+      line-height:1 !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .page-title p{
+      margin-top:4px !important;
+      font-size:9px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .showroom-back{
+      top:10px !important;
+      left:var(--ui-polish-edge) !important;
+      width:52px !important;
+      min-width:52px !important;
+      height:60px !important;
+      min-height:60px !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.50),0 14px 28px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.10) !important;
+    }
+    #barrage-ui .store-screen .ship-showroom-ui.showroom-v2{
+      top:82px !important;
+      left:0 !important;
+      right:0 !important;
+      height:326px !important;
+    }
+    #barrage-ui .store-screen .ship-showroom-ui.showroom-v2::before{
+      left:var(--ui-polish-edge) !important;
+      right:var(--ui-polish-edge) !important;
+      border-color:rgba(142,239,255,.22) !important;
+      background:
+        radial-gradient(circle at 68% 48%,rgba(142,239,255,.14),transparent 34%),
+        linear-gradient(180deg,rgba(7,10,12,.34),rgba(7,10,12,.08)) !important;
+    }
+    #barrage-ui .store-screen .showroom-v2 .showroom-copy{
+      left:calc(var(--ui-polish-edge) + 12px) !important;
+      right:calc(var(--ui-polish-edge) + 12px) !important;
+      top:14px !important;
+      width:auto !important;
+      grid-template-columns:minmax(0,1fr) minmax(104px,116px) !important;
+      background:
+        linear-gradient(122deg,color-mix(in srgb,var(--accent) 16%,transparent) 0 18%,transparent 18%),
+        linear-gradient(180deg,rgba(7,12,15,.92),rgba(4,8,10,.88)) !important;
+    }
+    #barrage-ui .store-screen .showroom-v2 .showroom-copy strong{
+      font-size:clamp(20px,5.8vw,23px) !important;
+    }
+    #barrage-ui .store-screen .showroom-v2 .showroom-copy span{
+      max-width:116px !important;
+    }
+    #barrage-ui .store-screen .showroom-part-stack{
+      left:calc(var(--ui-polish-edge) + 12px) !important;
+      right:calc(var(--ui-polish-edge) + 12px) !important;
+      bottom:18px !important;
+      gap:8px !important;
+    }
+    #barrage-ui .store-screen .showroom-part-chip{
+      min-height:44px !important;
+      padding:8px 10px !important;
+      border-left:3px solid color-mix(in srgb,var(--accent) 72%,rgba(238,247,255,.20)) !important;
+      background:
+        linear-gradient(120deg,color-mix(in srgb,var(--accent) 12%,transparent) 0 18%,transparent 18%),
+        rgba(5,9,11,.88) !important;
+    }
+    #barrage-ui .store-screen .commerce-panel{
+      left:var(--ui-polish-edge) !important;
+      right:var(--ui-polish-edge) !important;
+      top:clamp(394px,50vh,424px) !important;
+      bottom:calc(var(--ui-polish-dock-h) + 20px + env(safe-area-inset-bottom)) !important;
+      padding:10px !important;
+      border-top:3px solid rgba(238,247,255,.78) !important;
+      background:
+        linear-gradient(118deg,rgba(142,239,255,.105) 0 15%,transparent 15% 84%,rgba(255,211,106,.055) 84% 86%,transparent 86%),
+        rgba(4,8,10,.96) !important;
+      box-shadow:0 -18px 40px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .store-screen .store-market-v3{
+      grid-template-rows:38px 52px minmax(0,1fr) 48px !important;
+      gap:8px !important;
+    }
+    #barrage-ui .store-screen .compact-stats{
+      gap:8px !important;
+    }
+    #barrage-ui .store-screen .compact-stats > span,
+    #barrage-ui .store-screen .store-category-head,
+    #barrage-ui .store-screen .store-offer-card,
+    #barrage-ui .store-screen .store-category-tab{
+      border-radius:8px !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .store-screen .store-category-head{
+      padding:7px 9px !important;
+      border-left-width:4px !important;
+      background:
+        linear-gradient(118deg,rgba(142,239,255,.13) 0 18%,transparent 18% 78%,rgba(255,211,106,.06) 78% 81%,transparent 81%),
+        linear-gradient(180deg,#15272d,#071114) !important;
+    }
+    #barrage-ui .store-screen .store-offer-list{
+      gap:9px !important;
+      padding:0 2px 2px 0 !important;
+      mask-image:linear-gradient(180deg,#000 0 calc(100% - 14px),transparent 100%) !important;
+    }
+    #barrage-ui .store-screen .store-offer-card{
+      min-height:112px !important;
+      padding:10px 10px 9px !important;
+      grid-template-columns:minmax(0,1fr) 76px !important;
+      border-left-width:4px !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--accent) 14%,transparent) 0 15%,transparent 15%),
+        linear-gradient(180deg,#122127,#070f12) !important;
+    }
+    #barrage-ui .store-screen .store-offer-card.is-selected{
+      outline:1px solid color-mix(in srgb,var(--accent) 76%,rgba(255,255,255,.24)) !important;
+      outline-offset:-4px !important;
+      box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 34%,transparent),0 16px 32px rgba(0,0,0,.48),0 0 26px color-mix(in srgb,var(--accent) 18%,transparent),inset 0 1px 0 rgba(255,255,255,.09) !important;
+    }
+    #barrage-ui .store-screen .store-offer-main strong{
+      font-size:18px !important;
+    }
+    #barrage-ui .store-screen .store-offer-action{
+      width:76px !important;
+      min-width:76px !important;
+      border-radius:7px !important;
+      clip-path:none !important;
+      background:
+        linear-gradient(118deg,rgba(255,255,255,.74) 0 21%,transparent 21%),
+        linear-gradient(90deg,#f7fbff,var(--accent,var(--tone-cyan))) !important;
+    }
+    #barrage-ui .store-screen .store-category-tabs{
+      gap:7px !important;
+    }
+    #barrage-ui .store-screen .store-category-tab{
+      height:48px !important;
+      min-height:48px !important;
+      padding:6px 4px !important;
+    }
+    #barrage-ui .commerce-bottom-dock{
+      left:var(--ui-polish-edge) !important;
+      right:var(--ui-polish-edge) !important;
+      bottom:calc(8px + env(safe-area-inset-bottom)) !important;
+      height:var(--ui-polish-dock-h) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .commerce-bottom-dock button{
+      height:var(--ui-polish-dock-h) !important;
+      min-height:var(--ui-polish-dock-h) !important;
+      border-radius:8px !important;
+      clip-path:none !important;
+      border-top:3px solid rgba(142,239,255,.58) !important;
+      background:
+        linear-gradient(122deg,rgba(142,239,255,.17) 0 19%,transparent 19% 78%,rgba(255,255,255,.055) 78% 81%,transparent 81%),
+        linear-gradient(180deg,#15272d,#071014) !important;
+    }
+    #barrage-ui .garage-screen{
+      --garage-panel-h:clamp(220px,27vh,236px);
+      --garage-panel-bottom:calc(var(--garage-dock-bottom) + var(--garage-dock-h) + 8px);
+    }
+    #barrage-ui .garage-screen .garage-panel{
+      height:var(--garage-panel-h) !important;
+      padding:8px 9px !important;
+      border-radius:10px !important;
+      border-top:3px solid rgba(238,247,255,.78) !important;
+      background:
+        linear-gradient(118deg,rgba(142,239,255,.10) 0 15%,transparent 15% 84%,rgba(255,211,106,.055) 84% 86%,transparent 86%),
+        rgba(4,8,10,.96) !important;
+      box-shadow:0 -18px 40px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .garage-screen .garage-v2{
+      grid-template-rows:124px 58px !important;
+      align-content:start !important;
+      gap:8px !important;
+    }
+    #barrage-ui .garage-screen .garage-v2 .compact-head{
+      height:24px !important;
+      min-height:24px !important;
+      padding-bottom:5px !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-board{
+      height:94px !important;
+      min-height:0 !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-column{
+      grid-template-rows:12px !important;
+      grid-auto-rows:minmax(0,1fr) !important;
+      gap:4px !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-column.slots-0{
+      grid-template-rows:12px 46px !important;
+      align-content:start !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-column.slots-1{
+      grid-template-rows:12px 58px !important;
+      align-content:start !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-column.slots-2{
+      grid-template-rows:12px repeat(2,minmax(0,1fr)) !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-column.slots-3{
+      grid-template-rows:12px repeat(3,minmax(0,1fr)) !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-card,
+    #barrage-ui .garage-screen .garage-empty-slot,
+    #barrage-ui .garage-screen .garage-ship{
+      border-radius:7px !important;
+      clip-path:none !important;
+      border-left-width:3px !important;
+      background:
+        linear-gradient(120deg,color-mix(in srgb,var(--accent,var(--tone-cyan)) 16%,transparent) 0 18%,transparent 18%),
+        linear-gradient(180deg,#122127,#070f12) !important;
+    }
+    #barrage-ui .garage-screen .garage-slot-column.slots-1 .garage-slot-card{
+      height:58px !important;
+      align-self:start !important;
+    }
+    #barrage-ui .garage-screen .garage-ship-rail{
+      height:32px !important;
+      padding-right:8px !important;
+    }
+    #barrage-ui .garage-screen .garage-ship{
+      height:32px !important;
+      min-height:32px !important;
+      padding:0 10px !important;
+    }
+    @media (max-height:760px){
+      #barrage-ui .store-screen .ship-showroom-ui.showroom-v2{
+        top:76px !important;
+        height:300px !important;
+      }
+      #barrage-ui .store-screen .commerce-panel{
+        top:clamp(370px,51vh,392px) !important;
+      }
+      #barrage-ui .store-screen .store-market-v3{
+        grid-template-rows:36px 48px minmax(0,1fr) 46px !important;
+      }
+      #barrage-ui .store-screen .store-offer-card{
+        min-height:96px !important;
+        grid-template-rows:auto auto minmax(22px,auto) !important;
+        gap:5px 8px !important;
+      }
+      #barrage-ui .store-screen .store-offer-main{
+        gap:3px !important;
+      }
+      #barrage-ui .store-screen .store-offer-main strong{
+        font-size:16px !important;
+      }
+      #barrage-ui .store-screen .store-offer-main span,
+      #barrage-ui .store-screen .store-offer-desc small{
+        display:none !important;
+      }
+      #barrage-ui .store-screen .store-buff-grid{
+        gap:4px !important;
+      }
+      #barrage-ui .store-screen .store-buff-grid span{
+        padding:4px 5px !important;
+      }
+      #barrage-ui .garage-screen{
+        --garage-panel-h:214px;
+      }
+    }
+    @keyframes uiPolishSettle{
+      0%{opacity:0;translate:0 15px;scale:.985;filter:brightness(1.16)}
+      58%{opacity:1;translate:0 -2px;scale:1.004;filter:brightness(1.06)}
+      100%{opacity:1;translate:0 0;scale:1;filter:brightness(1)}
+    }
+    @keyframes uiPolishDockStep{
+      0%{opacity:0;translate:0 18px;filter:brightness(1.18)}
+      100%{opacity:1;translate:0 0;filter:brightness(1)}
+    }
+    @keyframes uiPolishHeaderStep{
+      0%{opacity:0;translate:0 -12px;filter:brightness(1.18)}
+      100%{opacity:1;translate:0 0;filter:brightness(1)}
+    }
+    @keyframes uiPolishSelectedGlow{
+      0%,100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--accent,var(--tone-cyan)) 36%,transparent),0 14px 28px rgba(0,0,0,.44),0 0 18px color-mix(in srgb,var(--accent,var(--tone-cyan)) 16%,transparent),inset 0 1px 0 rgba(255,255,255,.09)}
+      50%{box-shadow:0 0 0 1px color-mix(in srgb,var(--accent,var(--tone-cyan)) 64%,rgba(255,255,255,.18)),0 16px 34px rgba(0,0,0,.50),0 0 30px color-mix(in srgb,var(--accent,var(--tone-cyan)) 24%,transparent),inset 0 1px 0 rgba(255,255,255,.11)}
+    }
+    @keyframes uiPolishRailPulse{
+      0%,100%{background-position:0 0,0 0}
+      50%{background-position:22px 0,0 0}
+    }
+    #barrage-ui .screen.on :is(.page-title,.showroom-back){
+      transform-origin:center top !important;
+      animation:uiPolishHeaderStep .30s cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .home-screen.on :is(.brand-lockup,.wallet-chip,.home-settings-button,.record-pill,.loadout-panel){
+      animation:uiPolishSettle .34s cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .home-screen.on .wallet-chip{animation-delay:.02s !important}
+    #barrage-ui .home-screen.on .home-settings-button{animation-delay:.04s !important}
+    #barrage-ui .home-screen.on .record-pill{animation-delay:.06s !important}
+    #barrage-ui .home-screen.on .loadout-panel{animation-delay:.09s !important}
+    #barrage-ui .home-screen.on .home-actions .action-start{
+      transform-origin:center bottom !important;
+      animation:uiPolishSettle .36s cubic-bezier(.16,1,.3,1) .08s both !important;
+    }
+    #barrage-ui .home-screen.on .home-actions .action-tile:not(.action-start){
+      transform-origin:center bottom !important;
+      animation:uiPolishDockStep .30s cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .home-screen.on .home-actions .action-tile:nth-child(2){animation-delay:.11s !important}
+    #barrage-ui .home-screen.on .home-actions .action-tile:nth-child(3){animation-delay:.13s !important}
+    #barrage-ui .home-screen.on .home-actions .action-tile:nth-child(4){animation-delay:.15s !important}
+    #barrage-ui .home-screen.on .home-actions .action-tile:nth-child(5){animation-delay:.17s !important}
+    #barrage-ui .screen.on :is(.commerce-panel,.garage-panel){
+      transform-origin:center bottom !important;
+      animation:uiPolishSettle .36s cubic-bezier(.16,1,.3,1) .04s both !important;
+    }
+    #barrage-ui .screen.on .ship-showroom-ui.showroom-v2{
+      transform-origin:center center !important;
+      animation:uiPolishSettle .38s cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .screen.on .commerce-bottom-dock button{
+      transform-origin:center bottom !important;
+      animation:uiPolishDockStep .32s cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .screen.on .commerce-bottom-dock button:nth-child(2){animation-delay:.04s !important}
+    #barrage-ui .screen.on .commerce-bottom-dock button:nth-child(3){animation-delay:.08s !important}
+    #barrage-ui .store-screen.on .store-category-tab{
+      animation:uiPolishDockStep .28s cubic-bezier(.16,1,.3,1) both !important;
+    }
+    #barrage-ui .store-screen.on .store-category-tab:nth-child(2){animation-delay:.025s !important}
+    #barrage-ui .store-screen.on .store-category-tab:nth-child(3){animation-delay:.05s !important}
+    #barrage-ui .store-screen.on .store-category-tab:nth-child(4){animation-delay:.075s !important}
+    #barrage-ui .store-screen .store-offer-card.is-selected,
+    #barrage-ui .garage-screen .garage-ship.selected,
+    #barrage-ui .garage-screen .garage-slot-card:focus-within{
+      animation:uiPolishSelectedGlow 2.4s ease-in-out infinite !important;
+    }
+    #barrage-ui .store-screen .store-category-head,
+    #barrage-ui .garage-screen .compact-head{
+      background:
+        linear-gradient(90deg,rgba(142,239,255,.18) 0 12px,transparent 12px 22px),
+        linear-gradient(118deg,rgba(142,239,255,.13) 0 18%,transparent 18% 78%,rgba(255,211,106,.06) 78% 81%,transparent 81%),
+        linear-gradient(180deg,#15272d,#071114) !important;
+      background-size:44px 100%,100% 100%,100% 100% !important;
+      animation:uiPolishRailPulse 4.8s linear infinite !important;
+    }
+    #barrage-ui .skin-swatch{
+      position:relative !important;
+      width:36px !important;
+      height:36px !important;
+      display:block !important;
+      border:1px solid rgba(238,247,255,.32) !important;
+      border-left:4px solid var(--skin-c,var(--accent,var(--tone-cyan))) !important;
+      border-radius:7px !important;
+      overflow:hidden !important;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px) !important;
+      background:
+        linear-gradient(135deg,var(--skin-a,#06111d) 0 45%,var(--skin-b,#102436) 45% 74%,var(--skin-c,#8eefff) 74% 100%) !important;
+      box-shadow:0 0 18px color-mix(in srgb,var(--skin-c,var(--accent,var(--tone-cyan))) 28%,transparent),inset 0 1px 0 rgba(255,255,255,.18) !important;
+      flex:0 0 auto !important;
+    }
+    #barrage-ui .skin-swatch::before,
+    #barrage-ui .skin-swatch::after{
+      content:"" !important;
+      position:absolute !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .skin-swatch::before{
+      left:7px !important;
+      right:7px !important;
+      top:8px !important;
+      height:3px !important;
+      background:rgba(255,255,255,.72) !important;
+      box-shadow:0 10px 0 color-mix(in srgb,var(--skin-c,#8eefff) 82%,transparent) !important;
+    }
+    #barrage-ui .skin-swatch::after{
+      right:6px !important;
+      bottom:6px !important;
+      width:8px !important;
+      height:8px !important;
+      border:2px solid rgba(255,255,255,.78) !important;
+      transform:rotate(45deg) !important;
+    }
+    #barrage-ui .skin-swatch span{
+      position:absolute !important;
+      inset:0 !important;
+      background:linear-gradient(102deg,transparent 0 36%,rgba(255,255,255,.44) 36% 47%,transparent 47% 100%) !important;
+      opacity:.62 !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card{
+      display:grid !important;
+      grid-template-columns:36px minmax(0,1fr) !important;
+      grid-template-rows:auto auto auto !important;
+      gap:3px 9px !important;
+      align-items:center !important;
+      min-height:66px !important;
+      padding:10px 11px !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card .equipped-swatch{
+      grid-column:1 !important;
+      grid-row:1 / span 3 !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card :is(b,span,small){
+      grid-column:2 !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row{
+      grid-template-columns:38px minmax(0,1fr) 72px !important;
+      grid-template-rows:auto auto auto !important;
+      gap:3px 9px !important;
+      min-height:72px !important;
+      padding:10px 10px 10px 12px !important;
+      align-items:center !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row .skin-swatch{
+      grid-column:1 !important;
+      grid-row:1 / span 3 !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row :is(b,span,small){
+      grid-column:2 !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row button{
+      grid-column:3 !important;
+      grid-row:1 / span 3 !important;
+      width:72px !important;
+      min-width:72px !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row.equipped{
+      outline:1px solid color-mix(in srgb,var(--accent,var(--tone-cyan)) 70%,rgba(255,255,255,.22)) !important;
+      outline-offset:-4px !important;
+      box-shadow:0 0 0 1px color-mix(in srgb,var(--accent,var(--tone-cyan)) 34%,transparent),0 16px 30px rgba(0,0,0,.46),0 0 24px color-mix(in srgb,var(--accent,var(--tone-cyan)) 18%,transparent),inset 0 1px 0 rgba(255,255,255,.09) !important;
+    }
+    /* Gacha signal-search rebuild: ZZZ-inspired tuner layout, adapted to Barrage. */
+    #barrage-ui .gacha-screen{
+      --gacha-edge:clamp(12px,3.7vw,16px);
+      --gacha-bottom:calc(12px + env(safe-area-inset-bottom));
+      --gacha-cyan:var(--tone-cyan,#8df5ff);
+      --gacha-amber:var(--tone-amber,#ffd36a);
+      --gacha-red:#ff5d7e;
+      --gacha-text:#ffffff;
+      --gacha-muted:rgba(238,247,255,.72);
+      --gacha-line:rgba(238,247,255,.27);
+      --gacha-soft:rgba(238,247,255,.13);
+      background-color:#020405 !important;
+      background-image:
+        radial-gradient(circle at 74% 18%,rgba(141,245,255,.12),transparent 28%),
+        radial-gradient(circle at 26% 66%,rgba(255,93,126,.08),transparent 32%),
+        linear-gradient(180deg,rgba(141,245,255,.035),transparent 36%,rgba(255,211,106,.032) 78%,transparent),
+        linear-gradient(rgba(141,245,255,.048) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(238,247,255,.030) 1px,transparent 1px) !important;
+      background-size:100% 100%,100% 100%,100% 100%,34px 34px,34px 34px !important;
+      color:var(--gacha-text) !important;
+    }
+    #barrage-ui .gacha-screen::after{
+      content:"" !important;
+      position:absolute !important;
+      left:0 !important;
+      right:0 !important;
+      bottom:0 !important;
+      top:auto !important;
+      height:42% !important;
+      pointer-events:none !important;
+      background:linear-gradient(180deg,transparent,rgba(0,0,0,.52) 70%,rgba(0,0,0,.75)) !important;
+      box-shadow:none !important;
+      z-index:0 !important;
+    }
+    #barrage-ui .gacha-screen .page-stage{
+      inset:0 !important;
+      padding:0 !important;
+      overflow:hidden !important;
+      z-index:1 !important;
+    }
+    #barrage-ui .gacha-screen .page-header{
+      position:absolute !important;
+      left:var(--gacha-edge) !important;
+      right:var(--gacha-edge) !important;
+      top:10px !important;
+      height:60px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 52px !important;
+      align-items:stretch !important;
+      gap:10px !important;
+      z-index:45 !important;
+    }
+    #barrage-ui .gacha-screen .page-title{
+      position:relative !important;
+      inset:auto !important;
+      width:auto !important;
+      min-width:0 !important;
+      height:60px !important;
+      min-height:60px !important;
+      padding:10px 14px !important;
+      display:grid !important;
+      grid-template-rows:1fr auto !important;
+      gap:4px !important;
+      align-content:center !important;
+      overflow:hidden !important;
+      color:var(--gacha-text) !important;
+      border:1px solid var(--gacha-line) !important;
+      border-left:4px solid var(--gacha-cyan) !important;
+      border-top-color:rgba(141,245,255,.56) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.16) 0 18%,transparent 18% 74%,rgba(255,211,106,.10) 74% 78%,transparent 78%),
+        linear-gradient(180deg,rgba(18,36,42,.96),rgba(7,17,20,.94)) !important;
+      box-shadow:0 14px 30px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+    }
+    #barrage-ui .gacha-screen .page-title h1{
+      min-width:0 !important;
+      color:var(--gacha-text) !important;
+      font-size:clamp(20px,5.2vw,25px) !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:0 1px 0 #000,0 0 18px rgba(141,245,255,.18) !important;
+    }
+    #barrage-ui .gacha-screen .page-title p{
+      min-width:0 !important;
+      color:var(--gacha-muted) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .gacha-screen .page-back{
+      position:relative !important;
+      inset:auto !important;
+      width:52px !important;
+      min-width:52px !important;
+      height:60px !important;
+      min-height:60px !important;
+      padding:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      color:var(--gacha-text) !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      border:1px solid var(--gacha-line) !important;
+      border-top:3px solid var(--gacha-cyan) !important;
+      background:
+        linear-gradient(132deg,rgba(141,245,255,.18) 0 24%,transparent 24%),
+        linear-gradient(180deg,#12242a,#071114) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.48),0 14px 28px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      text-shadow:0 1px 0 #000 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-screen .gacha-panel{
+      position:absolute !important;
+      left:var(--gacha-edge) !important;
+      right:var(--gacha-edge) !important;
+      top:82px !important;
+      bottom:var(--gacha-bottom) !important;
+      width:auto !important;
+      height:auto !important;
+      min-height:0 !important;
+      padding:0 !important;
+      display:block !important;
+      overflow:hidden !important;
+      border:0 !important;
+      background:transparent !important;
+      box-shadow:none !important;
+      clip-path:none !important;
+      z-index:30 !important;
+    }
+    #barrage-ui .gacha-terminal{
+      height:100% !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-rows:clamp(156px,21.4vh,178px) 32px 58px 86px 96px minmax(0,1fr) !important;
+      gap:8px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .signal-banner{
+      position:relative !important;
+      min-width:0 !important;
+      min-height:0 !important;
+      padding:14px !important;
+      overflow:hidden !important;
+      border:1px solid var(--gacha-line) !important;
+      border-top:4px solid var(--last-accent,var(--gacha-cyan)) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--last-accent,var(--gacha-cyan)) 20%,transparent) 0 18%,transparent 18% 78%,rgba(255,211,106,.08) 78% 81%,transparent 81%),
+        linear-gradient(180deg,rgba(18,36,42,.96),rgba(4,8,10,.96)) !important;
+      box-shadow:0 18px 36px rgba(0,0,0,.48),0 0 30px color-mix(in srgb,var(--last-accent,var(--gacha-cyan)) 12%,transparent),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px) !important;
+    }
+    #barrage-ui .signal-banner::before,
+    #barrage-ui .signal-banner::after{
+      content:"" !important;
+      position:absolute !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .signal-banner::before{
+      inset:0 !important;
+      opacity:.46 !important;
+      background:
+        repeating-linear-gradient(0deg,rgba(255,255,255,.055) 0 1px,transparent 1px 5px),
+        linear-gradient(90deg,transparent 0 18%,rgba(255,255,255,.12) 18% 19%,transparent 19% 100%) !important;
+      animation:gachaScanline 5.8s linear infinite !important;
+    }
+    #barrage-ui .signal-banner::after{
+      left:12px !important;
+      right:12px !important;
+      bottom:12px !important;
+      height:3px !important;
+      background:linear-gradient(90deg,transparent,var(--last-accent,var(--gacha-cyan)),#f7ffff,transparent) !important;
+      box-shadow:0 0 18px color-mix(in srgb,var(--last-accent,var(--gacha-cyan)) 34%,transparent) !important;
+      animation:gachaSignalSweep 2.9s ease-in-out infinite !important;
+    }
+    #barrage-ui .signal-copy{
+      position:absolute !important;
+      z-index:2 !important;
+      left:16px !important;
+      top:15px !important;
+      width:52% !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .signal-copy b{
+      display:block !important;
+      color:color-mix(in srgb,var(--last-accent,var(--gacha-cyan)) 72%,#f7ffff) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .signal-copy strong{
+      display:block !important;
+      margin-top:7px !important;
+      color:#fff !important;
+      font-size:clamp(24px,7.4vw,34px) !important;
+      line-height:.92 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      text-shadow:0 1px 0 #000,0 0 22px color-mix(in srgb,var(--last-accent,var(--gacha-cyan)) 22%,transparent) !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .signal-copy span{
+      display:block !important;
+      margin-top:8px !important;
+      color:var(--gacha-muted) !important;
+      font-size:10px !important;
+      line-height:1.18 !important;
+      font-weight:900 !important;
+      letter-spacing:0 !important;
+    }
+    #barrage-ui .signal-orbit{
+      position:absolute !important;
+      z-index:1 !important;
+      right:78px !important;
+      top:24px !important;
+      width:116px !important;
+      height:116px !important;
+      border:1px solid color-mix(in srgb,var(--last-accent,var(--gacha-cyan)) 42%,rgba(255,255,255,.12)) !important;
+      border-radius:50% !important;
+      box-shadow:0 0 24px color-mix(in srgb,var(--last-accent,var(--gacha-cyan)) 16%,transparent),inset 0 0 24px rgba(0,0,0,.36) !important;
+      opacity:.88 !important;
+      animation:gachaOrbitSpin 8s linear infinite !important;
+    }
+    #barrage-ui .signal-orbit i{
+      position:absolute !important;
+      inset:16px !important;
+      border:1px dashed color-mix(in srgb,var(--last-accent,var(--gacha-cyan)) 48%,rgba(255,255,255,.12)) !important;
+      border-radius:50% !important;
+    }
+    #barrage-ui .signal-orbit i:nth-child(2){
+      inset:34px !important;
+      border-style:solid !important;
+      opacity:.72 !important;
+    }
+    #barrage-ui .signal-orbit i:nth-child(3){
+      left:50% !important;
+      top:50% !important;
+      width:12px !important;
+      height:12px !important;
+      inset:auto !important;
+      transform:translate(-50%,-50%) rotate(45deg) !important;
+      border:3px solid #f7ffff !important;
+      border-radius:0 !important;
+      box-shadow:0 0 18px var(--last-accent,var(--gacha-cyan)) !important;
+    }
+    #barrage-ui .signal-tape{
+      position:absolute !important;
+      z-index:2 !important;
+      right:14px !important;
+      bottom:18px !important;
+      width:98px !important;
+      height:58px !important;
+      border:1px solid rgba(255,255,255,.26) !important;
+      border-left:4px solid var(--last-accent,var(--gacha-cyan)) !important;
+      background:
+        linear-gradient(132deg,rgba(255,255,255,.70) 0 18%,transparent 18%),
+        linear-gradient(180deg,#f7ffff,#dce7e8) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      box-shadow:0 0 22px color-mix(in srgb,var(--last-accent,var(--gacha-cyan)) 22%,transparent),5px 5px 0 rgba(0,0,0,.46) !important;
+    }
+    #barrage-ui .signal-tape i{
+      position:absolute !important;
+      top:15px !important;
+      width:22px !important;
+      height:22px !important;
+      border:5px solid #071114 !important;
+      border-radius:50% !important;
+      background:var(--last-accent,var(--gacha-cyan)) !important;
+      animation:gachaTapeSpin 1.8s linear infinite !important;
+    }
+    #barrage-ui .signal-tape i:first-child{left:18px !important}
+    #barrage-ui .signal-tape i:nth-child(2){right:18px !important;animation-direction:reverse !important}
+    #barrage-ui .signal-tape span{
+      position:absolute !important;
+      left:18px !important;
+      right:18px !important;
+      bottom:11px !important;
+      height:5px !important;
+      background:#071114 !important;
+      box-shadow:0 0 0 1px rgba(7,17,20,.22) !important;
+    }
+    #barrage-ui .signal-guarantee{
+      position:absolute !important;
+      z-index:3 !important;
+      right:14px !important;
+      top:14px !important;
+      width:98px !important;
+      min-height:58px !important;
+      padding:9px 9px 8px !important;
+      text-align:right !important;
+      border:1px solid rgba(238,247,255,.18) !important;
+      border-top:3px solid var(--last-accent,var(--gacha-cyan)) !important;
+      background:rgba(3,7,9,.72) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+    }
+    #barrage-ui .signal-guarantee b,
+    #barrage-ui .signal-guarantee span{
+      display:block !important;
+      color:var(--gacha-muted) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .signal-guarantee strong{
+      display:block !important;
+      margin:5px 0 4px !important;
+      color:#fff !important;
+      font-size:17px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .signal-channel-row{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:7px !important;
+    }
+    #barrage-ui .signal-channel-row span{
+      min-width:0 !important;
+      height:32px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:5px !important;
+      padding:0 9px !important;
+      border:1px solid var(--gacha-soft) !important;
+      border-top:2px solid rgba(238,247,255,.20) !important;
+      background:rgba(7,17,20,.78) !important;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .signal-channel-row span.active{
+      color:#061014 !important;
+      border-color:transparent !important;
+      background:linear-gradient(90deg,#f7ffff,var(--gacha-cyan)) !important;
+      box-shadow:0 0 18px rgba(141,245,255,.20) !important;
+    }
+    #barrage-ui .signal-channel-row b,
+    #barrage-ui .signal-channel-row em{
+      min-width:0 !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      font-style:normal !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .signal-channel-row b{color:inherit !important}
+    #barrage-ui .signal-channel-row em{color:rgba(238,247,255,.55) !important}
+    #barrage-ui .signal-channel-row span.active em{color:rgba(6,16,20,.66) !important}
+    #barrage-ui .signal-console{
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 132px !important;
+      gap:8px !important;
+    }
+    #barrage-ui .signal-cost-card{
+      min-width:0 !important;
+      padding:9px 12px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      grid-template-rows:auto auto !important;
+      gap:4px 8px !important;
+      align-content:center !important;
+      border:1px solid var(--gacha-line) !important;
+      border-left:4px solid var(--gacha-cyan) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.12) 0 18%,transparent 18%),
+        rgba(7,17,20,.88) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06) !important;
+    }
+    #barrage-ui .signal-cost-card b{
+      grid-column:1 !important;
+      color:var(--gacha-muted) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .signal-cost-card strong{
+      grid-column:1 !important;
+      display:block !important;
+      color:#fff !important;
+      font-size:18px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .signal-cost-card span{
+      grid-column:2 !important;
+      grid-row:1 / span 2 !important;
+      align-self:center !important;
+      justify-self:end !important;
+      color:var(--gacha-muted) !important;
+      font-size:10px !important;
+      font-weight:900 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .signal-cost-card .token-value,
+    #barrage-ui .signal-wallet{
+      color:inherit !important;
+      display:inline-flex !important;
+      align-items:center !important;
+      gap:4px !important;
+    }
+    #barrage-ui .gacha-screen .gacha-roll.signal-search-button{
+      position:relative !important;
+      inset:auto !important;
+      width:132px !important;
+      min-width:132px !important;
+      height:58px !important;
+      min-height:58px !important;
+      display:grid !important;
+      grid-template-rows:1fr auto !important;
+      place-items:center !important;
+      padding:9px 10px !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:
+        linear-gradient(118deg,rgba(255,255,255,.72) 0 18%,transparent 18% 74%,rgba(6,16,20,.10) 74% 78%,transparent 78%),
+        linear-gradient(90deg,#f7ffff,var(--gacha-cyan)) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.54),0 0 24px rgba(141,245,255,.20),inset 0 1px 0 rgba(255,255,255,.62) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+      transform:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-screen .gacha-roll.signal-search-button b,
+    #barrage-ui .gacha-screen .gacha-roll.signal-search-button span{
+      display:block !important;
+      max-width:100% !important;
+      min-width:0 !important;
+      color:#061014 !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .gacha-screen .gacha-roll.signal-search-button b{
+      font-size:11px !important;
+    }
+    #barrage-ui .gacha-screen .gacha-roll.signal-search-button span{
+      font-size:9px !important;
+      opacity:.72 !important;
+    }
+    #barrage-ui .gacha-screen .gacha-roll.signal-search-button:active{
+      transform:translateY(1px) !important;
+    }
+    #barrage-ui .signal-reveal-grid{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr) !important;
+      gap:8px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-result{
+      position:relative !important;
+      min-width:0 !important;
+      min-height:0 !important;
+      height:86px !important;
+      padding:9px 10px 9px 52px !important;
+      display:grid !important;
+      grid-template-rows:12px minmax(0,1fr) 12px !important;
+      gap:3px !important;
+      align-content:center !important;
+      color:var(--gacha-text) !important;
+      border:1px solid color-mix(in srgb,var(--accent,var(--gacha-cyan)) 58%,rgba(238,247,255,.18)) !important;
+      border-top:3px solid var(--accent,var(--gacha-cyan)) !important;
+      background:
+        linear-gradient(120deg,color-mix(in srgb,var(--accent,var(--gacha-cyan)) 18%,transparent) 0 22%,transparent 22%),
+        rgba(7,17,20,.88) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.36),0 0 22px color-mix(in srgb,var(--accent,var(--gacha-cyan)) 14%,transparent),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      overflow:hidden !important;
+      animation:gachaReveal .46s cubic-bezier(.18,.82,.24,1) both !important;
+    }
+    #barrage-ui .gacha-result.empty{
+      padding-left:10px !important;
+      border-color:var(--gacha-soft) !important;
+      border-top-color:rgba(238,247,255,.28) !important;
+      background:rgba(7,17,20,.72) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.04) !important;
+      animation:none !important;
+    }
+    #barrage-ui .gacha-result::after{
+      content:"" !important;
+      position:absolute !important;
+      left:-40% !important;
+      top:0 !important;
+      width:34% !important;
+      height:100% !important;
+      transform:skewX(-18deg) !important;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent) !important;
+      animation:gachaCardShine 1.05s ease-out .12s both !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .gacha-result.empty::after{
+      display:none !important;
+    }
+    #barrage-ui .gacha-result .result-rank{
+      position:absolute !important;
+      left:9px !important;
+      top:9px !important;
+      width:34px !important;
+      height:34px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,var(--gacha-cyan))) !important;
+      box-shadow:0 0 16px color-mix(in srgb,var(--accent,var(--gacha-cyan)) 26%,transparent),inset 0 1px 0 rgba(255,255,255,.58) !important;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-result.empty .result-rank{
+      background:rgba(238,247,255,.12) !important;
+      color:var(--gacha-muted) !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .gacha-result .result-swatch{
+      position:absolute !important;
+      left:14px !important;
+      bottom:10px !important;
+      width:24px !important;
+      height:24px !important;
+    }
+    #barrage-ui .gacha-result b,
+    #barrage-ui .gacha-result span,
+    #barrage-ui .gacha-result small{
+      min-width:0 !important;
+      margin:0 !important;
+      display:block !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-align:left !important;
+    }
+    #barrage-ui .gacha-result b{
+      color:color-mix(in srgb,var(--accent,var(--gacha-cyan)) 72%,#f7ffff) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .gacha-result span{
+      color:#fff !important;
+      font-size:clamp(14px,4vw,18px) !important;
+      line-height:1.02 !important;
+      font-weight:950 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .gacha-result small{
+      color:var(--gacha-muted) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .supply-odds{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      grid-template-rows:repeat(3,minmax(0,1fr)) !important;
+      gap:5px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .supply-odds span{
+      min-width:0 !important;
+      height:auto !important;
+      min-height:0 !important;
+      padding:5px 7px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:5px !important;
+      border:1px solid color-mix(in srgb,var(--accent,var(--gacha-cyan)) 38%,rgba(238,247,255,.13)) !important;
+      border-left:3px solid var(--accent,var(--gacha-cyan)) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--accent,var(--gacha-cyan)) 14%,transparent) 0 24%,transparent 24%),
+        rgba(7,17,20,.78) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .supply-odds span :is(b,em){
+      min-width:0 !important;
+      margin:0 !important;
+      display:block !important;
+      color:var(--gacha-text) !important;
+      font-size:7.5px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      font-style:normal !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .supply-odds span em{
+      color:var(--gacha-muted) !important;
+      justify-self:end !important;
+    }
+    #barrage-ui .gacha-screen .supply-section{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-rows:22px minmax(0,1fr) !important;
+      gap:7px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-screen .garage-section-head{
+      height:22px !important;
+      min-height:22px !important;
+      border-bottom:1px solid rgba(238,247,255,.18) !important;
+    }
+    #barrage-ui .gacha-screen .garage-section-head b,
+    #barrage-ui .gacha-screen .garage-section-head span{
+      color:var(--gacha-muted) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .gacha-screen .equipped-grid{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:7px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card{
+      min-width:0 !important;
+      min-height:0 !important;
+      height:67px !important;
+      padding:8px 8px 7px 42px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) !important;
+      grid-template-rows:10px minmax(0,1fr) 10px !important;
+      gap:3px !important;
+      position:relative !important;
+      color:var(--gacha-text) !important;
+      border:1px solid color-mix(in srgb,var(--accent,var(--gacha-cyan)) 34%,rgba(238,247,255,.14)) !important;
+      border-top:3px solid var(--accent,var(--gacha-cyan)) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--accent,var(--gacha-cyan)) 14%,transparent) 0 22%,transparent 22%),
+        rgba(7,17,20,.82) !important;
+      box-shadow:0 10px 18px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card .equipped-swatch{
+      position:absolute !important;
+      left:8px !important;
+      top:13px !important;
+      width:26px !important;
+      height:26px !important;
+      grid-column:auto !important;
+      grid-row:auto !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card :is(b,span,small){
+      grid-column:1 !important;
+      min-width:0 !important;
+      margin:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-align:left !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card b{
+      color:var(--gacha-muted) !important;
+      font-size:7.5px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card span{
+      color:#fff !important;
+      font-size:11px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card small{
+      color:color-mix(in srgb,var(--accent,var(--gacha-cyan)) 70%,#f7ffff) !important;
+      font-size:7.5px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-list{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-auto-rows:68px !important;
+      gap:7px !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+      overscroll-behavior:contain !important;
+      padding-right:2px !important;
+      scrollbar-width:none !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-list::-webkit-scrollbar{
+      display:none !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row{
+      position:relative !important;
+      min-width:0 !important;
+      min-height:0 !important;
+      height:68px !important;
+      padding:8px 76px 8px 48px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) !important;
+      grid-template-rows:10px minmax(0,1fr) 10px !important;
+      gap:3px !important;
+      align-items:center !important;
+      color:var(--gacha-text) !important;
+      border:1px solid color-mix(in srgb,var(--accent,var(--gacha-cyan)) 34%,rgba(238,247,255,.14)) !important;
+      border-left:4px solid var(--accent,var(--gacha-cyan)) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--accent,var(--gacha-cyan)) 12%,transparent) 0 18%,transparent 18%),
+        rgba(7,17,20,.84) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.05) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row .skin-swatch{
+      position:absolute !important;
+      left:10px !important;
+      top:16px !important;
+      width:28px !important;
+      height:28px !important;
+      grid-column:auto !important;
+      grid-row:auto !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row :is(b,span,small){
+      grid-column:1 !important;
+      min-width:0 !important;
+      margin:0 !important;
+      display:block !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-align:left !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row b{
+      color:color-mix(in srgb,var(--accent,var(--gacha-cyan)) 70%,#f7ffff) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row span{
+      color:#fff !important;
+      font-size:13px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row small{
+      color:var(--gacha-muted) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row button{
+      position:absolute !important;
+      right:8px !important;
+      top:50% !important;
+      bottom:auto !important;
+      left:auto !important;
+      width:60px !important;
+      min-width:60px !important;
+      height:34px !important;
+      min-height:34px !important;
+      padding:0 6px !important;
+      transform:translateY(-50%) !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,var(--gacha-cyan))) !important;
+      box-shadow:0 0 14px color-mix(in srgb,var(--accent,var(--gacha-cyan)) 18%,transparent),inset 0 1px 0 rgba(255,255,255,.55) !important;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row button:active{
+      transform:translateY(calc(-50% + 1px)) !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row.locked{
+      opacity:.50 !important;
+      filter:saturate(.62) !important;
+    }
+    #barrage-ui .gacha-screen .cosmetic-row.equipped{
+      outline:1px solid color-mix(in srgb,var(--accent,var(--gacha-cyan)) 72%,rgba(255,255,255,.24)) !important;
+      outline-offset:-4px !important;
+      box-shadow:0 0 0 1px color-mix(in srgb,var(--accent,var(--gacha-cyan)) 32%,transparent),0 16px 28px rgba(0,0,0,.42),0 0 24px color-mix(in srgb,var(--accent,var(--gacha-cyan)) 16%,transparent),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .gacha-result.rarity-ssr,
+    #barrage-ui .gacha-result.rarity-legend{
+      animation:gachaReveal .46s cubic-bezier(.18,.82,.24,1) both,gachaRarePulse 1.8s ease-in-out .28s 2 !important;
+    }
+    @keyframes gachaScanline{
+      0%{transform:translateY(-18px);opacity:.30}
+      50%{opacity:.56}
+      100%{transform:translateY(18px);opacity:.30}
+    }
+    @keyframes gachaSignalSweep{
+      0%,100%{opacity:.38;transform:scaleX(.72)}
+      50%{opacity:.96;transform:scaleX(1)}
+    }
+    @keyframes gachaOrbitSpin{
+      to{transform:rotate(360deg)}
+    }
+    @keyframes gachaTapeSpin{
+      to{transform:rotate(360deg)}
+    }
+    @keyframes gachaReveal{
+      0%{opacity:0;transform:translateY(10px) scale(.97);filter:brightness(1.7)}
+      100%{opacity:1;transform:translateY(0) scale(1);filter:brightness(1)}
+    }
+    @keyframes gachaCardShine{
+      0%{left:-48%;opacity:0}
+      24%{opacity:.78}
+      100%{left:116%;opacity:0}
+    }
+    @keyframes gachaRarePulse{
+      0%,100%{box-shadow:0 12px 24px rgba(0,0,0,.36),0 0 22px color-mix(in srgb,var(--accent,var(--gacha-cyan)) 14%,transparent),inset 0 1px 0 rgba(255,255,255,.06)}
+      50%{box-shadow:0 12px 24px rgba(0,0,0,.36),0 0 42px color-mix(in srgb,var(--accent,var(--gacha-cyan)) 42%,transparent),inset 0 1px 0 rgba(255,255,255,.14)}
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .gacha-screen .page-header{
+        top:9px !important;
+        height:56px !important;
+        grid-template-columns:minmax(0,1fr) 50px !important;
+        gap:8px !important;
+      }
+      #barrage-ui .gacha-screen .page-title,
+      #barrage-ui .gacha-screen .page-back{
+        height:56px !important;
+        min-height:56px !important;
+      }
+      #barrage-ui .gacha-screen .page-title{
+        padding:9px 12px !important;
+      }
+      #barrage-ui .gacha-screen .page-title h1{
+        font-size:19px !important;
+      }
+      #barrage-ui .gacha-screen .gacha-panel{
+        top:76px !important;
+      }
+      #barrage-ui .gacha-terminal{
+        grid-template-rows:132px 30px 52px 76px 84px minmax(0,1fr) !important;
+        gap:7px !important;
+      }
+      #barrage-ui .signal-banner{
+        padding:12px !important;
+      }
+      #barrage-ui .signal-copy{
+        left:14px !important;
+        top:13px !important;
+        width:56% !important;
+      }
+      #barrage-ui .signal-copy strong{
+        font-size:23px !important;
+      }
+      #barrage-ui .signal-copy span{
+        font-size:8.5px !important;
+      }
+      #barrage-ui .signal-orbit{
+        right:66px !important;
+        top:20px !important;
+        width:84px !important;
+        height:84px !important;
+      }
+      #barrage-ui .signal-orbit i{
+        inset:12px !important;
+      }
+      #barrage-ui .signal-orbit i:nth-child(2){
+        inset:25px !important;
+      }
+      #barrage-ui .signal-guarantee{
+        right:12px !important;
+        top:12px !important;
+        width:84px !important;
+        min-height:50px !important;
+        padding:8px !important;
+      }
+      #barrage-ui .signal-guarantee strong{
+        font-size:14px !important;
+      }
+      #barrage-ui .signal-tape{
+        right:12px !important;
+        bottom:14px !important;
+        width:84px !important;
+        height:48px !important;
+      }
+      #barrage-ui .signal-tape i{
+        top:13px !important;
+        width:18px !important;
+        height:18px !important;
+        border-width:4px !important;
+      }
+      #barrage-ui .signal-console{
+        grid-template-columns:minmax(0,1fr) 118px !important;
+        gap:7px !important;
+      }
+      #barrage-ui .gacha-screen .gacha-roll.signal-search-button{
+        width:118px !important;
+        min-width:118px !important;
+        height:52px !important;
+        min-height:52px !important;
+        padding-left:7px !important;
+        padding-right:7px !important;
+      }
+      #barrage-ui .gacha-screen .gacha-roll.signal-search-button b{
+        font-size:9px !important;
+      }
+      #barrage-ui .gacha-screen .gacha-roll.signal-search-button span{
+        font-size:8px !important;
+      }
+      #barrage-ui .signal-cost-card{
+        padding:8px 10px !important;
+      }
+      #barrage-ui .signal-cost-card strong{
+        font-size:16px !important;
+      }
+      #barrage-ui .signal-cost-card span{
+        font-size:8px !important;
+      }
+      #barrage-ui .signal-reveal-grid{
+        grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr) !important;
+        gap:7px !important;
+      }
+      #barrage-ui .gacha-result{
+        height:76px !important;
+        padding:8px 8px 8px 45px !important;
+        grid-template-rows:10px minmax(0,1fr) 10px !important;
+      }
+      #barrage-ui .gacha-result .result-rank{
+        left:8px !important;
+        top:8px !important;
+        width:30px !important;
+        height:30px !important;
+        font-size:8px !important;
+      }
+      #barrage-ui .gacha-result .result-swatch{
+        left:11px !important;
+        bottom:8px !important;
+        width:21px !important;
+        height:21px !important;
+      }
+      #barrage-ui .gacha-result span{
+        font-size:13px !important;
+      }
+      #barrage-ui .gacha-result small,
+      #barrage-ui .supply-odds span :is(b,em){
+        font-size:7px !important;
+      }
+      #barrage-ui .gacha-screen .equipped-card{
+        height:55px !important;
+        padding:7px 7px 6px 36px !important;
+      }
+      #barrage-ui .gacha-screen .equipped-card .equipped-swatch{
+        left:7px !important;
+        top:13px !important;
+        width:22px !important;
+        height:22px !important;
+      }
+      #barrage-ui .gacha-screen .equipped-card span{
+        font-size:10px !important;
+      }
+      #barrage-ui .gacha-screen .cosmetic-list{
+        grid-auto-rows:62px !important;
+      }
+      #barrage-ui .gacha-screen .cosmetic-row{
+        height:62px !important;
+        padding:7px 68px 7px 43px !important;
+      }
+      #barrage-ui .gacha-screen .cosmetic-row .skin-swatch{
+        left:9px !important;
+        top:16px !important;
+        width:24px !important;
+        height:24px !important;
+      }
+      #barrage-ui .gacha-screen .cosmetic-row span{
+        font-size:12px !important;
+      }
+      #barrage-ui .gacha-screen .cosmetic-row small{
+        font-size:7px !important;
+      }
+      #barrage-ui .gacha-screen .cosmetic-row button{
+        right:7px !important;
+        width:54px !important;
+        min-width:54px !important;
+        height:31px !important;
+        min-height:31px !important;
+        font-size:8px !important;
+      }
+    }
+    /* Gameplay HUD rebuild v12: mobile-first combat readout. */
+    #barrage-ui .game-hud{
+      --combat-edge:clamp(10px,3.1vw,16px);
+      --combat-panel:rgba(5,12,15,.86);
+      --combat-panel-strong:rgba(12,25,30,.94);
+      --combat-line:rgba(230,249,255,.28);
+      --combat-text:#f7ffff;
+      --combat-muted:rgba(230,249,255,.72);
+      --combat-cyan:#8df5ff;
+      --combat-amber:#ffd36a;
+      --combat-red:#ff3b62;
+      position:fixed !important;
+      inset:0 !important;
+      display:none !important;
+      pointer-events:none !important;
+      z-index:30 !important;
+      font-variant-numeric:tabular-nums !important;
+      color:var(--combat-text) !important;
+    }
+    #barrage-ui .game-hud.on{
+      display:block !important;
+    }
+    #barrage-ui .game-hud::before,
+    #barrage-ui .game-hud::after{
+      content:"" !important;
+      position:fixed !important;
+      left:0 !important;
+      right:0 !important;
+      pointer-events:none !important;
+      z-index:0 !important;
+    }
+    #barrage-ui .game-hud::before{
+      top:0 !important;
+      height:clamp(118px,18vh,166px) !important;
+      background:
+        linear-gradient(180deg,rgba(0,0,0,.72),rgba(0,0,0,.32) 55%,transparent),
+        radial-gradient(circle at 50% 0,rgba(141,245,255,.18),transparent 64%) !important;
+      opacity:.88 !important;
+    }
+    #barrage-ui .game-hud::after{
+      bottom:0 !important;
+      height:clamp(160px,27vh,230px) !important;
+      background:
+        linear-gradient(0deg,rgba(0,0,0,.78),rgba(0,0,0,.40) 56%,transparent),
+        radial-gradient(circle at 50% 100%,rgba(255,211,106,.13),transparent 68%) !important;
+      opacity:.90 !important;
+    }
+    #barrage-ui .game-hud :is(.game-top-card,.game-pause,.game-xpbar,.game-bottom,.game-upgrade,.game-chip,.game-meter,.boss-hp,.special-slot){
+      box-sizing:border-box !important;
+      border-radius:0 !important;
+      letter-spacing:0 !important;
+      text-shadow:0 1px 2px rgba(0,0,0,.95) !important;
+    }
+    #barrage-ui .game-hud :is(.game-top-card,.game-pause,.game-xpbar,.game-bottom,.game-upgrade,.game-chip,.game-meter,.boss-hp){
+      border:1px solid var(--combat-line) !important;
+      background:
+        linear-gradient(132deg,rgba(141,245,255,.13) 0 18%,transparent 18%),
+        linear-gradient(180deg,var(--combat-panel-strong),var(--combat-panel)) !important;
+      box-shadow:0 12px 24px rgba(0,0,0,.44),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      backdrop-filter:blur(12px) saturate(1.12) !important;
+      -webkit-backdrop-filter:blur(12px) saturate(1.12) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+    }
+    #barrage-ui .game-hud :is(.game-top-card,.game-pause,.game-wave,.game-score,.game-upgrade,.game-chip)::before,
+    #barrage-ui .game-hud :is(.game-top-card,.game-pause,.game-wave,.game-score,.game-upgrade,.game-chip)::after,
+    #barrage-ui .game-hud .game-special-slots .special-slot::before,
+    #barrage-ui .game-hud .game-special-slots .special-slot::after{
+      content:none !important;
+      display:none !important;
+    }
+    #barrage-ui .game-top{
+      position:fixed !important;
+      top:calc(8px + env(safe-area-inset-top)) !important;
+      left:50% !important;
+      right:auto !important;
+      bottom:auto !important;
+      width:min(460px,calc(100vw - var(--combat-edge) * 2)) !important;
+      height:50px !important;
+      transform:translateX(-50%) !important;
+      display:grid !important;
+      grid-template-columns:44px minmax(0,1fr) minmax(96px,118px) !important;
+      grid-template-areas:"pause xp score" !important;
+      gap:8px !important;
+      align-items:start !important;
+      z-index:4 !important;
+      pointer-events:none !important;
+      margin:0 !important;
+      padding:0 !important;
+    }
+    #barrage-ui .game-pause{
+      grid-area:pause !important;
+      position:relative !important;
+      inset:auto !important;
+      width:44px !important;
+      min-width:44px !important;
+      height:44px !important;
+      min-height:44px !important;
+      padding:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      pointer-events:auto !important;
+      color:var(--combat-text) !important;
+      background:
+        linear-gradient(135deg,rgba(255,255,255,.18) 0 20%,transparent 20%),
+        linear-gradient(180deg,rgba(17,33,38,.96),rgba(5,11,13,.92)) !important;
+    }
+    #barrage-ui .game-pause span{
+      position:absolute !important;
+      width:20px !important;
+      height:20px !important;
+      font-size:0 !important;
+      line-height:0 !important;
+      color:transparent !important;
+    }
+    #barrage-ui .game-pause span::before,
+    #barrage-ui .game-pause span::after{
+      content:"" !important;
+      position:absolute !important;
+      top:2px !important;
+      bottom:2px !important;
+      width:5px !important;
+      background:linear-gradient(180deg,#fff,var(--combat-cyan)) !important;
+      box-shadow:0 0 13px rgba(141,245,255,.58) !important;
+    }
+    #barrage-ui .game-pause span::before{left:4px !important}
+    #barrage-ui .game-pause span::after{right:4px !important}
+    #barrage-ui .game-score{
+      grid-area:score !important;
+      position:relative !important;
+      inset:auto !important;
+      width:auto !important;
+      min-width:0 !important;
+      height:46px !important;
+      margin:0 !important;
+      padding:7px 9px 6px !important;
+      display:grid !important;
+      grid-template-rows:10px 1fr !important;
+      align-content:center !important;
+      justify-items:end !important;
+      gap:2px !important;
+      text-align:right !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-score b{
+      color:var(--combat-muted) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .game-score span[data-ref="score"]{
+      max-width:100% !important;
+      color:#fff !important;
+      font-size:clamp(15px,4.3vw,21px) !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-score small{
+      position:absolute !important;
+      right:7px !important;
+      bottom:2px !important;
+      max-width:88px !important;
+      display:block !important;
+      color:var(--combat-amber) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      opacity:.92 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-xpbar{
+      grid-area:xp !important;
+      position:relative !important;
+      inset:auto !important;
+      width:100% !important;
+      min-width:0 !important;
+      height:34px !important;
+      margin:6px 0 0 !important;
+      padding:6px 8px !important;
+      display:grid !important;
+      grid-template-columns:24px minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:7px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-xp-level{
+      width:22px !important;
+      height:22px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      background:linear-gradient(180deg,#f7ffff,var(--combat-cyan)) !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+      clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px) !important;
+    }
+    #barrage-ui .game-xp-count{
+      color:rgba(247,255,255,.86) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:850 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-xp-track{
+      position:relative !important;
+      height:8px !important;
+      min-width:42px !important;
+      overflow:hidden !important;
+      border:1px solid rgba(230,249,255,.24) !important;
+      background:rgba(255,255,255,.08) !important;
+      box-shadow:inset 0 0 10px rgba(0,0,0,.58) !important;
+    }
+    #barrage-ui .game-xp-track i{
+      display:block !important;
+      height:100% !important;
+      background:linear-gradient(90deg,#7cf7ff,#f7ffff,var(--combat-amber)) !important;
+      box-shadow:0 0 16px rgba(141,245,255,.48) !important;
+      transition:width .12s ease-out !important;
+    }
+    #barrage-ui .game-wave{
+      position:fixed !important;
+      top:calc(64px + env(safe-area-inset-top)) !important;
+      left:var(--combat-edge) !important;
+      right:auto !important;
+      bottom:auto !important;
+      width:112px !important;
+      height:52px !important;
+      margin:0 !important;
+      padding:7px 9px 8px 11px !important;
+      display:grid !important;
+      grid-template-columns:auto 1fr !important;
+      grid-template-rows:12px 18px 7px !important;
+      column-gap:6px !important;
+      row-gap:3px !important;
+      align-items:center !important;
+      z-index:3 !important;
+      border-left:4px solid var(--combat-cyan) !important;
+      overflow:hidden !important;
+      transform:none !important;
+    }
+    #barrage-ui .game-hud.has-boss .game-wave{
+      top:calc(122px + env(safe-area-inset-top)) !important;
+      transform:scale(.92) !important;
+      transform-origin:left top !important;
+    }
+    #barrage-ui .game-wave b{
+      grid-column:1 / 3 !important;
+      color:var(--combat-muted) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .game-wave span{
+      color:#fff !important;
+      font-size:21px !important;
+      line-height:.92 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .game-wave small{
+      color:rgba(247,255,255,.80) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:800 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-wave small i{
+      color:var(--combat-amber) !important;
+      font-style:normal !important;
+    }
+    #barrage-ui .game-wave-track{
+      grid-column:1 / 3 !important;
+      position:relative !important;
+      height:6px !important;
+      overflow:hidden !important;
+      border:1px solid rgba(230,249,255,.24) !important;
+      background:rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .game-wave-track i{
+      display:block !important;
+      height:100% !important;
+      background:linear-gradient(90deg,var(--combat-cyan),var(--combat-amber)) !important;
+      box-shadow:0 0 12px rgba(255,211,106,.42) !important;
+      transition:width .14s ease-out !important;
+    }
+    #barrage-ui .game-special-slots{
+      position:fixed !important;
+      top:calc(124px + env(safe-area-inset-top)) !important;
+      right:var(--combat-edge) !important;
+      left:auto !important;
+      bottom:auto !important;
+      width:42px !important;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      gap:6px !important;
+      z-index:3 !important;
+      pointer-events:none !important;
+      transform:none !important;
+    }
+    #barrage-ui .game-hud.has-boss .game-special-slots{
+      top:calc(178px + env(safe-area-inset-top)) !important;
+    }
+    #barrage-ui .game-special-slots .special-slot{
+      width:42px !important;
+      height:42px !important;
+      min-height:42px !important;
+      padding:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      position:relative !important;
+      overflow:hidden !important;
+      color:#fff !important;
+      border:1px solid color-mix(in srgb,var(--accent,#8df5ff) 62%,rgba(255,255,255,.22)) !important;
+      background:
+        radial-gradient(circle at 50% 42%,color-mix(in srgb,var(--accent,#8df5ff) 24%,transparent),transparent 58%),
+        linear-gradient(180deg,rgba(13,26,30,.90),rgba(3,8,10,.82)) !important;
+      box-shadow:0 9px 18px rgba(0,0,0,.38),0 0 16px color-mix(in srgb,var(--accent,#8df5ff) 22%,transparent),inset 0 1px 0 rgba(255,255,255,.10) !important;
+      clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px) !important;
+    }
+    #barrage-ui .game-special-slots .special-slot b{
+      width:100% !important;
+      height:100% !important;
+      margin:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#fff !important;
+      font-size:17px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:0 0 12px color-mix(in srgb,var(--accent,#8df5ff) 70%,transparent),0 1px 2px rgba(0,0,0,.90) !important;
+    }
+    #barrage-ui .game-special-slots .special-slot b .special-icon{
+      width:24px !important;
+      height:24px !important;
+      color:#fff !important;
+      filter:drop-shadow(0 0 10px color-mix(in srgb,var(--accent,#8df5ff) 78%,transparent)) drop-shadow(0 1px 1px rgba(0,0,0,.95)) !important;
+    }
+    #barrage-ui .game-special-slots .special-slot span{
+      display:none !important;
+    }
+    #barrage-ui .game-special-slots .special-slot small{
+      position:absolute !important;
+      right:3px !important;
+      bottom:2px !important;
+      min-width:13px !important;
+      height:13px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#071014 !important;
+      background:linear-gradient(180deg,#fff,var(--accent,#8df5ff)) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+      clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px) !important;
+    }
+    #barrage-ui .game-special-slots .special-slot.empty{
+      opacity:.34 !important;
+      filter:saturate(.4) !important;
+      box-shadow:0 7px 14px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .game-special-slots .special-slot.empty small{
+      display:none !important;
+    }
+    #barrage-ui .game-bottom{
+      position:fixed !important;
+      left:50% !important;
+      right:auto !important;
+      bottom:calc(8px + env(safe-area-inset-bottom)) !important;
+      width:min(440px,calc(100vw - var(--combat-edge) * 2)) !important;
+      height:126px !important;
+      min-height:126px !important;
+      margin:0 !important;
+      padding:10px !important;
+      display:grid !important;
+      grid-template-rows:40px 58px !important;
+      gap:8px !important;
+      z-index:4 !important;
+      pointer-events:auto !important;
+      transform:translateX(-50%) !important;
+      overflow:hidden !important;
+      border-top-color:rgba(141,245,255,.54) !important;
+      background:
+        linear-gradient(130deg,rgba(141,245,255,.16) 0 16%,transparent 16%),
+        linear-gradient(180deg,rgba(16,31,36,.95),rgba(3,8,10,.91)) !important;
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px) !important;
+    }
+    #barrage-ui .game-bottom::before{
+      content:"" !important;
+      position:absolute !important;
+      left:13px !important;
+      right:13px !important;
+      top:7px !important;
+      height:1px !important;
+      background:linear-gradient(90deg,var(--combat-cyan),rgba(255,255,255,.34),transparent) !important;
+      opacity:.92 !important;
+    }
+    #barrage-ui .game-bars{
+      min-width:0 !important;
+      display:block !important;
+    }
+    #barrage-ui .game-meter.is-hp{
+      width:100% !important;
+      height:40px !important;
+      min-height:40px !important;
+      margin:0 !important;
+      padding:7px 9px !important;
+      display:grid !important;
+      grid-template-columns:31px minmax(0,1fr) 68px !important;
+      align-items:center !important;
+      gap:8px !important;
+      border-color:rgba(255,59,98,.45) !important;
+      background:
+        linear-gradient(120deg,rgba(255,59,98,.18) 0 15%,transparent 15%),
+        linear-gradient(180deg,rgba(26,18,22,.92),rgba(8,8,11,.84)) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 16px rgba(0,0,0,.24) !important;
+    }
+    #barrage-ui .game-meter.is-hp b{
+      color:#ffd6de !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .game-meter.is-hp span{
+      color:#fff !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-align:right !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-meter-track{
+      position:relative !important;
+      height:11px !important;
+      overflow:hidden !important;
+      border:1px solid rgba(255,255,255,.24) !important;
+      background:
+        repeating-linear-gradient(90deg,rgba(255,255,255,.08) 0 14px,rgba(0,0,0,.30) 14px 16px),
+        rgba(0,0,0,.48) !important;
+      box-shadow:inset 0 0 12px rgba(0,0,0,.58) !important;
+    }
+    #barrage-ui .game-meter-track i{
+      display:block !important;
+      height:100% !important;
+      background:linear-gradient(90deg,#ff2f56,#ff6f81,#ffd2da) !important;
+      box-shadow:0 0 16px rgba(255,59,98,.48),inset 0 1px 0 rgba(255,255,255,.36) !important;
+      transition:width .10s ease-out !important;
+    }
+    #barrage-ui .game-console{
+      min-width:0 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 108px !important;
+      gap:8px !important;
+      align-items:stretch !important;
+    }
+    #barrage-ui .game-chips{
+      min-width:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+      gap:6px !important;
+    }
+    #barrage-ui .game-chip{
+      height:58px !important;
+      min-height:58px !important;
+      padding:7px 4px 5px !important;
+      display:grid !important;
+      grid-template-rows:12px minmax(0,1fr) !important;
+      align-items:center !important;
+      justify-items:center !important;
+      gap:3px !important;
+      overflow:hidden !important;
+      color:#fff !important;
+    }
+    #barrage-ui .game-chip b{
+      color:var(--combat-muted) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .game-chip span{
+      max-width:100% !important;
+      min-width:0 !important;
+      color:#fff !important;
+      font-size:clamp(12px,3.3vw,15px) !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+      text-align:center !important;
+    }
+    #barrage-ui .game-chip .token-value{
+      max-width:100% !important;
+      display:inline-flex !important;
+      justify-content:center !important;
+      gap:3px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-chip .token-diamond{
+      width:8px !important;
+      height:8px !important;
+      flex:0 0 8px !important;
+    }
+    #barrage-ui .game-chip .token-number{
+      min-width:0 !important;
+      max-width:100% !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      font-size:11px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-upgrade{
+      width:108px !important;
+      height:58px !important;
+      min-width:108px !important;
+      min-height:58px !important;
+      margin:0 !important;
+      padding:0 8px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      font-size:11px !important;
+      line-height:1.12 !important;
+      font-weight:950 !important;
+      white-space:normal !important;
+      overflow:hidden !important;
+      text-align:center !important;
+      background:
+        linear-gradient(135deg,rgba(255,255,255,.60) 0 22%,transparent 22%),
+        linear-gradient(180deg,#f7ffff,var(--combat-cyan) 55%,#4fd5e2) !important;
+      border-color:rgba(247,255,255,.66) !important;
+      box-shadow:0 0 22px rgba(141,245,255,.28),0 10px 18px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.72) !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .game-hud:not(.has-bp) .game-upgrade{
+      color:rgba(230,249,255,.58) !important;
+      background:
+        linear-gradient(135deg,rgba(255,255,255,.10) 0 22%,transparent 22%),
+        linear-gradient(180deg,rgba(22,37,41,.80),rgba(6,12,14,.74)) !important;
+      border-color:rgba(230,249,255,.18) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 14px rgba(0,0,0,.22) !important;
+      text-shadow:0 1px 2px rgba(0,0,0,.9) !important;
+    }
+    #barrage-ui .game-hud.has-bp .game-upgrade{
+      animation:combatUpgradePulse 1.35s ease-in-out infinite !important;
+    }
+    @keyframes combatUpgradePulse{
+      0%,100%{filter:brightness(1);box-shadow:0 0 20px rgba(141,245,255,.28),0 10px 18px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.72)}
+      50%{filter:brightness(1.08);box-shadow:0 0 30px rgba(141,245,255,.52),0 10px 18px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.82)}
+    }
+    #barrage-ui .game-hud.critical .game-meter.is-hp{
+      animation:combatCriticalHp .42s ease-in-out infinite alternate !important;
+      border-color:rgba(255,59,98,.86) !important;
+    }
+    @keyframes combatCriticalHp{
+      from{filter:brightness(1)}
+      to{filter:brightness(1.18);box-shadow:0 0 24px rgba(255,59,98,.36),inset 0 1px 0 rgba(255,255,255,.10)}
+    }
+    #barrage-ui .game-hud .boss-hp{
+      top:calc(62px + env(safe-area-inset-top)) !important;
+      left:50% !important;
+      width:min(326px,calc(100vw - 48px)) !important;
+      height:48px !important;
+      padding:8px 12px 10px !important;
+      z-index:6 !important;
+      border-left:4px solid var(--combat-red) !important;
+      border-color:rgba(255,211,106,.52) !important;
+      background:
+        linear-gradient(120deg,rgba(255,59,98,.22) 0 16%,transparent 16%),
+        linear-gradient(180deg,rgba(27,12,17,.95),rgba(5,7,10,.90)) !important;
+      transform:translateX(-50%) translateY(-8px) !important;
+    }
+    #barrage-ui .game-hud .boss-hp.on{
+      transform:translateX(-50%) translateY(0) !important;
+      opacity:1 !important;
+    }
+    #barrage-ui .game-hud .boss-hp-head{
+      height:15px !important;
+      margin:0 0 6px !important;
+      display:flex !important;
+      align-items:center !important;
+      justify-content:space-between !important;
+      gap:10px !important;
+    }
+    #barrage-ui .game-hud .boss-hp-head b,
+    #barrage-ui .game-hud .boss-hp-head span{
+      color:#fff !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-hud .boss-hp-head b{
+      max-width:62% !important;
+      color:var(--combat-amber) !important;
+    }
+    #barrage-ui .game-hud .boss-hp-track{
+      height:11px !important;
+      border:1px solid rgba(255,255,255,.25) !important;
+      background:
+        repeating-linear-gradient(90deg,rgba(255,255,255,.10) 0 13px,rgba(0,0,0,.35) 13px 15px),
+        rgba(0,0,0,.58) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud .boss-hp-track i{
+      height:100% !important;
+      background:linear-gradient(90deg,var(--combat-red),#ff7a3d,var(--combat-amber)) !important;
+      box-shadow:0 0 18px rgba(255,59,98,.50),inset 0 1px 0 rgba(255,255,255,.36) !important;
+    }
+    #barrage-ui .game-hud .damage-vignette{
+      z-index:1 !important;
+    }
+    #barrage-ui .game-hud .hit-confirm{
+      z-index:7 !important;
+      top:45% !important;
+    }
+    #barrage-ui .game-hud.leveling .game-top,
+    #barrage-ui .game-hud.leveling .game-bottom,
+    #barrage-ui .game-hud.leveling .game-special-slots{
+      opacity:.22 !important;
+      filter:blur(.4px) saturate(.8) !important;
+      transform:translateX(-50%) scale(.98) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-hud.leveling .game-wave,
+    #barrage-ui .game-hud.leveling .game-special-slots{
+      transform:scale(.96) !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-top{
+        top:calc(6px + env(safe-area-inset-top)) !important;
+        width:min(420px,calc(100vw - 18px)) !important;
+        grid-template-columns:40px minmax(0,1fr) 102px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-pause{
+        width:40px !important;
+        min-width:40px !important;
+        height:40px !important;
+        min-height:40px !important;
+      }
+      #barrage-ui .game-score{
+        height:42px !important;
+        padding:6px 8px 5px !important;
+      }
+      #barrage-ui .game-score span[data-ref="score"]{
+        font-size:15px !important;
+      }
+      #barrage-ui .game-score small{
+        display:none !important;
+      }
+      #barrage-ui .game-xpbar{
+        height:31px !important;
+        margin-top:5px !important;
+        padding:5px 7px !important;
+        grid-template-columns:22px minmax(0,1fr) auto !important;
+        gap:5px !important;
+      }
+      #barrage-ui .game-xp-level{
+        width:20px !important;
+        height:20px !important;
+        font-size:11px !important;
+      }
+      #barrage-ui .game-xp-count{
+        font-size:8px !important;
+      }
+      #barrage-ui .game-wave{
+        top:calc(58px + env(safe-area-inset-top)) !important;
+        width:100px !important;
+        height:48px !important;
+        grid-template-rows:11px 17px 6px !important;
+        padding:6px 8px 7px 10px !important;
+      }
+      #barrage-ui .game-hud.has-boss .game-wave{
+        top:calc(114px + env(safe-area-inset-top)) !important;
+      }
+      #barrage-ui .game-special-slots{
+        top:calc(112px + env(safe-area-inset-top)) !important;
+        width:38px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .game-hud.has-boss .game-special-slots{
+        top:calc(166px + env(safe-area-inset-top)) !important;
+      }
+      #barrage-ui .game-special-slots .special-slot{
+        width:38px !important;
+        height:38px !important;
+        min-height:38px !important;
+      }
+      #barrage-ui .game-special-slots .special-slot b .special-icon{
+        width:21px !important;
+        height:21px !important;
+      }
+      #barrage-ui .game-bottom{
+        bottom:calc(7px + env(safe-area-inset-bottom)) !important;
+        width:calc(100vw - 18px) !important;
+        height:118px !important;
+        min-height:118px !important;
+        padding:9px !important;
+        grid-template-rows:38px 54px !important;
+        gap:7px !important;
+      }
+      #barrage-ui .game-meter.is-hp{
+        height:38px !important;
+        min-height:38px !important;
+        grid-template-columns:28px minmax(0,1fr) 60px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-console{
+        grid-template-columns:minmax(0,1fr) 96px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-chips{
+        gap:5px !important;
+      }
+      #barrage-ui .game-chip{
+        height:54px !important;
+        min-height:54px !important;
+        padding:6px 3px 5px !important;
+      }
+      #barrage-ui .game-chip span{
+        font-size:12px !important;
+      }
+      #barrage-ui .game-upgrade{
+        width:96px !important;
+        min-width:96px !important;
+        height:54px !important;
+        min-height:54px !important;
+        font-size:10px !important;
+      }
+      #barrage-ui .game-hud .boss-hp{
+        top:calc(56px + env(safe-area-inset-top)) !important;
+        width:min(304px,calc(100vw - 40px)) !important;
+        height:46px !important;
+      }
+    }
+    @media (orientation:landscape) and (max-height:560px){
+      #barrage-ui .game-top{
+        width:min(520px,calc(100vw - 24px)) !important;
+      }
+      #barrage-ui .game-wave{
+        top:calc(58px + env(safe-area-inset-top)) !important;
+      }
+      #barrage-ui .game-special-slots{
+        top:calc(72px + env(safe-area-inset-top)) !important;
+        grid-template-columns:repeat(5,38px) !important;
+        width:auto !important;
+      }
+      #barrage-ui .game-special-slots .special-slot{
+        width:38px !important;
+        height:38px !important;
+        min-height:38px !important;
+      }
+      #barrage-ui .game-bottom{
+        width:min(420px,calc(100vw - 24px)) !important;
+        height:106px !important;
+        min-height:106px !important;
+        grid-template-rows:34px 48px !important;
+      }
+      #barrage-ui .game-meter.is-hp{
+        height:34px !important;
+        min-height:34px !important;
+      }
+      #barrage-ui .game-chip,
+      #barrage-ui .game-upgrade{
+        height:48px !important;
+        min-height:48px !important;
+      }
+    }
+    /* Gameplay HUD specificity lock: beats older HUD layers above. */
+    #barrage-ui .game-hud.on .game-top{
+      position:fixed !important;
+      top:calc(8px + env(safe-area-inset-top)) !important;
+      left:50% !important;
+      right:auto !important;
+      bottom:auto !important;
+      width:min(460px,calc(100vw - var(--combat-edge) * 2)) !important;
+      height:50px !important;
+      min-height:50px !important;
+      transform:translateX(-50%) !important;
+      display:grid !important;
+      grid-template-columns:44px minmax(0,1fr) minmax(96px,118px) !important;
+      grid-template-areas:"pause xp score" !important;
+      gap:8px !important;
+      align-items:start !important;
+      margin:0 !important;
+      padding:0 !important;
+      pointer-events:none !important;
+      z-index:4 !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back){
+      grid-area:pause !important;
+      position:relative !important;
+      inset:auto !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      width:44px !important;
+      min-width:44px !important;
+      max-width:44px !important;
+      height:44px !important;
+      min-height:44px !important;
+      max-height:44px !important;
+      margin:0 !important;
+      padding:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      pointer-events:auto !important;
+      transform:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back)::before,
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back)::after{
+      content:none !important;
+      display:none !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span{
+      position:absolute !important;
+      inset:auto !important;
+      width:20px !important;
+      height:20px !important;
+      display:block !important;
+      font-size:0 !important;
+      line-height:0 !important;
+      color:transparent !important;
+      overflow:visible !important;
+      transform:none !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span::before,
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span::after{
+      content:"" !important;
+      display:block !important;
+      position:absolute !important;
+      top:2px !important;
+      bottom:2px !important;
+      width:5px !important;
+      background:linear-gradient(180deg,#fff,var(--combat-cyan)) !important;
+      box-shadow:0 0 13px rgba(141,245,255,.58) !important;
+    }
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span::before{left:4px !important}
+    #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back) span::after{right:4px !important}
+    #barrage-ui .game-hud.on .game-xpbar{
+      grid-area:xp !important;
+      position:relative !important;
+      inset:auto !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:none !important;
+      height:34px !important;
+      min-height:34px !important;
+      margin:6px 0 0 !important;
+      padding:6px 8px !important;
+      display:grid !important;
+      grid-template-columns:24px minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:7px !important;
+      transform:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on .game-xpbar .game-xp-level{
+      position:relative !important;
+      inset:auto !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      width:22px !important;
+      min-width:22px !important;
+      max-width:22px !important;
+      height:22px !important;
+      min-height:22px !important;
+      max-height:22px !important;
+      margin:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      transform:none !important;
+      align-self:center !important;
+      justify-self:start !important;
+    }
+    #barrage-ui .game-hud.on .game-xpbar .game-xp-track{
+      position:relative !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:none !important;
+      height:8px !important;
+      min-height:8px !important;
+      max-height:8px !important;
+      margin:0 !important;
+      align-self:center !important;
+      justify-self:stretch !important;
+      display:block !important;
+      transform:none !important;
+    }
+    #barrage-ui .game-hud.on .game-xpbar .game-xp-count{
+      position:relative !important;
+      inset:auto !important;
+      width:auto !important;
+      min-width:0 !important;
+      max-width:42px !important;
+      height:auto !important;
+      min-height:0 !important;
+      margin:0 !important;
+      display:block !important;
+      align-self:center !important;
+      justify-self:end !important;
+      transform:none !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-hud.on .game-score{
+      grid-area:score !important;
+      position:relative !important;
+      inset:auto !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      width:auto !important;
+      min-width:0 !important;
+      max-width:none !important;
+      height:46px !important;
+      min-height:46px !important;
+      margin:0 !important;
+      padding:7px 9px 6px !important;
+      display:grid !important;
+      grid-template-rows:10px 1fr !important;
+      justify-items:end !important;
+      gap:2px !important;
+      text-align:right !important;
+      transform:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on .game-score span[data-ref="score"]{
+      max-width:100% !important;
+      font-size:clamp(15px,4.3vw,21px) !important;
+      line-height:1 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-hud.on .game-score > span[data-ref="score"]{
+      display:block !important;
+      position:relative !important;
+      z-index:1 !important;
+      color:#fff !important;
+      font-weight:950 !important;
+      text-align:right !important;
+      justify-self:end !important;
+      align-self:center !important;
+    }
+    #barrage-ui .game-hud.on .game-score small{
+      position:absolute !important;
+      right:7px !important;
+      bottom:2px !important;
+      max-width:88px !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-hud.on .game-score small .token-value{
+      max-width:88px !important;
+      display:inline-flex !important;
+      align-items:center !important;
+      justify-content:flex-end !important;
+      gap:3px !important;
+      color:var(--combat-amber) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      transform:none !important;
+      text-shadow:0 1px 2px rgba(0,0,0,.95) !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .game-hud.on .game-score small .token-diamond{
+      width:7px !important;
+      height:7px !important;
+      min-width:7px !important;
+      flex:0 0 7px !important;
+    }
+    #barrage-ui .game-hud.on .game-score small .token-number{
+      max-width:72px !important;
+      color:var(--combat-amber) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-hud.on .game-wave{
+      position:fixed !important;
+      top:calc(64px + env(safe-area-inset-top)) !important;
+      left:var(--combat-edge) !important;
+      right:auto !important;
+      bottom:auto !important;
+      width:112px !important;
+      min-width:112px !important;
+      max-width:112px !important;
+      height:52px !important;
+      min-height:52px !important;
+      margin:0 !important;
+      padding:7px 9px 8px 11px !important;
+      display:grid !important;
+      grid-template-columns:auto 1fr !important;
+      grid-template-rows:12px 18px 7px !important;
+      column-gap:6px !important;
+      row-gap:3px !important;
+      align-items:center !important;
+      transform:none !important;
+      overflow:hidden !important;
+      z-index:3 !important;
+    }
+    #barrage-ui .game-hud.has-boss.on .game-wave{
+      top:calc(122px + env(safe-area-inset-top)) !important;
+      transform:scale(.92) !important;
+      transform-origin:left top !important;
+    }
+    #barrage-ui .game-hud.on .game-wave::before,
+    #barrage-ui .game-hud.on .game-wave::after{
+      content:none !important;
+      display:none !important;
+    }
+    #barrage-ui .game-hud.on .game-special-slots{
+      position:fixed !important;
+      top:calc(124px + env(safe-area-inset-top)) !important;
+      right:var(--combat-edge) !important;
+      left:auto !important;
+      bottom:auto !important;
+      width:42px !important;
+      height:auto !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      gap:6px !important;
+      transform:none !important;
+      z-index:3 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-hud.has-boss.on .game-special-slots{
+      top:calc(178px + env(safe-area-inset-top)) !important;
+    }
+    #barrage-ui .game-hud.on .game-special-slots .special-slot{
+      position:relative !important;
+      inset:auto !important;
+      width:42px !important;
+      min-width:42px !important;
+      max-width:42px !important;
+      height:42px !important;
+      min-height:42px !important;
+      max-height:42px !important;
+      margin:0 !important;
+      padding:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      transform:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom{
+      position:fixed !important;
+      left:50% !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:calc(8px + env(safe-area-inset-bottom)) !important;
+      width:min(440px,calc(100vw - var(--combat-edge) * 2)) !important;
+      min-width:0 !important;
+      max-width:440px !important;
+      height:126px !important;
+      min-height:126px !important;
+      max-height:126px !important;
+      margin:0 !important;
+      padding:10px !important;
+      display:grid !important;
+      grid-template-rows:40px 58px !important;
+      gap:8px !important;
+      transform:translateX(-50%) !important;
+      overflow:hidden !important;
+      z-index:4 !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui .game-hud.on .game-bars{
+      position:relative !important;
+      inset:auto !important;
+      min-width:0 !important;
+      width:100% !important;
+      height:40px !important;
+      display:block !important;
+      transform:none !important;
+    }
+    #barrage-ui .game-hud.on .game-meter.is-hp{
+      position:relative !important;
+      inset:auto !important;
+      width:100% !important;
+      min-width:0 !important;
+      height:40px !important;
+      min-height:40px !important;
+      max-height:40px !important;
+      margin:0 !important;
+      padding:7px 9px !important;
+      display:grid !important;
+      grid-template-columns:31px minmax(0,1fr) 68px !important;
+      align-items:center !important;
+      gap:8px !important;
+      transform:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on .game-meter.is-hp .game-meter-track{
+      height:11px !important;
+      min-height:11px !important;
+      max-height:11px !important;
+    }
+    #barrage-ui .game-hud.on .game-console{
+      position:relative !important;
+      inset:auto !important;
+      width:100% !important;
+      min-width:0 !important;
+      height:58px !important;
+      min-height:58px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 108px !important;
+      gap:8px !important;
+      align-items:stretch !important;
+      transform:none !important;
+      overflow:visible !important;
+    }
+    #barrage-ui .game-hud.on .game-chips{
+      position:relative !important;
+      inset:auto !important;
+      min-width:0 !important;
+      width:100% !important;
+      height:58px !important;
+      min-height:58px !important;
+      display:grid !important;
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+      gap:6px !important;
+      align-items:stretch !important;
+      transform:none !important;
+      opacity:1 !important;
+      overflow:visible !important;
+    }
+    #barrage-ui .game-hud.on .game-chip{
+      position:relative !important;
+      inset:auto !important;
+      width:auto !important;
+      min-width:0 !important;
+      height:58px !important;
+      min-height:58px !important;
+      max-height:58px !important;
+      margin:0 !important;
+      padding:7px 4px 5px !important;
+      display:grid !important;
+      grid-template-rows:12px minmax(0,1fr) !important;
+      justify-items:center !important;
+      align-items:center !important;
+      gap:3px !important;
+      transform:none !important;
+      opacity:1 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on .game-upgrade{
+      position:relative !important;
+      inset:auto !important;
+      width:108px !important;
+      min-width:108px !important;
+      max-width:108px !important;
+      height:58px !important;
+      min-height:58px !important;
+      max-height:58px !important;
+      margin:0 !important;
+      padding:0 8px !important;
+      display:grid !important;
+      place-items:center !important;
+      transform:none !important;
+      overflow:hidden !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud.on .game-top{
+        top:calc(6px + env(safe-area-inset-top)) !important;
+        width:calc(100vw - 18px) !important;
+        grid-template-columns:40px minmax(0,1fr) 102px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back){
+        width:40px !important;
+        min-width:40px !important;
+        max-width:40px !important;
+        height:40px !important;
+        min-height:40px !important;
+        max-height:40px !important;
+      }
+      #barrage-ui .game-hud.on .game-xpbar{
+        height:31px !important;
+        min-height:31px !important;
+        margin-top:5px !important;
+        padding:5px 7px !important;
+        grid-template-columns:22px minmax(0,1fr) auto !important;
+        gap:5px !important;
+      }
+      #barrage-ui .game-hud.on .game-xpbar .game-xp-level{
+        width:20px !important;
+        min-width:20px !important;
+        max-width:20px !important;
+        height:20px !important;
+        min-height:20px !important;
+        max-height:20px !important;
+      }
+      #barrage-ui .game-hud.on .game-xpbar .game-xp-count{
+        max-width:36px !important;
+        font-size:8px !important;
+      }
+      #barrage-ui .game-hud.on .game-score{
+        height:42px !important;
+        min-height:42px !important;
+        padding:6px 8px 5px !important;
+      }
+      #barrage-ui .game-hud.on .game-score small{
+        display:none !important;
+      }
+      #barrage-ui .game-hud.on .game-wave{
+        top:calc(58px + env(safe-area-inset-top)) !important;
+        width:100px !important;
+        min-width:100px !important;
+        max-width:100px !important;
+        height:48px !important;
+        min-height:48px !important;
+        max-height:48px !important;
+        padding:6px 8px 7px 10px !important;
+        grid-template-rows:11px 17px 6px !important;
+      }
+      #barrage-ui .game-hud.has-boss.on .game-wave{
+        top:calc(114px + env(safe-area-inset-top)) !important;
+      }
+      #barrage-ui .game-hud.on .game-special-slots{
+        top:calc(112px + env(safe-area-inset-top)) !important;
+        width:38px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .game-hud.has-boss.on .game-special-slots{
+        top:calc(166px + env(safe-area-inset-top)) !important;
+      }
+      #barrage-ui .game-hud.on .game-special-slots .special-slot{
+        width:38px !important;
+        min-width:38px !important;
+        max-width:38px !important;
+        height:38px !important;
+        min-height:38px !important;
+        max-height:38px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom{
+        bottom:calc(7px + env(safe-area-inset-bottom)) !important;
+        width:calc(100vw - 18px) !important;
+        max-width:none !important;
+        height:118px !important;
+        min-height:118px !important;
+        max-height:118px !important;
+        padding:9px !important;
+        grid-template-rows:38px 54px !important;
+        gap:7px !important;
+      }
+      #barrage-ui .game-hud.on .game-bars{
+        height:38px !important;
+      }
+      #barrage-ui .game-hud.on .game-meter.is-hp{
+        height:38px !important;
+        min-height:38px !important;
+        max-height:38px !important;
+        grid-template-columns:28px minmax(0,1fr) 60px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-hud.on .game-console{
+        height:54px !important;
+        min-height:54px !important;
+        grid-template-columns:minmax(0,1fr) 96px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-hud.on .game-chips{
+        height:54px !important;
+        min-height:54px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .game-hud.on .game-chip,
+      #barrage-ui .game-hud.on .game-upgrade{
+        height:54px !important;
+        min-height:54px !important;
+        max-height:54px !important;
+      }
+      #barrage-ui .game-hud.on .game-upgrade{
+        width:96px !important;
+        min-width:96px !important;
+        max-width:96px !important;
+      }
+    }
+    @media (prefers-reduced-motion: reduce){
+      #barrage-ui .signal-banner::before,
+      #barrage-ui .signal-banner::after,
+      #barrage-ui .signal-orbit,
+      #barrage-ui .signal-tape i,
+      #barrage-ui .gacha-result,
+      #barrage-ui .gacha-result::after{
+        animation:none !important;
+      }
+    }
+    /* Store garage-style pass: open the top field and compress buying controls into a lower bay. */
+    #barrage-ui .store-screen{
+      --store-edge:10px;
+      --store-dock-bottom:10px;
+      --store-dock-h:52px;
+      --store-panel-h:232px;
+      --store-panel-bottom:calc(var(--store-dock-bottom) + var(--store-dock-h) + 12px);
+    }
+    #barrage-ui .store-screen .page-header,
+    #barrage-ui .store-screen .showroom-v2 .showroom-copy,
+    #barrage-ui .store-screen .showroom-part-stack,
+    #barrage-ui .store-screen .showroom-mode,
+    #barrage-ui .store-screen .showroom-v2 .showroom-tabs{
+      display:none !important;
+    }
+    #barrage-ui .store-screen .showroom-stage{
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-screen .ship-showroom-ui.showroom-v2{
+      left:0 !important;
+      right:0 !important;
+      top:0 !important;
+      width:100% !important;
+      height:392px !important;
+      border:0 !important;
+      background:transparent !important;
+      box-shadow:none !important;
+      clip-path:none !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .store-screen .ship-showroom-ui.showroom-v2::before{
+      display:none !important;
+    }
+    #barrage-ui .store-screen .ship-showroom-ui.showroom-v2::after{
+      content:"" !important;
+      position:absolute !important;
+      left:26px !important;
+      right:26px !important;
+      bottom:2px !important;
+      height:2px !important;
+      background:linear-gradient(90deg,transparent,rgba(102,247,255,.62),rgba(242,251,251,.32),transparent) !important;
+      box-shadow:0 0 18px rgba(102,247,255,.22) !important;
+      opacity:.70 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .store-screen .commerce-panel{
+      left:var(--store-edge) !important;
+      right:var(--store-edge) !important;
+      top:auto !important;
+      bottom:var(--store-panel-bottom) !important;
+      width:auto !important;
+      height:var(--store-panel-h) !important;
+      min-height:0 !important;
+      max-height:none !important;
+      padding:8px !important;
+      border-radius:10px !important;
+      border-top:3px solid rgba(242,251,251,.78) !important;
+      background:
+        linear-gradient(118deg,rgba(102,247,255,.095) 0 15%,transparent 15% 84%,rgba(255,255,255,.055) 84% 86%,transparent 86%),
+        rgba(5,7,9,.96) !important;
+      box-shadow:0 -18px 38px rgba(0,0,0,.54),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-screen .store-market-v3{
+      height:100% !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-rows:26px 32px minmax(0,1fr) 38px !important;
+      gap:7px !important;
+      align-content:start !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-screen .compact-stats{
+      min-height:0 !important;
+      height:26px !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:6px !important;
+    }
+    #barrage-ui .store-screen .compact-stats > span{
+      min-height:0 !important;
+      height:26px !important;
+      padding:4px 6px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      grid-template-rows:1fr !important;
+      align-items:center !important;
+      gap:4px !important;
+      border-radius:7px !important;
+      clip-path:none !important;
+      border-left-width:3px !important;
+      background:
+        linear-gradient(120deg,rgba(102,247,255,.13) 0 18%,transparent 18%),
+        linear-gradient(180deg,#122127,#070f12) !important;
+    }
+    #barrage-ui .store-screen .compact-stats > span b,
+    #barrage-ui .store-screen .compact-stats > span small{
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .store-screen .compact-stats > span b{
+      font-size:10px !important;
+      justify-self:start !important;
+    }
+    #barrage-ui .store-screen .compact-stats > span small{
+      font-size:7px !important;
+      justify-self:end !important;
+      color:rgba(242,251,251,.58) !important;
+    }
+    #barrage-ui .store-screen .store-category-head{
+      height:32px !important;
+      min-height:32px !important;
+      padding:5px 8px !important;
+      display:grid !important;
+      grid-template-columns:54px minmax(0,1fr) !important;
+      grid-template-rows:1fr 1fr !important;
+      gap:2px 7px !important;
+      align-items:center !important;
+      border-radius:7px !important;
+      clip-path:none !important;
+      border-left-width:3px !important;
+      background:
+        linear-gradient(120deg,rgba(102,247,255,.13) 0 18%,transparent 18%),
+        linear-gradient(180deg,#122127,#070f12) !important;
+    }
+    #barrage-ui .store-screen .store-category-head b{
+      grid-column:1 !important;
+      grid-row:1 / span 2 !important;
+      min-width:0 !important;
+      height:22px !important;
+      padding:0 5px !important;
+      display:grid !important;
+      place-items:center !important;
+      font-size:8px !important;
+      clip-path:none !important;
+      border-radius:6px !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .store-screen .store-category-head strong{
+      grid-column:2 !important;
+      grid-row:1 !important;
+      font-size:12px !important;
+    }
+    #barrage-ui .store-screen .store-category-head span{
+      grid-column:2 !important;
+      grid-row:2 !important;
+      font-size:8px !important;
+    }
+    #barrage-ui .store-screen .store-offer-list{
+      min-height:0 !important;
+      height:100% !important;
+      display:grid !important;
+      grid-auto-flow:column !important;
+      grid-auto-columns:minmax(214px,74%) !important;
+      grid-auto-rows:100% !important;
+      gap:7px !important;
+      overflow-x:auto !important;
+      overflow-y:hidden !important;
+      padding:0 18px 0 0 !important;
+      scroll-snap-type:none !important;
+      scrollbar-width:none !important;
+      mask-image:none !important;
+    }
+    #barrage-ui .store-screen .store-offer-list::-webkit-scrollbar{
+      display:none !important;
+    }
+    #barrage-ui .store-screen .store-offer-card{
+      min-width:0 !important;
+      width:100% !important;
+      min-height:0 !important;
+      height:100% !important;
+      padding:7px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 74px !important;
+      grid-template-rows:minmax(0,1fr) 30px !important;
+      grid-template-areas:
+        "main action"
+        "buff action" !important;
+      gap:6px 8px !important;
+      align-items:stretch !important;
+      scroll-snap-align:start !important;
+      border-radius:7px !important;
+      clip-path:none !important;
+      border-left-width:3px !important;
+      background:
+        linear-gradient(120deg,color-mix(in srgb,var(--accent,var(--tone-cyan)) 16%,transparent) 0 18%,transparent 18%),
+        linear-gradient(180deg,#122127,#070f12) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06) !important;
+    }
+    #barrage-ui .store-screen .store-offer-card:first-child{
+      margin-left:0 !important;
+    }
+    #barrage-ui .store-screen .store-offer-card.is-selected,
+    #barrage-ui .store-screen .store-offer-card.is-owned{
+      border-top-color:rgba(242,251,251,.78) !important;
+      background:
+        linear-gradient(120deg,color-mix(in srgb,var(--accent,var(--tone-cyan)) 24%,transparent) 0 22%,transparent 22%),
+        linear-gradient(180deg,#172932,#091116) !important;
+    }
+    #barrage-ui .store-screen .store-offer-main{
+      grid-area:main !important;
+      min-height:0 !important;
+      gap:3px !important;
+      align-content:start !important;
+    }
+    #barrage-ui .store-screen .store-offer-main b{
+      font-size:8px !important;
+    }
+    #barrage-ui .store-screen .store-offer-main strong{
+      font-size:15px !important;
+      line-height:1.05 !important;
+    }
+    #barrage-ui .store-screen .store-offer-main span{
+      font-size:9px !important;
+      line-height:1.15 !important;
+      -webkit-line-clamp:2 !important;
+    }
+    #barrage-ui .store-screen .store-offer-desc{
+      display:none !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid{
+      grid-area:buff !important;
+      min-height:0 !important;
+      display:flex !important;
+      gap:4px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid span{
+      flex:1 1 0 !important;
+      min-width:0 !important;
+      height:30px !important;
+      padding:4px 5px !important;
+      grid-template-columns:1fr !important;
+      grid-template-rows:10px 10px !important;
+      gap:2px !important;
+      border-radius:6px !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid span:nth-child(n+4){
+      display:none !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid b,
+    #barrage-ui .store-screen .store-buff-grid em{
+      justify-self:center !important;
+      text-align:center !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid b{
+      font-size:7px !important;
+    }
+    #barrage-ui .store-screen .store-buff-grid em{
+      font-size:9px !important;
+    }
+    #barrage-ui .store-screen .store-offer-action{
+      grid-area:action !important;
+      width:74px !important;
+      min-width:74px !important;
+      height:100% !important;
+      min-height:0 !important;
+      border-radius:7px !important;
+      clip-path:none !important;
+      box-shadow:4px 4px 0 rgba(0,0,0,.54) !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .store-screen .store-category-tabs{
+      height:38px !important;
+      min-height:38px !important;
+      display:grid !important;
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+      gap:6px !important;
+    }
+    #barrage-ui .store-screen .store-category-tab{
+      height:38px !important;
+      min-height:38px !important;
+      padding:5px 3px !important;
+      border-radius:7px !important;
+      clip-path:none !important;
+      border-left-width:3px !important;
+      background:
+        linear-gradient(120deg,rgba(102,247,255,.11) 0 18%,transparent 18%),
+        linear-gradient(180deg,#122127,#070f12) !important;
+    }
+    #barrage-ui .store-screen .store-category-tab b{
+      font-size:9px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .store-screen .store-category-tab span{
+      margin-top:3px !important;
+      font-size:7px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .store-screen .commerce-bottom-dock{
+      bottom:var(--store-dock-bottom) !important;
+      height:var(--store-dock-h) !important;
+    }
+    #barrage-ui .store-screen .commerce-bottom-dock button{
+      height:var(--store-dock-h) !important;
+      min-height:var(--store-dock-h) !important;
+    }
+    @media (max-height:660px){
+      #barrage-ui .store-screen{
+        --store-panel-h:224px;
+        --store-panel-bottom:70px;
+        --store-dock-bottom:8px;
+        --store-dock-h:50px;
+      }
+      #barrage-ui .store-screen .ship-showroom-ui.showroom-v2{
+        height:366px !important;
+      }
+      #barrage-ui .store-screen .store-market-v3{
+        grid-template-rows:24px 30px minmax(0,1fr) 36px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .store-screen .compact-stats,
+      #barrage-ui .store-screen .compact-stats > span{
+        height:24px !important;
+      }
+      #barrage-ui .store-screen .store-category-head{
+        height:30px !important;
+        min-height:30px !important;
+      }
+      #barrage-ui .store-screen .store-offer-list{
+        grid-auto-columns:minmax(206px,76%) !important;
+      }
+      #barrage-ui .store-screen .store-offer-card{
+        grid-template-columns:minmax(0,1fr) 70px !important;
+        grid-template-rows:minmax(0,1fr) 28px !important;
+      }
+      #barrage-ui .store-screen .store-offer-main strong{
+        font-size:14px !important;
+      }
+      #barrage-ui .store-screen .store-buff-grid span{
+        height:28px !important;
+      }
+      #barrage-ui .store-screen .store-offer-action{
+        width:70px !important;
+        min-width:70px !important;
+      }
+      #barrage-ui .store-screen .store-category-tabs,
+      #barrage-ui .store-screen .store-category-tab{
+        height:36px !important;
+        min-height:36px !important;
+      }
+    }
+    /* Home upgrade tone pass: match the home command deck and keep mobile text legible. */
+    #barrage-ui .upgrade-screen{
+      --upgrade-edge:clamp(12px,3.7vw,16px);
+      --upgrade-bottom:calc(12px + env(safe-area-inset-bottom));
+      --upgrade-cyan:var(--tone-cyan,#8df5ff);
+      --upgrade-amber:var(--tone-amber,#ffd36a);
+      --upgrade-surface:#071114;
+      --upgrade-surface-2:#12242a;
+      --upgrade-line:rgba(238,247,255,.28);
+      --upgrade-line-soft:rgba(238,247,255,.15);
+      --upgrade-text:#ffffff;
+      --upgrade-muted:rgba(238,247,255,.73);
+      background-color:#020405 !important;
+      background-image:
+        linear-gradient(180deg,rgba(141,245,255,.035),transparent 30%,rgba(255,211,106,.035) 74%,transparent),
+        linear-gradient(rgba(141,245,255,.055) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(238,247,255,.034) 1px,transparent 1px) !important;
+      background-size:100% 100%,32px 32px,32px 32px !important;
+      color:var(--upgrade-text) !important;
+    }
+    #barrage-ui .upgrade-screen::after{
+      content:"" !important;
+      position:absolute !important;
+      left:0 !important;
+      right:0 !important;
+      bottom:0 !important;
+      height:38% !important;
+      pointer-events:none !important;
+      background:linear-gradient(180deg,transparent,rgba(0,0,0,.42) 72%,rgba(0,0,0,.68)) !important;
+      z-index:0 !important;
+    }
+    #barrage-ui .upgrade-screen .page-stage{
+      inset:0 !important;
+      overflow:hidden !important;
+      z-index:1 !important;
+    }
+    #barrage-ui .upgrade-screen .page-header{
+      position:absolute !important;
+      left:var(--upgrade-edge) !important;
+      right:var(--upgrade-edge) !important;
+      top:10px !important;
+      height:60px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 52px !important;
+      gap:10px !important;
+      align-items:stretch !important;
+      z-index:45 !important;
+    }
+    #barrage-ui .upgrade-screen .page-title{
+      position:relative !important;
+      inset:auto !important;
+      width:auto !important;
+      min-width:0 !important;
+      height:60px !important;
+      min-height:60px !important;
+      padding:10px 14px !important;
+      display:grid !important;
+      grid-template-rows:1fr auto !important;
+      align-content:center !important;
+      gap:4px !important;
+      overflow:hidden !important;
+      border:1px solid var(--upgrade-line) !important;
+      border-left:4px solid var(--upgrade-cyan) !important;
+      border-top-color:rgba(141,245,255,.52) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.16) 0 18%,transparent 18% 76%,rgba(255,211,106,.08) 76% 79%,transparent 79%),
+        linear-gradient(180deg,rgba(18,36,42,.96),rgba(7,17,20,.94)) !important;
+      box-shadow:0 14px 30px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+    }
+    #barrage-ui .upgrade-screen .page-title h1{
+      min-width:0 !important;
+      color:var(--upgrade-text) !important;
+      font-size:clamp(20px,5.2vw,26px) !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:0 1px 0 #000,0 0 18px rgba(141,245,255,.18) !important;
+    }
+    #barrage-ui .upgrade-screen .page-title p{
+      min-width:0 !important;
+      color:var(--upgrade-muted) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-screen .page-back{
+      position:relative !important;
+      inset:auto !important;
+      width:52px !important;
+      min-width:52px !important;
+      height:60px !important;
+      min-height:60px !important;
+      padding:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      color:var(--upgrade-text) !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      border:1px solid var(--upgrade-line) !important;
+      border-top:3px solid var(--upgrade-cyan) !important;
+      background:
+        linear-gradient(132deg,rgba(141,245,255,.18) 0 24%,transparent 24%),
+        linear-gradient(180deg,var(--upgrade-surface-2),var(--upgrade-surface)) !important;
+      box-shadow:5px 5px 0 rgba(0,0,0,.48),0 14px 28px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      text-shadow:0 1px 0 #000 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path-list{
+      left:var(--upgrade-edge) !important;
+      right:var(--upgrade-edge) !important;
+      top:82px !important;
+      bottom:var(--upgrade-bottom) !important;
+      width:auto !important;
+      height:auto !important;
+      min-height:0 !important;
+      padding:10px !important;
+      display:grid !important;
+      grid-template-rows:86px minmax(0,1fr) !important;
+      grid-auto-rows:unset !important;
+      gap:10px !important;
+      overflow:hidden !important;
+      border:1px solid var(--upgrade-line) !important;
+      border-top:3px solid var(--upgrade-cyan) !important;
+      background:
+        linear-gradient(118deg,rgba(141,245,255,.12) 0 16%,transparent 16% 78%,rgba(255,211,106,.06) 78% 81%,transparent 81%),
+        linear-gradient(180deg,rgba(18,36,42,.92),rgba(5,10,12,.96)) !important;
+      box-shadow:0 18px 36px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px) !important;
+      z-index:30 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path-list::before{
+      content:"" !important;
+      position:absolute !important;
+      left:12px !important;
+      right:12px !important;
+      top:9px !important;
+      height:1px !important;
+      background:linear-gradient(90deg,transparent,var(--upgrade-cyan),rgba(255,211,106,.62),transparent) !important;
+      opacity:.8 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .upgrade-overview{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1.2fr) repeat(3,minmax(0,.74fr)) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .upgrade-overview-main,
+    #barrage-ui .upgrade-overview-stat{
+      min-width:0 !important;
+      min-height:0 !important;
+      padding:9px 9px 8px !important;
+      overflow:hidden !important;
+      border:1px solid var(--upgrade-line-soft) !important;
+      border-top:3px solid rgba(141,245,255,.52) !important;
+      background:
+        linear-gradient(122deg,rgba(141,245,255,.11) 0 23%,transparent 23%),
+        rgba(6,11,13,.86) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+    }
+    #barrage-ui .upgrade-overview-main{
+      display:grid !important;
+      grid-template-rows:12px minmax(0,1fr) 16px !important;
+      gap:4px !important;
+      border-top-color:var(--upgrade-cyan) !important;
+      background:
+        linear-gradient(122deg,rgba(141,245,255,.18) 0 24%,transparent 24%),
+        rgba(6,11,13,.90) !important;
+    }
+    #barrage-ui .upgrade-overview-main b,
+    #barrage-ui .upgrade-overview-stat span{
+      min-width:0 !important;
+      color:var(--upgrade-muted) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overview-main strong{
+      min-width:0 !important;
+      color:var(--upgrade-text) !important;
+      font-size:24px !important;
+      line-height:.94 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      text-shadow:0 1px 0 #000,0 0 18px rgba(141,245,255,.18) !important;
+    }
+    #barrage-ui .upgrade-overview-main .token-value{
+      color:var(--upgrade-cyan) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .upgrade-overview-stat{
+      display:grid !important;
+      grid-template-rows:minmax(0,1fr) 12px !important;
+      align-items:center !important;
+      text-align:center !important;
+      gap:5px !important;
+    }
+    #barrage-ui .upgrade-overview-stat b{
+      min-width:0 !important;
+      color:var(--upgrade-text) !important;
+      font-size:16px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-path-grid{
+      min-width:0 !important;
+      min-height:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      grid-auto-rows:clamp(116px,14.8vh,128px) !important;
+      gap:8px !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+      overscroll-behavior:contain !important;
+      padding:0 2px 2px 0 !important;
+      scroll-padding-block:8px !important;
+      scrollbar-width:none !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path-grid::-webkit-scrollbar{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path{
+      display:block !important;
+      min-width:0 !important;
+      min-height:0 !important;
+      height:auto !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path-grid .upgrade-path:last-child:nth-child(odd){
+      grid-column:1 / -1 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card{
+      position:relative !important;
+      width:100% !important;
+      height:100% !important;
+      min-height:0 !important;
+      padding:8px 8px 7px 40px !important;
+      display:grid !important;
+      grid-template-rows:9px 16px 4px minmax(18px,1fr) 24px !important;
+      align-content:stretch !important;
+      gap:3px !important;
+      color:var(--upgrade-text) !important;
+      border:1px solid var(--upgrade-line-soft) !important;
+      border-top:3px solid var(--accent,var(--upgrade-cyan)) !important;
+      border-left:1px solid var(--upgrade-line-soft) !important;
+      background:
+        linear-gradient(122deg,color-mix(in srgb,var(--accent,var(--upgrade-cyan)) 18%,transparent) 0 19%,transparent 19% 78%,rgba(255,255,255,.06) 78% 81%,transparent 81%),
+        linear-gradient(180deg,rgba(18,36,42,.92),rgba(6,11,13,.94)) !important;
+      box-shadow:0 12px 22px rgba(0,0,0,.36),0 0 18px color-mix(in srgb,var(--accent,var(--upgrade-cyan)) 10%,transparent),inset 0 1px 0 rgba(255,255,255,.06) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card::before{
+      content:"" !important;
+      position:absolute !important;
+      left:40px !important;
+      right:8px !important;
+      top:29px !important;
+      height:1px !important;
+      background:linear-gradient(90deg,color-mix(in srgb,var(--accent,var(--upgrade-cyan)) 72%,transparent),transparent) !important;
+      opacity:.62 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card-mark{
+      position:absolute !important;
+      left:8px !important;
+      top:8px !important;
+      width:24px !important;
+      height:24px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,var(--upgrade-cyan))) !important;
+      box-shadow:0 0 16px color-mix(in srgb,var(--accent,var(--upgrade-cyan)) 24%,transparent),inset 0 1px 0 rgba(255,255,255,.55) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card b{
+      min-width:0 !important;
+      color:color-mix(in srgb,var(--accent,var(--upgrade-cyan)) 72%,#f7ffff) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card span{
+      min-width:0 !important;
+      color:var(--upgrade-text) !important;
+      font-size:clamp(12px,3.5vw,15px) !important;
+      line-height:1.04 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      display:block !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-progress{
+      height:4px !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      background:rgba(238,247,255,.08) !important;
+      box-shadow:inset 0 0 8px rgba(0,0,0,.32) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-progress i{
+      display:block !important;
+      height:100% !important;
+      background:linear-gradient(90deg,var(--accent,var(--upgrade-cyan)),#f7ffff) !important;
+      box-shadow:0 0 12px color-mix(in srgb,var(--accent,var(--upgrade-cyan)) 42%,transparent) !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card small{
+      min-width:0 !important;
+      color:var(--upgrade-muted) !important;
+      font-size:8px !important;
+      line-height:1.05 !important;
+      font-weight:900 !important;
+      display:block !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card em{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button{
+      position:relative !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      width:100% !important;
+      height:24px !important;
+      min-height:24px !important;
+      transform:none !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      border:0 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,var(--upgrade-cyan))) !important;
+      box-shadow:0 0 18px color-mix(in srgb,var(--accent,var(--upgrade-cyan)) 24%,transparent),inset 0 1px 0 rgba(255,255,255,.58) !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      font-size:9.5px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button:active{
+      transform:translateY(1px) !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button:disabled{
+      color:rgba(238,247,255,.48) !important;
+      border:1px solid rgba(238,247,255,.14) !important;
+      background:rgba(238,247,255,.06) !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card.locked{
+      opacity:.62 !important;
+      filter:saturate(.72) !important;
+    }
+    #barrage-ui .upgrade-screen .upgrade-path .upgrade-card.maxed button{
+      color:#061014 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--upgrade-amber)) !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .upgrade-screen .page-header{
+        top:9px !important;
+        height:56px !important;
+        grid-template-columns:minmax(0,1fr) 50px !important;
+        gap:8px !important;
+      }
+      #barrage-ui .upgrade-screen .page-title,
+      #barrage-ui .upgrade-screen .page-back{
+        height:56px !important;
+        min-height:56px !important;
+      }
+      #barrage-ui .upgrade-screen .page-title{
+        padding:9px 12px !important;
+      }
+      #barrage-ui .upgrade-screen .page-title h1{
+        font-size:19px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path-list{
+        top:76px !important;
+        grid-template-rows:76px minmax(0,1fr) !important;
+        gap:8px !important;
+        padding:9px !important;
+      }
+      #barrage-ui .upgrade-overview{
+        gap:6px !important;
+      }
+      #barrage-ui .upgrade-overview-main,
+      #barrage-ui .upgrade-overview-stat{
+        padding:7px !important;
+      }
+      #barrage-ui .upgrade-overview-main{
+        grid-template-rows:10px minmax(0,1fr) 14px !important;
+      }
+      #barrage-ui .upgrade-overview-main strong{
+        font-size:20px !important;
+      }
+      #barrage-ui .upgrade-overview-stat b{
+        font-size:13px !important;
+      }
+      #barrage-ui .upgrade-overview-main b,
+      #barrage-ui .upgrade-overview-stat span{
+        font-size:7px !important;
+      }
+      #barrage-ui .upgrade-path-grid{
+        grid-auto-rows:112px !important;
+        gap:7px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card{
+        padding:7px 7px 6px 36px !important;
+        grid-template-rows:8px 14px 4px minmax(16px,1fr) 23px !important;
+        gap:2px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card::before{
+        left:36px !important;
+        right:7px !important;
+        top:26px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card-mark{
+        left:7px !important;
+        top:7px !important;
+        width:22px !important;
+        height:22px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card span{
+        font-size:13px !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card small{
+        font-size:7.5px !important;
+        line-height:1 !important;
+      }
+      #barrage-ui .upgrade-screen .upgrade-path .upgrade-card button{
+        height:23px !important;
+        min-height:23px !important;
+        font-size:9px !important;
+      }
+    }
+    /* Special upgrade command focus: icon-first picker, floating just below center. */
+    #barrage-ui .upgrade-overlay.special-overlay.on{
+      background:
+        radial-gradient(circle at 50% 57%,color-mix(in srgb,var(--tone-cyan,#8df5ff) 18%,transparent) 0 128px,transparent 272px),
+        linear-gradient(180deg,rgba(0,0,0,.06) 0 30%,rgba(0,0,0,.44) 58%,rgba(0,0,0,.78) 100%) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on::before{
+      top:calc(56% - 210px) !important;
+      bottom:auto !important;
+      height:2px !important;
+      background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--tone-cyan,#8df5ff) 80%,white),rgba(255,211,106,.70),transparent) !important;
+      box-shadow:0 0 18px rgba(141,245,255,.30),0 0 34px rgba(255,211,106,.16) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+      left:50% !important;
+      right:auto !important;
+      top:56% !important;
+      bottom:auto !important;
+      width:min(720px,calc(100% - clamp(24px,7vw,42px))) !important;
+      height:clamp(350px,45vh,398px) !important;
+      max-height:calc(100% - 28px) !important;
+      padding:12px !important;
+      transform:translate(-50%,-50%) !important;
+      grid-template-rows:44px 42px minmax(0,1fr) !important;
+      gap:10px !important;
+      border-top:4px solid color-mix(in srgb,var(--tone-cyan,#8df5ff) 72%,white) !important;
+      background:
+        linear-gradient(128deg,rgba(141,245,255,.14) 0 16%,transparent 16%),
+        linear-gradient(180deg,rgba(10,16,18,.96),rgba(4,5,6,.94)) !important;
+      box-shadow:0 22px 52px rgba(0,0,0,.52),0 0 36px rgba(141,245,255,.12),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-head{
+      align-items:center !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-title{
+      font-size:24px !important;
+      color:#fff !important;
+      text-shadow:0 1px 0 #000,0 0 18px rgba(141,245,255,.22) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-note{
+      color:rgba(238,247,255,.66) !important;
+      font-size:9px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots{
+      height:42px !important;
+      min-height:42px !important;
+      gap:7px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot{
+      height:42px !important;
+      min-height:42px !important;
+      background:
+        linear-gradient(130deg,color-mix(in srgb,var(--accent,#d8e2ea) 14%,transparent) 0 38%,transparent 38%),
+        rgba(8,10,12,.82) !important;
+      border-color:rgba(238,247,255,.18) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:10px !important;
+      overflow:hidden !important;
+      max-height:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+      position:relative !important;
+      isolation:isolate !important;
+      min-height:0 !important;
+      height:100% !important;
+      padding:10px 9px 9px !important;
+      grid-template-columns:1fr !important;
+      grid-template-rows:minmax(88px,1fr) 12px 34px minmax(28px,.45fr) 31px !important;
+      grid-template-areas:"icon" "meta" "title" "body" "action" !important;
+      gap:6px !important;
+      justify-items:center !important;
+      align-items:stretch !important;
+      text-align:center !important;
+      border:1px solid rgba(238,247,255,.18) !important;
+      border-top:4px solid var(--accent,var(--tone-cyan,#8df5ff)) !important;
+      background:
+        linear-gradient(180deg,color-mix(in srgb,var(--accent,var(--tone-cyan,#8df5ff)) 18%,transparent),transparent 42%),
+        linear-gradient(135deg,rgba(255,255,255,.08) 0 18%,transparent 18%),
+        rgba(6,8,10,.96) !important;
+      box-shadow:0 16px 28px rgba(0,0,0,.42),0 0 26px color-mix(in srgb,var(--accent,var(--tone-cyan,#8df5ff)) 14%,transparent),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice::before{
+      content:"" !important;
+      position:absolute !important;
+      inset:8px 8px auto !important;
+      height:96px !important;
+      z-index:-1 !important;
+      background:radial-gradient(circle,color-mix(in srgb,var(--accent,var(--tone-cyan,#8df5ff)) 34%,transparent),transparent 68%) !important;
+      opacity:.86 !important;
+      transform:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon{
+      grid-area:icon !important;
+      align-self:stretch !important;
+      justify-self:stretch !important;
+      width:100% !important;
+      height:auto !important;
+      min-height:88px !important;
+      margin:0 !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#020607 !important;
+      border:1px solid color-mix(in srgb,var(--accent,var(--tone-cyan,#8df5ff)) 58%,rgba(255,255,255,.26)) !important;
+      border-top:4px solid #f7ffff !important;
+      background:
+        linear-gradient(135deg,rgba(255,255,255,.70) 0 20%,transparent 20%),
+        radial-gradient(circle at 50% 46%,#ffffff 0 16%,color-mix(in srgb,var(--accent,var(--tone-cyan,#8df5ff)) 82%,#ecfeff) 17% 66%,color-mix(in srgb,var(--accent,var(--tone-cyan,#8df5ff)) 42%,#071014) 100%) !important;
+      box-shadow:0 0 26px color-mix(in srgb,var(--accent,var(--tone-cyan,#8df5ff)) 34%,transparent),inset 0 1px 0 rgba(255,255,255,.72),inset 0 -18px 24px rgba(0,0,0,.18) !important;
+      clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon::before{
+      left:10px !important;
+      top:10px !important;
+      width:12px !important;
+      height:12px !important;
+      border-color:rgba(2,6,7,.60) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon::after{
+      right:10px !important;
+      bottom:10px !important;
+      width:38px !important;
+      height:5px !important;
+      background:rgba(2,6,7,.56) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon{
+      width:clamp(62px,10.4vh,78px) !important;
+      height:clamp(62px,10.4vh,78px) !important;
+      color:#020607 !important;
+      filter:drop-shadow(0 2px 0 rgba(255,255,255,.42)) drop-shadow(0 8px 10px rgba(0,0,0,.26)) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon svg :is(path,line,circle,rect,polygon,polyline){
+      stroke-width:2.7 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice b{
+      grid-area:meta !important;
+      align-self:end !important;
+      justify-self:stretch !important;
+      color:color-mix(in srgb,var(--accent,var(--tone-cyan,#8df5ff)) 72%,#f7ffff) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      text-align:center !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice span{
+      grid-area:title !important;
+      justify-self:stretch !important;
+      align-self:center !important;
+      min-height:34px !important;
+      color:#fff !important;
+      font-size:clamp(14px,3.7vw,18px) !important;
+      line-height:1.08 !important;
+      text-align:center !important;
+      text-shadow:0 1px 0 #000 !important;
+      white-space:normal !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:2 !important;
+      -webkit-box-orient:vertical !important;
+      overflow:hidden !important;
+      text-overflow:clip !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice small{
+      grid-area:body !important;
+      justify-self:stretch !important;
+      align-self:start !important;
+      color:rgba(238,247,255,.70) !important;
+      font-size:9px !important;
+      line-height:1.22 !important;
+      text-align:left !important;
+      -webkit-line-clamp:2 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice strong{
+      grid-area:action !important;
+      width:100% !important;
+      height:32px !important;
+      min-height:32px !important;
+      margin:0 !important;
+      color:#020607 !important;
+      background:linear-gradient(90deg,#f7ffff,var(--accent,var(--tone-cyan,#8df5ff))) !important;
+      box-shadow:0 0 18px color-mix(in srgb,var(--accent,var(--tone-cyan,#8df5ff)) 22%,transparent),inset 0 1px 0 rgba(255,255,255,.62) !important;
+      font-size:11px !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+        top:56% !important;
+        height:clamp(326px,46vh,356px) !important;
+        padding:9px !important;
+        grid-template-rows:40px 38px minmax(0,1fr) !important;
+        gap:8px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+        gap:7px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+        padding:8px 7px !important;
+        grid-template-rows:minmax(74px,1fr) 11px 32px minmax(24px,.45fr) 28px !important;
+        gap:4px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon{
+        min-height:74px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon{
+        width:54px !important;
+        height:54px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice span{
+        font-size:13px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice small{
+        font-size:8px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice strong{
+        height:28px !important;
+        min-height:28px !important;
+      }
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
       #barrage-ui .brand-lockup,
       #barrage-ui .wallet-chip,
+      #barrage-ui .home-settings-button,
       #barrage-ui .mission-tag,
       #barrage-ui .home-decal,
       #barrage-ui .record-pill,
@@ -21475,6 +25901,10 @@ function createUi(){
       #barrage-ui .upgrade-overlay.on .level-special-slots .special-slot,
       #barrage-ui .game-hud.on :is(.game-pause,.game-score,.game-xpbar,.game-wave,.game-bottom,.game-upgrade),
       #barrage-ui .game-hud.on .game-special-slots .special-slot,
+      #barrage-ui .showroom-back,
+      #barrage-ui .commerce-bottom-dock button,
+      #barrage-ui .store-category-head,
+      #barrage-ui .garage-screen .compact-head,
       #barrage-ui.motion-switch::before,
       #barrage-ui.motion-switch::after,
       #barrage-ui .ui-tap-burst,
@@ -21566,6 +25996,7 @@ function renderUi2(){
   const equippedSummary = (gachaActive || garageActive) ? renderEquippedCosmetics() : '';
   const gachaResult = gachaActive ? renderGachaResult() : '';
   const tokenReward = deadActive ? calculateTokenReward() : 0;
+  const bossHud = bossHpInfo();
   ui.root.innerHTML = `
     <div class="screen home-screen ${state.mode==='home'?'on':''}" data-screen="home">
       <div class="ui-stage home-hub">
@@ -21599,7 +26030,7 @@ function renderUi2(){
         <div class="home-actions">
           <button class="action-tile action-start" data-action="start"><b>スタート</b><span>READY</span></button>
           <button class="action-tile" data-action="store" style="--accent:#d8e2ea"><b>ストア</b><span>機体とパーツ</span></button>
-          <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>強化</b><span>アップグレード</span></button>
+          <button class="action-tile" data-action="homeUpgrade" style="--accent:#f6f8fa"><b>アップグレード</b><span>ベース性能</span></button>
           <button class="action-tile" data-action="gacha" style="--accent:#d8e2ea"><b>ガチャ</b><span>スキンとクロマコート</span></button>
           <button class="action-tile" data-action="ranking" style="--accent:#8eefff"><b>ランキング</b><span>ハイスコア記録</span></button>
         </div>
@@ -21655,8 +26086,8 @@ function renderUi2(){
       <div class="ui-stage page-stage">
         <div class="page-header">
           <div class="page-title glass-panel">
-            <h1>ガチャ</h1>
-            <p>${tokenAmount(GACHA_COST)} / 所持 ${gachaActive ? Object.keys(state.cosmetics.owned).length : 0}/${COSMETIC_ITEMS.length}</p>
+            <h1>シグナルサーチ</h1>
+            <p>${tokenAmount(GACHA_COST)} / SKIN CHANNEL</p>
           </div>
           <button class="page-back" data-action="home">戻る</button>
         </div>
@@ -21669,8 +26100,8 @@ function renderUi2(){
       <div class="ui-stage page-stage">
         <div class="page-header">
           <div class="page-title glass-panel">
-            <h1>強化</h1>
-            <p>${tokenAmount(state.tokens)} / 下位10で上位解放</p>
+            <h1>アップグレード</h1>
+            <p>${tokenAmount(state.tokens)} / PERMANENT PROGRAM</p>
           </div>
           <button class="page-back" data-action="home">戻る</button>
         </div>
@@ -21693,7 +26124,13 @@ function renderUi2(){
         </div>
       </div>
     </div>
-    <div class="hud game-hud ${state.mode==='play'||state.mode==='levelup'||state.mode==='basicUpgrade'?'on':''} ${state.mode==='levelup'||state.mode==='basicUpgrade'?'leveling':''} ${visibleHp() / visibleHpMax() < .30 ? 'critical' : ''} ${state.basicPoints > 0 ? 'has-bp' : ''}" data-ref="hud">
+    <div class="hud game-hud ${state.mode==='play'||state.mode==='levelup'||state.mode==='basicUpgrade'?'on':''} ${state.mode==='levelup'||state.mode==='basicUpgrade'?'leveling':''} ${visibleHp() / visibleHpMax() < .30 ? 'critical' : ''} ${state.basicPoints > 0 ? 'has-bp' : ''} ${bossHud.visible ? 'has-boss' : ''}" data-ref="hud">
+      <div class="damage-vignette" data-ref="damageVignette" aria-hidden="true"></div>
+      <div class="hit-confirm" data-ref="hitConfirm" aria-hidden="true"><span data-ref="hitConfirmText">${state.hitConfirmText || 'HIT'}</span></div>
+      <div class="boss-hp ${bossHud.visible ? 'on' : ''}" data-ref="bossHpPanel" aria-hidden="${bossHud.visible ? 'false' : 'true'}">
+        <div class="boss-hp-head"><b data-ref="bossName">${bossHud.name}</b><span data-ref="bossHpText">${bossHud.hp}/${bossHud.max}</span></div>
+        <div class="boss-hp-track"><i data-ref="bossHp" style="width:${bossHud.percent}%"></i></div>
+      </div>
       <div class="game-top">
         <div class="game-top-card game-wave">
           <b>WAVE</b>
@@ -21735,7 +26172,7 @@ function renderUi2(){
         </div>
       </div>
     </div>
-    <div class="upgrade-overlay ${state.mode==='levelup'?'on':''}">
+    <div class="upgrade-overlay special-overlay ${state.mode==='levelup'?'on':''}">
       <div class="level-dialog glass-panel">
         <div class="level-head">
           <div>
@@ -21752,7 +26189,7 @@ function renderUi2(){
         </div>
       </div>
     </div>
-    <div class="upgrade-overlay ${state.mode==='basicUpgrade'?'on':''}">
+    <div class="upgrade-overlay basic-overlay ${state.mode==='basicUpgrade'?'on':''}">
       <div class="basic-dialog glass-panel">
         <div class="basic-head">
           <div>
@@ -21805,6 +26242,7 @@ function renderUi2(){
   for(const key of Object.keys(hudCache)) delete hudCache[key];
   syncUiBounds();
   uiDirty = false;
+  if(state.mode === 'store') scheduleStoreOfferScrollReset();
 }
 
 function renderRankingRows(rows){
@@ -22013,7 +26451,7 @@ function renderGarageLoadoutColumn(type){
     ? Array.from({length:count}, (_, index) => renderGarageLoadoutSlot(type, index)).join('')
     : '<div class="garage-empty-slot">搭載不可</div>';
   return `
-    <div class="garage-slot-column">
+    <div class="garage-slot-column slots-${count}">
       <b>${PART_TYPE_LABELS[type]}</b>
       ${slots}
     </div>
@@ -22386,7 +26824,7 @@ function renderHomeUpgradeCard(def, path = null){
   const cost = homeUpgradeCost(def.id);
   const canBuy = unlocked && !maxed && Number.isFinite(cost) && state.tokens >= cost;
   const tierLabel = fullDef.tier === 'base' ? `${lv}/${HOME_UPGRADE_CAP}` : `Lv.${lv}`;
-  const buttonLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : `強化 ${formatNumber(cost)}`;
+  const buttonLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : `UP ${formatNumber(cost)}`;
   const note = fullDef.tier === 'base' ? '上限あり' : `${homeUpgradeDef(fullDef.parent).name} 10/10で解放`;
   const progress = fullDef.tier === 'base'
     ? Math.min(100, lv / HOME_UPGRADE_CAP * 100)
@@ -22507,12 +26945,30 @@ function renderRunBasicNote(fullDef, parent, child){
   return `MAX\u3067 ${child?.name || '\u9752\u5929\u4e95\u5f37\u5316'} \u89e3\u653e`;
 }
 
+function cosmeticSwatchStyle(item){
+  if(item.type === 'shipCoat'){
+    const profile = COAT_VISUAL_PROFILES[item.id] || item.colors || {};
+    return `--skin-a:${colorCss(profile.hull ?? item.colors?.hull ?? 0x06111d)};--skin-b:${colorCss(profile.wing ?? item.colors?.wing ?? 0x102436)};--skin-c:${colorCss(profile.line ?? item.colors?.line ?? 0x8eefff)};`;
+  }
+  if(item.type === 'armorSkin'){
+    const profile = ARMOR_VISUAL_PROFILES[item.id] || item.colors || {};
+    return `--skin-a:${colorCss(profile.plate ?? item.colors?.plate ?? 0xf6f9fa)};--skin-b:${colorCss(profile.panel ?? item.colors?.panel ?? 0x102436)};--skin-c:${colorCss(profile.secondary ?? profile.trim ?? 0x8eefff)};`;
+  }
+  const profile = BULLET_VISUAL_PROFILES[item.id] || item.colors || {};
+  return `--skin-a:${colorCss(profile.shot ?? item.colors?.shot ?? 0x9cf5ff)};--skin-b:${colorCss(profile.glow ?? item.colors?.glow ?? 0x1ed6ff)};--skin-c:${colorCss(profile.core ?? profile.glow ?? 0xf4fbff)};`;
+}
+
+function renderCosmeticSwatch(item, className = ''){
+  return `<i class="skin-swatch ${className}" style="${cosmeticSwatchStyle(item)}" aria-hidden="true"><span></span></i>`;
+}
+
 function renderEquippedCosmetics(){
   return Object.keys(DEFAULT_COSMETICS).map(type => {
     const item = equippedCosmetic(type);
     const rarity = COSMETIC_RARITY_BY_ID[item.rarity];
     return `
       <div class="equipped-card" style="--accent:${rarity.color}">
+        ${renderCosmeticSwatch(item, 'equipped-swatch')}
         <b>${COSMETIC_TYPE_LABELS[type]}</b>
         <span>${item.name}</span>
         <small>${rarity.name}</small>
@@ -22522,40 +26978,85 @@ function renderEquippedCosmetics(){
 }
 
 function renderSupplyPanel(equippedSummary, gachaResult){
+  const ownedUnique = Object.keys(state.cosmetics.owned || {}).length;
+  const ownedTotal = Object.values(state.cosmetics.owned || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const lastItem = state.lastGacha ? cosmeticItem(state.lastGacha.id) : null;
+  const lastRarity = lastItem ? COSMETIC_RARITY_BY_ID[lastItem.rarity] : null;
+  const lastAccent = lastRarity?.color || '#8eefff';
+  const ready = state.tokens >= GACHA_COST;
   return `
-    <div class="supply-hero">
-      <div class="supply-copy">
-        <b>GACHA</b>
-        <strong>${tokenAmount(GACHA_COST, 'supply-cost')}</strong>
-        <span>${Object.keys(state.cosmetics.owned).length}/${COSMETIC_ITEMS.length} 所持</span>
+    <div class="gacha-terminal ${state.lastGacha ? 'has-result' : 'idle'}" style="--last-accent:${lastAccent}">
+      <div class="signal-banner">
+        <div class="signal-copy">
+          <b>CHROMA SIGNAL</b>
+          <strong>SKIN SEARCH</strong>
+          <span>外装データ / 弾スキン / クロマコート</span>
+        </div>
+        <div class="signal-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="signal-tape" aria-hidden="true">
+          <i></i><i></i><span></span>
+        </div>
+        <div class="signal-guarantee">
+          <b>SYNC</b>
+          <strong>${ready ? 'READY' : 'LOW'}</strong>
+          <span>${ownedUnique}/${COSMETIC_ITEMS.length} SIGNALS</span>
+        </div>
       </div>
-      <button class="gacha-roll" ${state.tokens < GACHA_COST ? 'disabled' : ''} data-action="rollGacha">抽選</button>
+      <div class="signal-channel-row">
+        <span class="active"><b>EXCLUSIVE</b><em>SKIN</em></span>
+        <span><b>STABLE</b><em>COAT</em></span>
+        <span><b>ARCHIVE</b><em>${ownedTotal} LOG</em></span>
+      </div>
+      <div class="signal-console">
+        <div class="signal-cost-card">
+          <b>MASTER TAPE</b>
+          <strong>${tokenAmount(GACHA_COST, 'supply-cost')}</strong>
+          <span>${tokenAmount(state.tokens, 'signal-wallet')} 所持</span>
+        </div>
+        <button class="gacha-roll signal-search-button" ${ready ? '' : 'disabled'} data-action="rollGacha">
+          <b>SIGNAL SEARCH</b>
+          <span>1回抽選</span>
+        </button>
+      </div>
+      <div class="signal-reveal-grid">
+        ${gachaResult}
+        <div class="supply-odds">
+          ${COSMETIC_RARITIES.map(rarity => `<span style="--accent:${rarity.color}"><b>${rarity.name}</b><em>${rarity.weight}</em></span>`).join('')}
+        </div>
+      </div>
+      <section class="supply-section equipped-section">
+        <div class="garage-section-head"><b>装備中シグナル</b><span>ACTIVE LOADOUT</span></div>
+        <div class="equipped-grid">${equippedSummary}</div>
+      </section>
+      <section class="supply-section inventory-section">
+        <div class="garage-section-head"><b>シグナルアーカイブ</b><span>INVENTORY</span></div>
+        <div class="cosmetic-list">${renderCosmeticInventory()}</div>
+      </section>
     </div>
-    ${gachaResult}
-    <div class="supply-odds">
-      ${COSMETIC_RARITIES.map(rarity => `<span style="--accent:${rarity.color}"><b>${rarity.name}</b><em>${rarity.weight}</em></span>`).join('')}
-    </div>
-    <section class="supply-section">
-      <div class="garage-section-head"><b>装備中スキン</b><span>ACTIVE</span></div>
-      <div class="equipped-grid">${equippedSummary}</div>
-    </section>
-    <section class="supply-section">
-      <div class="garage-section-head"><b>所持スキン</b><span>INVENTORY</span></div>
-      <div class="cosmetic-list">${renderCosmeticInventory()}</div>
-    </section>
   `;
 }
 
 function renderGachaResult(){
-  if(!state.lastGacha) return '<div class="gacha-result empty"><b>RESULT</b><span>未抽選</span><small>---</small></div>';
+  if(!state.lastGacha){
+    return `
+      <div class="gacha-result empty">
+        <div class="result-rank">--</div>
+        <b>NO SIGNAL</b>
+        <span>受信待機</span>
+        <small>テープを同期してシグナルを受信</small>
+      </div>
+    `;
+  }
   const item = cosmeticItem(state.lastGacha.id);
   const rarity = COSMETIC_RARITY_BY_ID[item.rarity];
-  const duplicateText = state.lastGacha.duplicate ? ` / 重複 ${tokenAmount(rarity.refund, 'token-gain', '+')}` : '';
+  const duplicateText = state.lastGacha.duplicate ? `DUPLICATE ${tokenAmount(rarity.refund, 'token-gain', '+')}` : 'NEW SIGNAL';
   return `
-    <div class="gacha-result" style="--accent:${rarity.color}">
-      <b>${rarity.name}${duplicateText}</b>
+    <div class="gacha-result rarity-${item.rarity} ${state.lastGacha.duplicate ? 'duplicate' : 'new'}" style="--accent:${rarity.color}">
+      <div class="result-rank">${rarity.name}</div>
+      ${renderCosmeticSwatch(item, 'result-swatch')}
+      <b>${duplicateText}</b>
       <span>${item.name}</span>
-      <small>${COSMETIC_TYPE_LABELS[item.type]}</small>
+      <small>${COSMETIC_TYPE_LABELS[item.type]} / ${cosmeticBuffText(item)}</small>
     </div>
   `;
 }
@@ -22566,7 +27067,8 @@ function renderCosmeticInventory(){
     const rarity = COSMETIC_RARITY_BY_ID[item.rarity];
     const equipped = state.cosmetics.equipped[item.type] === item.id;
     return `
-      <div class="cosmetic-row ${owned ? '' : 'locked'} ${equipped ? 'equipped' : ''}" style="--accent:${rarity.color}">
+      <div class="cosmetic-row rarity-${item.rarity} ${owned ? '' : 'locked'} ${equipped ? 'equipped' : ''}" style="--accent:${rarity.color}">
+        ${renderCosmeticSwatch(item)}
         <b>${rarity.name}</b>
         <span>${item.name}</span>
         <small>${COSMETIC_TYPE_LABELS[item.type]} / ${cosmeticBuffText(item)}${owned > 1 ? ` x${owned}` : ''}</small>
@@ -22609,7 +27111,8 @@ function updateHud(){
   const threshold = xpThreshold();
   const hp = visibleHp();
   const maxHp = visibleHpMax();
-  const hudClass = `hud game-hud on${hp / maxHp < .30 ? ' critical' : ''}${state.basicPoints > 0 ? ' has-bp' : ''}`;
+  const bossHud = bossHpInfo();
+  const hudClass = `hud game-hud on${hp / maxHp < .30 ? ' critical' : ''}${state.basicPoints > 0 ? ' has-bp' : ''}${bossHud.visible ? ' has-boss' : ''}`;
   if(ui.refs.hud && hudCache.hudClass !== hudClass){
     hudCache.hudClass = hudClass;
     ui.refs.hud.className = hudClass;
@@ -22623,7 +27126,88 @@ function updateHud(){
   setHudWidth('xp', Math.min(100, state.xp / threshold * 100));
   setHudText('xpLabel', state.level);
   setHudText('xpText', `${Math.floor(state.xp)}/${threshold}`);
+  updateBossHud(bossHud);
   setHudText('skillControl', `基礎強化 ${state.basicPoints}`);
+}
+
+function updateBossHud(info = bossHpInfo()){
+  const panel = ui.refs?.bossHpPanel;
+  if(!panel) return;
+  const panelClass = `boss-hp${info.visible ? ' on' : ''}`;
+  if(hudCache.bossHpClass !== panelClass){
+    hudCache.bossHpClass = panelClass;
+    panel.className = panelClass;
+    panel.setAttribute('aria-hidden', info.visible ? 'false' : 'true');
+  }
+  setHudText('bossName', info.name);
+  setHudText('bossHpText', `${info.hp}/${info.max}`);
+  setHudWidth('bossHp', info.percent);
+}
+
+function updateDamageHudEffect(){
+  const hud = ui.refs?.hud;
+  if(!hud) return;
+  const alpha = state.mode === 'play' ? clamp(state.hurtFlash || 0, 0, 1) : 0;
+  const rgb = state.hurtFlashRgb || '255,59,98';
+  const alphaText = alpha.toFixed(3);
+  if(hudCache.damageAlpha !== alphaText){
+    hudCache.damageAlpha = alphaText;
+    hud.style.setProperty('--damage-alpha', alphaText);
+  }
+  const overlay = ui.refs?.damageVignette || hud.querySelector('.damage-vignette');
+  if(overlay && hudCache.damageOverlayAlpha !== alphaText){
+    hudCache.damageOverlayAlpha = alphaText;
+    overlay.style.setProperty('opacity', alphaText, 'important');
+  }
+  if(hudCache.damageColor !== rgb){
+    hudCache.damageColor = rgb;
+    hud.style.setProperty('--damage-color', rgb);
+  }
+  const active = alpha > .02;
+  if(hudCache.damageActive !== active || hud.classList.contains('is-hit') !== active){
+    hudCache.damageActive = active;
+    hud.classList.toggle('is-hit', active);
+  }
+  const evaded = active && !!state.hurtEvade;
+  if(hudCache.damageEvade !== evaded || hud.classList.contains('is-evade') !== evaded){
+    hudCache.damageEvade = evaded;
+    hud.classList.toggle('is-evade', evaded);
+  }
+}
+
+function updateHitConfirmHud(){
+  const hud = ui.refs?.hud;
+  if(!hud) return;
+  const alpha = state.mode === 'play' ? clamp(state.hitConfirm || 0, 0, 1) : 0;
+  const marker = ui.refs?.hitConfirm || hud.querySelector('.hit-confirm');
+  const displayAlpha = alpha > .02 ? Math.min(1, .12 + alpha * 1.12) : 0;
+  const alphaText = displayAlpha.toFixed(3);
+  const rgb = state.hitConfirmRgb || '255,211,106';
+  if(hudCache.hitAlpha !== alphaText){
+    hudCache.hitAlpha = alphaText;
+    hud.style.setProperty('--hit-alpha', alphaText);
+    hud.style.setProperty('--hit-scale', (1 + (1 - alpha) * .22).toFixed(3));
+    if(marker) marker.style.setProperty('opacity', alphaText, 'important');
+  }
+  if(hudCache.hitColor !== rgb){
+    hudCache.hitColor = rgb;
+    hud.style.setProperty('--hit-color', rgb);
+  }
+  const active = displayAlpha > .02;
+  if(hudCache.hitActive !== active || hud.classList.contains('is-hit-confirm') !== active){
+    hudCache.hitActive = active;
+    hud.classList.toggle('is-hit-confirm', active);
+  }
+  const crit = active && !!state.hitConfirmCrit;
+  if(hudCache.hitCrit !== crit || hud.classList.contains('is-hit-crit') !== crit){
+    hudCache.hitCrit = crit;
+    hud.classList.toggle('is-hit-crit', crit);
+  }
+  const label = state.hitConfirmText || 'HIT';
+  if(ui.refs?.hitConfirmText && hudCache.hitConfirmText !== label){
+    hudCache.hitConfirmText = label;
+    ui.refs.hitConfirmText.textContent = label;
+  }
 }
 
 function setHudText(ref, value){
@@ -22688,7 +27272,22 @@ function renderStoreMarketOnly(){
   const target = ui.root.querySelector('[data-store-market]');
   if(!target) return false;
   target.innerHTML = renderStoreMarketV2();
+  scheduleStoreOfferScrollReset();
   return true;
+}
+
+function resetStoreOfferScroll(){
+  const offerList = ui.root?.querySelector?.('.store-screen .store-offer-list');
+  if(offerList) offerList.scrollLeft = Number.parseFloat(getComputedStyle(offerList).paddingLeft) || 0;
+}
+
+function scheduleStoreOfferScrollReset(){
+  resetStoreOfferScroll();
+  requestAnimationFrame(resetStoreOfferScroll);
+  window.setTimeout(resetStoreOfferScroll, 0);
+  window.setTimeout(resetStoreOfferScroll, 120);
+  window.setTimeout(resetStoreOfferScroll, 360);
+  window.setTimeout(resetStoreOfferScroll, 720);
 }
 
 function previewStoreShip(id){
@@ -22714,6 +27313,7 @@ function setMode(mode){
   uiDirty = true;
   renderUi2();
   syncCanvasVisibility();
+  applyRenderPixelRatioForCurrentSize(true);
   playUiModeTransition();
 }
 
@@ -22743,7 +27343,15 @@ function startRun(){
   state.roll = 0;
   state.prevRoll = 0;
   state.rollVel = 0;
+  state.shake = 0;
+  state.hurtFlash = 0;
+  state.hurtEvade = false;
+  state.playerHitFlash = 0;
+  state.hitConfirm = 0;
+  state.hitConfirmCrit = false;
+  state.hitConfirmText = 'HIT';
   player.root.position.x = 0;
+  player.root.position.z = PLAYER_Z;
   camera.position.set(0, CAMERA_BASE_Y, CAMERA_BASE_Z);
   camera.lookAt(0, CAMERA_LOOK_Y, CAMERA_LOOK_Z);
   state.spawnTimer = .45;
@@ -22752,6 +27360,7 @@ function startRun(){
   uiDirty = true;
   renderUi2();
   syncCanvasVisibility();
+  applyRenderPixelRatioForCurrentSize(true);
   playUiModeTransition();
 }
 
@@ -22763,6 +27372,7 @@ function clearRunObjects(){
   bulletsDirty = true;
   particlesDirty = true;
   bulletMesh.count = 0;
+  bulletGlowMesh.count = 0;
   particleMesh.count = 0;
   syncBulletInstances();
   syncParticleInstances();
@@ -22917,8 +27527,12 @@ function updateRenderQuality(frameMs, now){
 function renderPixelRatioForSize(w, h){
   const deviceDpr = Math.max(1, Number(window.devicePixelRatio) || 1);
   const area = Math.max(1, w * h);
-  const budgetDpr = Math.sqrt(RENDER_PIXEL_BUDGET / area);
-  return Math.max(1, Math.min(deviceDpr, RENDER_DPR_CAP, budgetDpr) * renderQualityScale);
+  const highDetail = HIGH_DETAIL_CANVAS_MODES.has(state?.mode);
+  const budget = highDetail ? RENDER_SHOWROOM_PIXEL_BUDGET : RENDER_PLAY_PIXEL_BUDGET;
+  const cap = highDetail ? RENDER_SHOWROOM_DPR_CAP : RENDER_PLAY_DPR_CAP;
+  const quality = highDetail ? 1 : renderQualityScale;
+  const budgetDpr = Math.sqrt(budget / area);
+  return Math.max(1, Math.min(deviceDpr, cap, budgetDpr) * quality);
 }
 
 function syncUiBounds(rect = canvas.getBoundingClientRect()){
@@ -23016,6 +27630,8 @@ function update(dt, t){
     updateParticles(dt);
   }
   updateHud();
+  updateDamageHudEffect();
+  updateHitConfirmHud();
 }
 
 function updatePlay(dt, t){
@@ -23029,6 +27645,11 @@ function updatePlay(dt, t){
   state.runTime += dt;
   state.score += Math.floor((24 + state.wave * 1.8) * dt);
   state.shake = Math.max(0, state.shake - dt * 6);
+  state.hurtFlash = Math.max(0, (state.hurtFlash || 0) - dt * PLAYER_HIT_FLASH_DECAY);
+  state.playerHitFlash = Math.max(0, (state.playerHitFlash || 0) - dt * PLAYER_HIT_CORE_DECAY);
+  state.hitConfirm = Math.max(0, (state.hitConfirm || 0) - dt * HIT_CONFIRM_DECAY);
+  if(state.hitConfirm <= 0) state.hitConfirmCrit = false;
+  if(state.hurtFlash <= 0) state.hurtEvade = false;
   const regen = regenPerSecond();
   if(regen > 0 && state.hp < state.maxHp){
     state.hp = Math.min(state.maxHp, state.hp + regen * dt);
@@ -23084,6 +27705,7 @@ function applySceneVisualMode(mode){
     if(homeShip.materials.wing.emissive) homeShip.materials.wing.emissiveIntensity = 1.05;
     if(homeShip.materials.panel.emissive) homeShip.materials.panel.emissiveIntensity = .90;
     if(homeShip.materials.glass.emissiveIntensity !== undefined) homeShip.materials.glass.emissiveIntensity = 1.85;
+    applyHomeShipCosmeticFinish(visualPreviewShip(), cosmeticVisualState());
   }else if(mode === 'play'){
     homeShip.root.visible = false;
     player.root.visible = true;
@@ -23098,6 +27720,7 @@ function applySceneVisualMode(mode){
     shared.materials.playerEngine.emissiveIntensity = .24;
     shared.materials.playerPlate.emissiveIntensity = .42;
     shared.materials.playerWing.emissiveIntensity = .52;
+    applyPlayerCosmeticFinish(cosmeticVisualState(), colorHexValue(currentShip().color));
   }
 }
 
@@ -23189,6 +27812,7 @@ function updateHomePreview(dt, t){
   for(const coreVisual of homeShip.animatedCoreVisuals || [homeShip.core]){
     coreVisual.scale.setScalar(corePulse);
   }
+  updateSkinKitAnimation(homeShip.skinKit, t);
 
   ambient.intensity += (1.7 - ambient.intensity) * Math.min(1, dt * 4.8);
   keyLight.intensity += (22 - keyLight.intensity) * Math.min(1, dt * 4.8);
@@ -23206,6 +27830,26 @@ function updateHomePreview(dt, t){
     pose.targetZ
   );
   camera.lookAt(cameraHomeTarget);
+}
+
+function updatePlayerDamageVisual(t){
+  const hit = clamp(state.playerHitFlash || 0, 0, 1);
+  const hitWave = hit > .01 ? 1 + Math.sin(t * 48) * hit * .018 : 1;
+  player.root.position.z = PLAYER_Z + hit * .16;
+  player.root.scale.setScalar(PLAYER_VISUAL_SCALE * (1 + hit * .052) * hitWave);
+
+  if(!player.hitShield) return;
+  const visible = hit > .012;
+  player.hitShield.visible = visible;
+  if(!visible) return;
+  const material = player.hitShield.material;
+  if(material?.color) material.color.setHex(state.hurtFlashColor || 0xff3b62);
+  if(material){
+    material.opacity = Math.min(.72, .18 + hit * .58);
+    material.needsUpdate = true;
+  }
+  player.hitShield.scale.setScalar(.72 + (1 - hit) * .96 + hit * .10);
+  player.hitShield.rotation.z = t * (state.hurtEvade ? -2.1 : 2.8);
 }
 
 function updateStage(dt, t){
@@ -23239,6 +27883,8 @@ function updateStage(dt, t){
   for(const coreVisual of player.animatedCoreVisuals || [player.core]){
     coreVisual.scale.setScalar(playerCorePulse);
   }
+  updateSkinKitAnimation(player.skinKit, t);
+  updatePlayerDamageVisual(t);
 
   if(state.shake > 0){
     camera.position.x = (Math.random() - .5) * state.shake * .08;
@@ -23330,6 +27976,7 @@ function updateEnemies(dt, t, syncVisuals = true){
     const visible = rollDistance < ENEMY_VISIBLE_ARC || (e.boss && e.z <= BOSS_SIGHT_Z);
     e.root.visible = visible;
     e.hitFlash = Math.max(0, (e.hitFlash || 0) - dt * 5.8);
+    e.hitCue = Math.max(0, (e.hitCue || 0) - dt * HIT_CONFIRM_DECAY);
     if(syncVisuals && visible){
       setPipePositionFromTrig(e.root, e.sin, e.cos, e.z, e.radial ?? (e.boss ? .68 : .88));
       const presence = enemyDepthPresence(e);
@@ -23338,6 +27985,8 @@ function updateEnemies(dt, t, syncVisuals = true){
       setEnemyFlash(e.root, e.hitFlash || 0);
       syncEnemyDetail(e);
       animateEnemyObject(e, dt, t);
+      syncBossAttackVisual(e, t, presence);
+      syncEnemyHitVisual(e, t, presence);
       e.root.rotation.x += dt * e.spinX;
       e.root.rotation.y += dt * e.spinY;
       e.root.rotation.z += dt * e.spinZ;
@@ -23379,6 +28028,7 @@ function hitEnemyWithBullets(enemy, enemyIndex){
     const impact = bulletEnemyImpact(enemy, b);
     if(!impact) continue;
     enemy.hp -= b.damage;
+    if(enemy.boss) state.nextHudAt = 0;
     enemy.recoilVel = Math.max(enemy.recoilVel || 0, enemy.boss ? 2.2 : Math.min(8.2, 4.8 + b.damage * .022));
     triggerEnemyHit(enemy, b.crit ? 0xffd36a : enemy.type.color, b.crit ? 2 : 1, {
       angle: impact.angle,
@@ -23552,6 +28202,7 @@ function defeatEnemy(enemy, enemyIndex){
   grantXp(xpGain);
   if(enemy.boss){
     state.bossAlive = false;
+    state.nextHudAt = 0;
   }
   removeEnemy(enemyIndex, true);
 }
@@ -23560,14 +28211,49 @@ function damagePlayer(amount, impact = null){
   if(amount <= 0) return;
   const evade = evasionChance();
   if(evade > 0 && Math.random() < evade){
-    state.shake = Math.max(state.shake, .24);
-    burst(impact?.angle ?? state.roll, impact?.z ?? PLAYER_Z - .3, 0x1ed6ff, 3);
+    triggerPlayerDamageEffect(impact, {evaded:true});
     return;
   }
   const taken = Math.max(1, Math.ceil(amount * defenseMultiplier() * specialDefenseMultiplier()));
   state.hp -= taken;
-  state.shake = Math.max(state.shake, .62);
-  burst(impact?.angle ?? state.roll, impact?.z ?? PLAYER_Z - .3, 0xff3b62, 4);
+  triggerPlayerDamageEffect(impact, {taken});
+}
+
+function triggerPlayerDamageEffect(impact = null, options = {}){
+  const evaded = !!options.evaded;
+  const color = evaded ? 0x1ed6ff : 0xff3b62;
+  const amount = Math.max(0, Number(options.taken) || 0);
+  state.hurtFlashColor = color;
+  state.hurtFlashRgb = colorRgbCss(color);
+  state.hurtEvade = evaded;
+  state.hurtFlash = Math.max(state.hurtFlash || 0, evaded ? .48 : .94);
+  state.playerHitFlash = Math.max(state.playerHitFlash || 0, evaded ? .36 : 1);
+  state.shake = Math.max(state.shake, evaded ? .25 : Math.min(.88, .58 + amount * .014));
+  spawnPlayerDamageBurst(impact?.angle ?? state.roll, impact?.z ?? PLAYER_Z - .26, color, evaded);
+}
+
+function spawnPlayerDamageBurst(angle, z, color, evaded = false){
+  const count = Math.max(0, Math.min(MAX_PARTICLES - particles.length, evaded ? (VISUAL_LOW_POWER ? 5 : 7) : (VISUAL_LOW_POWER ? 8 : 12)));
+  const palette = evaded ? [0x9cf5ff, 0x1ed6ff, 0xf4fbff] : [color, 0xffd36a, 0xf4fbff, 0xff7a3d];
+  for(let i=0;i<count;i++){
+    const particleAngle = normalizeAngle(angle + (Math.random() - .5) * (evaded ? .64 : .92));
+    const life = (evaded ? .32 : .42) + Math.random() * (evaded ? .22 : .34);
+    particles.push({
+      color: palette[i % palette.length],
+      angle: particleAngle,
+      sin: Math.sin(particleAngle),
+      cos: Math.cos(particleAngle),
+      z: z + (Math.random() - .5) * (evaded ? .72 : 1.05),
+      radial: PLAYER_RADIAL + .08 + Math.random() * .14,
+      va: (Math.random() - .5) * (evaded ? 1.25 : 1.85),
+      vz: (Math.random() - .5) * (evaded ? 8.5 : 12) - (evaded ? 0 : 4.5),
+      vr: (evaded ? .22 : .50) + Math.random() * (evaded ? .34 : .62),
+      life,
+      maxLife: life,
+      size: (evaded ? .90 : 1.22) + (i < 3 ? .58 : 0) + Math.random() * .24
+    });
+  }
+  particlesDirty = true;
 }
 
 function fireShot(){
@@ -23621,6 +28307,8 @@ function pushBullet(angleOffset, baseDamage, speed, life, damageMult = 1, speedM
     speed: speed * speedMult,
     damage: Math.ceil(baseDamage * damageMult * (crit ? critDamageMult() : 1)),
     crit,
+    visualSize: (crit ? 1.18 : 1) * (damageMult > 2 ? 1.25 : damageMult < .75 ? .98 : 1) * (pierce > 0 ? 1.08 : 1),
+    trailScale: (speedMult > 1.25 ? 1.20 : 1) * (lifeMult > 1.35 ? 1.18 : 1) * (angleVelocity ? .92 : 1),
     life: life * lifeMult,
     pierce,
     hitEnemies: pierce > 0 ? new Set() : null
@@ -23653,6 +28341,7 @@ function spawnEnemyPack(){
 function spawnEnemy(offset = 0){
   const type = pickEnemyType();
   const root = acquireEnemyObject(type, false);
+  tintEnemyObject(root, type.color, type.color, .72);
   const wavePower = Math.pow(1.035, state.wave - 1);
   const enemy = {
     root,
@@ -23660,7 +28349,7 @@ function spawnEnemy(offset = 0){
     boss:false,
     angle: randomPipeAngle() + offset,
     z: PIPE_Z_FAR + 24 - Math.random() * 18,
-    hp: Math.ceil(type.hp * wavePower * (1 + state.wave * .022)),
+    hp: Math.ceil(type.hp * wavePower * (1 + state.wave * .022) * ENEMY_HP_MULT),
     damage: Math.ceil(type.damage * (1 + state.wave * .018)),
     speed: 12.5 + Math.min(8.5, state.wave * .11) + Math.random() * 2.2,
     radius: type.radius * ENEMY_HITBOX_MULT,
@@ -23689,6 +28378,7 @@ function spawnBoss(){
   state.bossAlive = true;
   const type = { id:'boss', name:'トライ・レイド', color:0xff3b62, radius:1.4 };
   const root = acquireEnemyObject(type, true);
+  const bossHp = Math.ceil((220 + state.wave * 38) * Math.pow(1.035, state.wave - 10) * BOSS_HP_MULT);
   const enemy = {
     root,
     type,
@@ -23696,7 +28386,8 @@ function spawnBoss(){
     angle: state.roll + (Math.random() - .5) * .8,
     z: BOSS_SIGHT_Z,
     targetZ: BOSS_TARGET_Z,
-    hp: Math.ceil((220 + state.wave * 38) * Math.pow(1.035, state.wave - 10)),
+    hp: bossHp,
+    maxHp: bossHp,
     damage: 42 + Math.floor(state.wave * 1.2),
     radius:1.4 * ENEMY_HITBOX_MULT,
     radial:.68,
@@ -23717,31 +28408,34 @@ function spawnBoss(){
   enemyRoot.add(root);
   setPipePositionFromTrig(root, enemy.sin, enemy.cos, enemy.z, enemy.radial);
   applyEnemyVisual(enemy, 0);
+  state.nextHudAt = 0;
 }
 
 function spawnBossShard(boss){
   for(let i=-1;i<=1;i++){
     if(enemies.length >= MAX_ENEMIES) return;
-    const type = ENEMY_TYPES[1];
-    const root = acquireEnemyObject(type, false);
+    const type = {...ENEMY_TYPES[1], color:i === 0 ? 0xf4fbff : 0xffd36a};
+    const root = acquireEnemyObject(ENEMY_TYPES[1], false);
+    tintEnemyObject(root, type.color, i === 0 ? 0xff3b62 : 0xff7a3d, 1.28);
     const shard = {
       root,
       type,
       boss:false,
+      bossShard:true,
       angle: boss.angle + i * .28 + (Math.random() - .5) * .16,
-      z: boss.z + 1.5,
-      hp: Math.ceil(8 + state.wave * .6),
+      z: boss.z + 2.6,
+      hp: Math.ceil((8 + state.wave * .6) * BOSS_SHARD_HP_MULT),
       damage: Math.ceil(18 + state.wave * .4),
-      speed: 24 + Math.min(8, state.wave * .08),
-      radius:.42 * ENEMY_HITBOX_MULT,
+      speed: 22.5 + Math.min(7.2, state.wave * .075),
+      radius:.46 * ENEMY_HITBOX_MULT,
       radial:.88,
-      baseScale:1.20 * ENEMY_SIZE_BOOST,
+      baseScale:1.82 * ENEMY_SIZE_BOOST,
       phase:Math.random() * TAU,
       drift:.018,
       wobble:.58,
       spinX:.95,
       spinY:.44,
-      spinZ:1.28
+      spinZ:2.10
     };
     shard.prevAngle = shard.angle;
     shard.prevZ = shard.z;
@@ -23752,7 +28446,37 @@ function spawnBossShard(boss){
     enemyRoot.add(root);
     setPipePositionFromTrig(root, shard.sin, shard.cos, shard.z, shard.radial);
     applyEnemyVisual(shard, 0);
+    spawnBossAttackCue(shard.angle, shard.z, i);
   }
+  state.shake = Math.max(state.shake, .045);
+}
+
+function spawnBossAttackCue(angle, startZ, laneIndex = 0){
+  const count = VISUAL_LOW_POWER ? 4 : 6;
+  const available = Math.max(0, Math.min(MAX_PARTICLES - particles.length, count));
+  const cueAngle = normalizeAngle(angle);
+  const colors = [0xffd36a, 0xf4fbff, 0xff3b62, 0xff7a3d];
+  for(let i=0;i<available;i++){
+    const laneT = (i + 1) / (count + 1);
+    const life = .78 + laneT * .34;
+    const particleAngle = cueAngle + (Math.random() - .5) * .026;
+    particles.push({
+      color: colors[(i + laneIndex + 3) % colors.length],
+      angle: particleAngle,
+      sin: Math.sin(particleAngle),
+      cos: Math.cos(particleAngle),
+      z: startZ + (PLAYER_Z - startZ) * laneT,
+      radial: .84 + laneT * .105,
+      va: (Math.random() - .5) * .12,
+      vz: 3.2 + laneT * 3.0,
+      vr: .012 + laneT * .020,
+      life,
+      maxLife: life,
+      size: 2.35 - laneT * .42,
+      minScale: .18
+    });
+  }
+  particlesDirty = true;
 }
 
 function acquireEnemyObject(type, boss = false){
@@ -23766,7 +28490,10 @@ function acquireEnemyObject(type, boss = false){
   if(root.userData){
     root.userData.detailVisible = null;
     root.userData.opacity = null;
+    root.userData.attackCueActive = false;
     if(root.userData.core) root.userData.core.visible = true;
+    for(const part of root.userData.attackParts || []) part.visible = false;
+    for(const part of root.userData.hitParts || []) part.visible = false;
   }
   return root;
 }
@@ -23777,6 +28504,7 @@ function releaseEnemyObject(enemy){
   const pool = enemyPools.get(key) || [];
   enemy.root.visible = false;
   setEnemyFlash(enemy.root, 0);
+  for(const part of enemy.root.userData?.hitParts || []) part.visible = false;
   if(pool.length < ENEMY_POOL_LIMIT){
     pool.push(enemy.root);
     enemyPools.set(key, pool);
@@ -23814,8 +28542,11 @@ function decorateEnemyObject(root, type, boss, key){
       const a = TAU * i / 3 - Math.PI / 2;
       addEnemyBlade(root, a, 1.10, shared.geometries.bossBlade, shared.materials.enemyArmorLight, 1, 1.05, 1.0);
     }
+    addEnemyHitCue(root, true);
     return;
   }
+  addBossAttackCue(root);
+  addEnemyHitCue(root, false);
 }
 
 function prepareEnemyVisualMaterials(root){
@@ -23836,6 +28567,27 @@ function prepareEnemyVisualMaterials(root){
       root.userData.opacityMaterials.push(material);
     }
   });
+}
+
+function tintEnemyObject(root, color, emissive = color, emissiveIntensity = null){
+  if(!root?.userData?.opacityMaterials) return;
+  const base = new THREE.Color(colorHexValue(color));
+  const glow = new THREE.Color(colorHexValue(emissive));
+  for(const material of root.userData.opacityMaterials){
+    if(material.color){
+      material.color.copy(base);
+      material.userData.baseColor = base.clone();
+    }
+    if(material.emissive){
+      material.emissive.copy(glow);
+      material.userData.baseEmissive = glow.clone();
+      if(emissiveIntensity != null && typeof material.emissiveIntensity === 'number'){
+        material.emissiveIntensity = emissiveIntensity;
+        material.userData.baseEmissiveIntensity = emissiveIntensity;
+      }
+    }
+    material.needsUpdate = true;
+  }
 }
 
 function addEnemyBlade(root, angle, radius, geometry, material, sx = 1, sy = 1, sz = 1){
@@ -23863,22 +28615,85 @@ function removeBullet(index){
   bulletsDirty = true;
 }
 
+function addEnemyHitCue(root, boss = false){
+  const segments = SMALL_SCREEN ? 58 : 46;
+  const size = boss ? 1.62 : 1.02;
+  const halo = new THREE.Mesh(new THREE.RingGeometry(.38 * size, .66 * size, segments, 1), shared.materials.hitGlow.clone());
+  halo.visible = false;
+  halo.renderOrder = 17;
+  halo.userData.hitRole = 'halo';
+  const ring = new THREE.Line(makeRingCircleGeometry(.76 * size, segments), shared.materials.hitLine.clone());
+  ring.visible = false;
+  ring.renderOrder = 18;
+  ring.userData.hitRole = 'ring';
+  const cross = new THREE.LineSegments(shared.geometries.hitCross, shared.materials.hitLine.clone());
+  cross.visible = false;
+  cross.scale.setScalar(size);
+  cross.renderOrder = 19;
+  cross.userData.hitRole = 'cross';
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.105 * size, SMALL_SCREEN ? 12 : 8, SMALL_SCREEN ? 7 : 5), shared.materials.hitGlow.clone());
+  core.visible = false;
+  core.renderOrder = 20;
+  core.userData.hitRole = 'core';
+  root.userData.hitParts = [halo, ring, cross, core];
+  root.add(halo, ring, cross, core);
+}
+
+function addBossAttackCue(root){
+  const ring = new THREE.Line(makeRingCircleGeometry(1.22, SMALL_SCREEN ? 64 : 52), shared.materials.bossAttackLine);
+  ring.visible = false;
+  ring.renderOrder = 13;
+  ring.userData.attackRole = 'ring';
+  const outer = new THREE.Line(makeRingCircleGeometry(1.72, SMALL_SCREEN ? 64 : 52), shared.materials.bossAttackLine);
+  outer.visible = false;
+  outer.renderOrder = 13;
+  outer.userData.attackRole = 'outer';
+  const halo = new THREE.Mesh(new THREE.RingGeometry(.56, 1.54, SMALL_SCREEN ? 64 : 52, 1), shared.materials.bossAttackGlow);
+  halo.visible = false;
+  halo.renderOrder = 12;
+  halo.userData.attackRole = 'halo';
+  const band = new THREE.Mesh(new THREE.RingGeometry(1.10, 1.32, SMALL_SCREEN ? 64 : 52, 1), shared.materials.bossAttackGlow);
+  band.visible = false;
+  band.renderOrder = 14;
+  band.userData.attackRole = 'band';
+  const outerBand = new THREE.Mesh(new THREE.RingGeometry(1.58, 1.84, SMALL_SCREEN ? 64 : 52, 1), shared.materials.bossAttackGlow);
+  outerBand.visible = false;
+  outerBand.renderOrder = 14;
+  outerBand.userData.attackRole = 'outerBand';
+  const core = new THREE.Mesh(new THREE.SphereGeometry(.22, SMALL_SCREEN ? 14 : 10, SMALL_SCREEN ? 8 : 6), shared.materials.bossAttackGlow);
+  core.visible = false;
+  core.renderOrder = 14;
+  core.userData.attackRole = 'core';
+  root.userData.attackParts = [halo, band, ring, outerBand, outer, core];
+  root.add(halo, band, ring, outerBand, outer, core);
+}
+
 function triggerEnemyHit(enemy, color, amount = 1, impact = null){
   enemy.hitFlash = 1;
+  enemy.hitCue = Math.max(enemy.hitCue || 0, impact?.bullet?.crit ? 1 : .78);
+  enemy.hitCueColor = impact?.bullet?.crit ? 0xffd36a : color;
   if(impact?.bullet){
+    triggerHitConfirm(enemy, impact.bullet, color);
     spawnBulletImpact(enemy, impact.bullet, impact.angle ?? enemy.angle, impact.z ?? enemy.z, color, amount);
   }else{
     burst(enemy.angle, enemy.z, color, enemy.boss ? amount + 2 : amount);
   }
 }
 
+function triggerHitConfirm(enemy, bullet, color){
+  const crit = !!bullet?.crit;
+  const hitColor = crit ? 0xffd36a : blendHex(color, 0xf4fbff, enemy?.boss ? .44 : .32);
+  state.hitConfirm = Math.max(state.hitConfirm || 0, crit ? 1.15 : .96);
+  state.hitConfirmRgb = colorRgbCss(hitColor);
+  state.hitConfirmCrit = crit;
+  state.hitConfirmText = crit ? 'CRIT' : 'HIT';
+}
+
 function spawnBulletImpact(enemy, bullet, angle, z, color, amount = 1){
-  if(enemy.boss || bullet.crit){
-    state.shake = Math.max(state.shake, enemy.boss ? .10 : .055);
-  }
-  const baseCount = enemy.boss ? 9 : 5;
-  const critBonus = bullet.crit ? 3 : 0;
-  const pierceBonus = bullet.pierce > 0 ? 2 : 0;
+  state.shake = Math.max(state.shake, enemy.boss ? .12 : bullet.crit ? .072 : .026);
+  const baseCount = enemy.boss ? 12 : 7;
+  const critBonus = bullet.crit ? 4 : 0;
+  const pierceBonus = bullet.pierce > 0 ? 3 : 0;
   const count = Math.max(0, Math.min(
     MAX_PARTICLES - particles.length,
     baseCount + critBonus + pierceBonus + Math.max(0, amount - 1)
@@ -23891,9 +28706,9 @@ function spawnBulletImpact(enemy, bullet, angle, z, color, amount = 1){
   ];
   const travelSign = Math.sign((bullet.z ?? z) - (bullet.prevZ ?? z)) || -1;
   for(let i=0;i<count;i++){
-    const strong = i < 2;
-    const life = strong ? .28 + Math.random() * .14 : .38 + Math.random() * .24;
-    const spray = (Math.random() - .5) * (enemy.boss ? .62 : .44);
+    const strong = i < (bullet.crit ? 4 : 3);
+    const life = strong ? .32 + Math.random() * .16 : .42 + Math.random() * .28;
+    const spray = (Math.random() - .5) * (enemy.boss ? .78 : .54);
     const particleAngle = angle + spray;
     particles.push({
       color: palette[i % palette.length],
@@ -23902,44 +28717,112 @@ function spawnBulletImpact(enemy, bullet, angle, z, color, amount = 1){
       cos: Math.cos(particleAngle),
       z: z + (Math.random() - .5) * (enemy.boss ? .92 : .56),
       radial: .74 + Math.random() * .18,
-      va: spray * (strong ? 3.8 : 2.4) + (Math.random() - .5) * .35,
-      vz: travelSign * (strong ? -10 - Math.random() * 8 : -4 - Math.random() * 6),
-      vr: (Math.random() - .5) * .22,
+      va: spray * (strong ? 4.8 : 2.8) + (Math.random() - .5) * .42,
+      vz: travelSign * (strong ? -13 - Math.random() * 10 : -5 - Math.random() * 7),
+      vr: (Math.random() - .5) * .30,
       life,
       maxLife: life,
-      size: (strong ? 1.9 : 1.05) + Math.random() * (enemy.boss ? .9 : .5)
+      size: (strong ? 2.35 : 1.18) + Math.random() * (enemy.boss ? 1.05 : .62),
+      minScale: strong ? .18 : .08
     });
   }
   particlesDirty = true;
 }
 
 function spawnXpBurst(enemy, amount){
-  const count = Math.max(0, Math.min(
-    MAX_PARTICLES - particles.length,
-    enemy.boss
-      ? (VISUAL_LOW_POWER ? 8 : 12)
-      : Math.max(VISUAL_LOW_POWER ? 3 : 4, Math.min(VISUAL_LOW_POWER ? 5 : 7, Math.ceil(amount / 8)))
-  ));
+  const available = Math.max(0, MAX_PARTICLES - particles.length);
+  if(!available) return;
+  const desired = enemy.boss
+    ? (VISUAL_LOW_POWER ? 10 : 15)
+    : Math.max(VISUAL_LOW_POWER ? 4 : 6, Math.min(VISUAL_LOW_POWER ? 7 : 10, Math.ceil(amount / 5)));
+  const count = Math.min(available, desired);
+  const originAngle = normalizeAngle(enemy.angle ?? 0);
+  const originZ = enemy.z ?? PIPE_Z_FAR;
+  const originRadial = clamp(enemy.radial ?? .82, .58, .98);
+  const targetZ = PLAYER_Z - .10;
+  const targetRadial = PLAYER_RADIAL + .02;
+  const palette = [0x36f39b, 0xc8ffd4, 0xf4fbff, 0xffd36a, 0x9dffd9];
   for(let i=0;i<count;i++){
-    const life = .82 + Math.random() * .34;
-    const angle = enemy.angle + (Math.random() - .5) * .24;
+    const strong = i < (enemy.boss ? 4 : 2);
+    const spread = (Math.random() - .5) * (enemy.boss ? .48 : .34);
+    const angle = normalizeAngle(originAngle + spread);
+    const life = (strong ? .96 : .78) + Math.random() * (strong ? .30 : .24) + i * .006;
     particles.push({
-      color: i % 3 === 0 ? 0xd8e2ea : 0x36f39b,
+      color: palette[(i + (strong ? 2 : 0)) % palette.length],
       angle,
       sin: Math.sin(angle),
       cos: Math.cos(angle),
-      z: enemy.z + (Math.random() - .5) * .72,
-      radial: .76 + Math.random() * .16,
+      z: originZ + (Math.random() - .5) * (enemy.boss ? 1.08 : .72),
+      radial: clamp(originRadial + (Math.random() - .5) * (enemy.boss ? .18 : .12), .58, .98),
       va: (Math.random() - .5) * .28,
       vz: 0,
       vr: 0,
       life,
       maxLife: life,
-      size: enemy.boss ? 1.7 : 1.18,
+      size: (enemy.boss ? 1.92 : 1.34) + (strong ? .38 : 0) + Math.random() * .28,
+      minScale: strong ? .18 : .12,
       seekPlayer: true,
-      seekRate: 3.4 + Math.random() * 1.8,
-      targetRadial: PLAYER_RADIAL,
-      targetZ: PLAYER_Z - .12
+      seekRate: (strong ? 6.2 : 5.1) + Math.random() * (enemy.boss ? 2.4 : 1.8),
+      targetRadial,
+      targetZ: targetZ + (Math.random() - .5) * .12,
+      xpOrb: true,
+      collectFlash: strong || i % (VISUAL_LOW_POWER ? 3 : 2) === 0
+    });
+  }
+
+  const trailCount = Math.min(
+    Math.max(0, MAX_PARTICLES - particles.length),
+    enemy.boss ? (VISUAL_LOW_POWER ? 4 : 6) : (VISUAL_LOW_POWER ? 2 : 4)
+  );
+  for(let i=0;i<trailCount;i++){
+    const laneT = (i + 1) / (trailCount + 1);
+    const angle = normalizeAngle(originAngle + signedAngleDelta(state.roll, originAngle) * laneT + (Math.random() - .5) * .045);
+    const life = .36 + laneT * .24 + Math.random() * .10;
+    particles.push({
+      color: i % 2 === 0 ? 0xf4fbff : 0xc8ffd4,
+      angle,
+      sin: Math.sin(angle),
+      cos: Math.cos(angle),
+      z: originZ + (targetZ - originZ) * laneT,
+      radial: originRadial + (targetRadial - originRadial) * laneT,
+      va: (Math.random() - .5) * .16,
+      vz: 0,
+      vr: 0,
+      life,
+      maxLife: life,
+      size: .86 + laneT * .46 + (enemy.boss ? .22 : 0),
+      minScale: .10,
+      seekPlayer: true,
+      seekRate: 7.2 + laneT * 2.2 + Math.random() * 1.2,
+      targetRadial,
+      targetZ,
+      xpOrb: true,
+      collectFlash: i === trailCount - 1
+    });
+  }
+  particlesDirty = true;
+}
+
+function spawnXpCollectFlash(source){
+  const count = Math.max(0, Math.min(MAX_PARTICLES - particles.length, VISUAL_LOW_POWER ? 1 : 2));
+  if(!count) return;
+  for(let i=0;i<count;i++){
+    const angle = normalizeAngle(state.roll + (Math.random() - .5) * .18);
+    const life = .22 + Math.random() * .14;
+    particles.push({
+      color: i === 0 ? 0xf4fbff : 0x36f39b,
+      angle,
+      sin: Math.sin(angle),
+      cos: Math.cos(angle),
+      z: PLAYER_Z - .12 + (Math.random() - .5) * .32,
+      radial: PLAYER_RADIAL + .03 + Math.random() * .05,
+      va: (Math.random() - .5) * .68,
+      vz: (Math.random() - .5) * 5.4 - 1.4,
+      vr: .18 + Math.random() * .24,
+      life,
+      maxLife: life,
+      size: Math.min(1.75, (source?.size || 1) * .72 + .44),
+      minScale: .08
     });
   }
   particlesDirty = true;
@@ -23985,6 +28868,17 @@ function updateParticles(dt){
     }
     p.sin = Math.sin(p.angle);
     p.cos = Math.cos(p.angle);
+    if(p.xpOrb){
+      const angleGap = Math.abs(signedAngleDelta(p.angle, state.roll));
+      const zGap = Math.abs(p.z - (p.targetZ ?? PLAYER_Z));
+      const radialGap = Math.abs(p.radial - (p.targetRadial ?? PLAYER_RADIAL));
+      if(angleGap < .055 && zGap < .72 && radialGap < .10){
+        const flashSource = p.collectFlash ? {...p} : null;
+        removeParticle(i);
+        if(flashSource) spawnXpCollectFlash(flashSource);
+        continue;
+      }
+    }
     if(p.life <= 0){
       removeParticle(i);
     }
@@ -24043,6 +28937,7 @@ function syncBulletInstances(){
   if(!bulletsDirty) return;
   const count = Math.min(bullets.length, MAX_BULLETS);
   bulletMesh.count = count;
+  bulletGlowMesh.count = count;
   if(count === 0){
     bulletsDirty = false;
     return;
@@ -24050,14 +28945,27 @@ function syncBulletInstances(){
   for(let i=0;i<count;i++){
     const b = bullets[i];
     const renderRadial = b.visualRadial ?? b.muzzleRadial ?? b.radial;
-    bulletMatrix.makeTranslation(
+    const distanceBoost = 1 + clamp((PLAYER_Z - b.z) / 132, 0, 1) * .58;
+    const coreScale = (b.visualSize || 1) * distanceBoost;
+    const trailScale = b.trailScale || 1;
+    bulletMatrix.makeScale(.92 * coreScale, .92 * coreScale, 1.62 * coreScale * trailScale);
+    bulletMatrix.setPosition(
       b.sin * PIPE_RADIUS * renderRadial,
       -b.cos * PIPE_RADIUS * renderRadial,
       b.z
     );
     bulletMesh.setMatrixAt(i, bulletMatrix);
+    const glowScale = coreScale * (b.crit ? 1.34 : 1);
+    bulletGlowMatrix.makeScale(2.35 * glowScale, 2.35 * glowScale, 4.9 * glowScale * trailScale);
+    bulletGlowMatrix.setPosition(
+      b.sin * PIPE_RADIUS * renderRadial,
+      -b.cos * PIPE_RADIUS * renderRadial,
+      b.z + .10
+    );
+    bulletGlowMesh.setMatrixAt(i, bulletGlowMatrix);
   }
   bulletMesh.instanceMatrix.needsUpdate = true;
+  bulletGlowMesh.instanceMatrix.needsUpdate = true;
   bulletsDirty = false;
 }
 
@@ -24071,7 +28979,8 @@ function syncParticleInstances(){
   }
   for(let i=0;i<count;i++){
     const p = particles[i];
-    const scale = Math.max(.05, (p.size || 1) * p.life / p.maxLife);
+    const lifeRatio = p.maxLife > 0 ? clamp(p.life / p.maxLife, 0, 1) : 0;
+    const scale = Math.max(p.minScale ?? .05, (p.size || 1) * lifeRatio);
     particleMatrix.makeScale(scale, scale, scale);
     particleMatrix.setPosition(
       p.sin * PIPE_RADIUS * p.radial,
@@ -24167,6 +29076,114 @@ function animateEnemyObject(enemy, dt, t){
   }
 }
 
+function syncEnemyHitVisual(enemy, t, presence){
+  const parts = enemy.root.userData?.hitParts || [];
+  if(!parts.length) return;
+  const hit = clamp(enemy.hitCue || 0, 0, 1);
+  if(hit <= .015){
+    for(const part of parts) part.visible = false;
+    return;
+  }
+  const fade = smoothstep(hit);
+  const expand = 1 + (1 - hit) * (enemy.boss ? 1.10 : .78);
+  const color = enemy.hitCueColor || 0xf4fbff;
+  for(const part of parts){
+    const role = part.userData?.hitRole || '';
+    part.visible = true;
+    const material = part.material;
+    const roleColor = role === 'core' ? 0xf4fbff : role === 'cross' ? 0xfff0b8 : color;
+    if(material?.color) material.color.setHex(roleColor);
+    if(material?.opacity !== undefined){
+      const base = material.userData?.baseOpacity ?? (role === 'halo' ? .70 : .95);
+      const roleBoost = role === 'cross' ? 1.20 : role === 'core' ? 1.35 : 1;
+      material.opacity = Math.min(1, base * roleBoost * (.18 + fade * 1.10) * Math.max(.56, presence));
+      material.needsUpdate = true;
+    }
+  }
+  const halo = parts.find(part => part.userData?.hitRole === 'halo');
+  const ring = parts.find(part => part.userData?.hitRole === 'ring');
+  const cross = parts.find(part => part.userData?.hitRole === 'cross');
+  const core = parts.find(part => part.userData?.hitRole === 'core');
+  if(halo){
+    halo.scale.setScalar((enemy.boss ? 1.38 : 1.06) * expand);
+    halo.rotation.z = -t * 4.8 + enemy.phase;
+  }
+  if(ring){
+    ring.scale.setScalar((enemy.boss ? 1.22 : 1.0) * (1 + (1 - hit) * .55));
+    ring.rotation.z = t * 6.2 + enemy.phase;
+  }
+  if(cross){
+    cross.scale.setScalar((enemy.boss ? 1.48 : 1.08) * (1 + (1 - hit) * .24));
+    cross.rotation.z = -t * 7.4 + enemy.phase;
+  }
+  if(core){
+    core.scale.setScalar((enemy.boss ? 1.8 : 1.25) * (.78 + hit * .42));
+  }
+}
+
+function syncBossAttackVisual(enemy, t, presence){
+  const data = enemy.root.userData;
+  const parts = data?.attackParts || [];
+  if(!parts.length) return;
+  if(!enemy.bossShard){
+    if(data.attackCueActive){
+      for(const part of parts) part.visible = false;
+      data.attackCueActive = false;
+    }
+    return;
+  }
+  data.attackCueActive = true;
+  const danger = clamp((enemy.z - (BOSS_TARGET_Z - 6)) / Math.max(1, PLAYER_Z - (BOSS_TARGET_Z - 6)), 0, 1);
+  const pulse = .5 + .5 * Math.sin(t * 18 + enemy.phase);
+  for(const part of parts){
+    part.visible = true;
+    const role = part.userData?.attackRole || '';
+    let colorMix = pulse > .54 ? 0xff3b62 : 0xffd36a;
+    if(role === 'halo') colorMix = pulse > .44 ? 0xff3b62 : 0xff7a3d;
+    else if(role === 'band') colorMix = pulse > .52 ? 0xfff0b8 : 0xffd36a;
+    else if(role === 'outerBand') colorMix = pulse > .46 ? 0xff7a3d : 0xff3b62;
+    else if(role === 'core') colorMix = pulse > .38 ? 0xf4fbff : 0xfff0b8;
+    else if(role === 'outer') colorMix = pulse > .48 ? 0xffd36a : 0xff3b62;
+    const material = part.material;
+    if(material?.color) material.color.setHex(colorMix);
+    if(material?.opacity !== undefined){
+      const base = material.userData?.baseOpacity ?? 1;
+      const roleBoost = role === 'core' ? 1.34 : role === 'band' || role === 'outerBand' ? 1.18 : 1.0;
+      material.opacity = Math.min(1, base * roleBoost * Math.max(.60, presence) * (.86 + danger * .52 + pulse * .34));
+      material.needsUpdate = true;
+    }
+  }
+  const halo = parts.find(part => part.userData?.attackRole === 'halo') || parts[0];
+  const band = parts.find(part => part.userData?.attackRole === 'band');
+  const ring = parts.find(part => part.userData?.attackRole === 'ring') || parts[1];
+  const outerBand = parts.find(part => part.userData?.attackRole === 'outerBand');
+  const outer = parts.find(part => part.userData?.attackRole === 'outer') || parts[2];
+  const core = parts.find(part => part.userData?.attackRole === 'core') || parts[3];
+  if(halo){
+    halo.scale.setScalar(1.28 + danger * .58 + pulse * .14);
+    halo.rotation.z = -t * 3.4 + enemy.phase;
+  }
+  if(band){
+    band.scale.setScalar(1.30 + danger * .70 + pulse * .16);
+    band.rotation.z = t * 4.7 - enemy.phase;
+  }
+  if(ring){
+    ring.scale.setScalar(1.36 + danger * .74 + pulse * .20);
+    ring.rotation.z = t * 5.0 + enemy.phase;
+  }
+  if(outerBand){
+    outerBand.scale.setScalar(1.06 + danger * .46 + pulse * .13);
+    outerBand.rotation.z = -t * 2.5 + enemy.phase * .5;
+  }
+  if(outer){
+    outer.scale.setScalar(1.05 + danger * .42 + pulse * .12);
+    outer.rotation.z = -t * 2.2 - enemy.phase;
+  }
+  if(core){
+    core.scale.setScalar(1.4 + danger * .65 + pulse * .32);
+  }
+}
+
 function angleDistance(a, b){
   let d = normalizeAngle(a - b);
   if(d > Math.PI) d -= TAU;
@@ -24204,6 +29221,11 @@ function tokenAmount(value, className = '', prefix = '', ref = ''){
 function colorCss(color){
   if(typeof color === 'string') return color;
   return `#${Number(color).toString(16).padStart(6, '0')}`;
+}
+
+function colorRgbCss(color){
+  const value = colorHexValue(color);
+  return `${(value >> 16) & 255},${(value >> 8) & 255},${value & 255}`;
 }
 
 function render(t){
