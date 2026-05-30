@@ -174,8 +174,9 @@ const ENEMY_TYPES = [
   { id:'orb', name:'オーブ', sides:0, unlock:1, color:0x1ed6ff, hp:10, damage:14, radius:.42 },
   { id:'tri', name:'トライ', sides:3, unlock:11, color:0xff3b62, hp:17, damage:21, radius:.52 },
   { id:'quad', name:'クアッド', sides:4, unlock:30, color:0xffd36a, hp:32, damage:32, radius:.56 },
-  { id:'penta', name:'ペンタ', sides:5, unlock:60, color:0x36f39b, hp:56, damage:48, radius:.60 },
-  { id:'hexa', name:'ヘクサ', sides:6, unlock:100, color:0xb8a7ff, hp:90, damage:68, radius:.64 }
+  { id:'octa', name:'オクタ', sides:8, unlock:60, color:0x36f39b, hp:56, damage:48, radius:.60 },
+  { id:'dodeca', name:'ドデカ', sides:12, unlock:88, color:0xb8a7ff, hp:76, damage:58, radius:.64 },
+  { id:'icosa', name:'イコサ', sides:20, unlock:118, color:0xff7a3d, hp:104, damage:74, radius:.68 }
 ];
 
 const BASIC_STAT_DEFS = [
@@ -2191,13 +2192,15 @@ function makeSharedAssets(){
     orb: new THREE.IcosahedronGeometry(.55, 1),
     tri: new THREE.ConeGeometry(.62, .92, 3, 1),
     quad: new THREE.BoxGeometry(.86, .86, .86),
-    penta: new THREE.CylinderGeometry(.58, .58, .72, 5, 1),
-    hexa: new THREE.CylinderGeometry(.60, .60, .78, 6, 1),
+    octa: new THREE.OctahedronGeometry(.68, 0),
+    dodeca: new THREE.DodecahedronGeometry(.68, 0),
+    icosa: new THREE.IcosahedronGeometry(.68, 0),
     boss: new THREE.ConeGeometry(1.45, 2.15, 3, 2)
   };
+  const enemyGeometryIds = new Set([...ENEMY_TYPES.map(type => type.id), 'boss']);
   const edgeGeometries = new Map();
   for(const [id, geometry] of Object.entries(geometries)){
-    if(['orb','tri','quad','penta','hexa','boss'].includes(id)){
+    if(enemyGeometryIds.has(id)){
       edgeGeometries.set(id, new THREE.EdgesGeometry(geometry, 18));
     }
   }
