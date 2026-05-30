@@ -101,7 +101,14 @@ const BOSS_CHASE_TURN_SPEED = .42;
 const BOSS_CHASE_CATCHUP_TURN = .48;
 const BOSS_CHASE_LEAD_TIME = .22;
 const BOSS_CHASE_WOBBLE = .025;
-const PLAYER_HURTBOX_LANE_RADIAL = .72;
+const PLAYER_COLLISION_RADIAL = PLAYER_RADIAL + .02;
+const PLAYER_BODY_COLLISION_RADIUS = .50;
+const PLAYER_BODY_COLLISION_Z = .96;
+const ENEMY_APPROACH_RADIAL_START = 24;
+const ENEMY_APPROACH_RADIAL_END = 5.2;
+const BOSS_SHARD_APPROACH_RADIAL_START = 34;
+const BOSS_SHARD_APPROACH_RADIAL_END = 6.4;
+const PLAYER_HURTBOX_LANE_RADIAL = PLAYER_COLLISION_RADIAL;
 const PLAYER_HURTBOX_LATERAL = .48;
 const PLAYER_HURTBOX_Z_BASE = .34;
 const ENEMY_HP_MULT = 1.34;
@@ -833,6 +840,32 @@ function applyUiPreviewMode(){
       triggerHitConfirm(target, previewBullet, target.type.color);
       revealEnemyHpBar(target, 999, 379);
       spawnBulletImpact(target, previewBullet, target.angle, target.z, target.type.color, 2);
+    }
+  }else if(preview === 'collision'){
+    state.mode = 'play';
+    applySceneVisualMode('play');
+    state.wave = Math.max(state.wave, 3);
+    state.maxHp = safeHpMax();
+    state.hp = state.maxHp;
+    state.roll = 0;
+    state.prevRoll = 0;
+    state.spawnTimer = 999;
+    clearRunObjects();
+    spawnEnemy(0);
+    const target = enemies[0];
+    if(target){
+      target.z = PLAYER_Z - 3.8;
+      target.prevZ = PLAYER_Z - 6.8;
+      target.angle = 0;
+      target.prevAngle = 0;
+      target.sin = Math.sin(target.angle);
+      target.cos = Math.cos(target.angle);
+      target.baseRadial = .88;
+      target.prevRadial = enemyApproachRadial(target, target.prevZ);
+      target.radial = enemyApproachRadial(target, target.z);
+      target.spawnZ = PIPE_Z_FAR + 24;
+      setPipePositionFromTrig(target.root, target.sin, target.cos, target.z, target.radial);
+      applyEnemyVisual(target, 0);
     }
   }else if(preview === 'shotgun'){
     state.mode = 'play';
@@ -32252,6 +32285,7 @@ function updateEnemies(dt, t, syncVisuals = true){
     const e = enemies[i];
     e.prevZ = e.z;
     e.prevAngle = e.angle;
+    e.prevRadial = e.radial ?? e.baseRadial ?? (e.boss ? .68 : .88);
     const approachDistance = angleDistance(e.angle, state.roll);
     const stasisSlow = stasisLevel > 0 && e.z > -72 && approachDistance < (.30 + stasisLevel * .038)
       ? Math.max(.62, 1 - stasisLevel * .075)
@@ -32275,6 +32309,7 @@ function updateEnemies(dt, t, syncVisuals = true){
     }
     e.sin = Math.sin(e.angle);
     e.cos = Math.cos(e.angle);
+    e.radial = enemyApproachRadial(e, e.z);
     const rollDistance = angleDistance(e.angle, state.roll);
     const visible = rollDistance < ENEMY_RENDER_ARC || (e.boss && e.z <= BOSS_SIGHT_Z);
     e.root.visible = visible;
@@ -32375,15 +32410,16 @@ function hitEnemyWithBullets(enemy, enemyIndex){
 function bulletEnemyImpact(enemy, bullet){
   const bulletStartZ = bullet.prevZ ?? bullet.z;
   const bulletStartAngle = bullet.prevAngle ?? bullet.angle;
-  const bulletStartRadial = bulletCollisionPathRadial(bullet.prevRadial ?? bullet.radial);
+  const bulletStartRadial = bulletCollisionPathRadial(bullet.prevVisualRadial ?? bullet.prevRadial ?? bullet.radial);
   const enemyStartZ = enemy.prevZ ?? enemy.z;
   const enemyStartAngle = enemy.prevAngle ?? enemy.angle;
-  const enemyRadial = enemy.radial ?? (enemy.boss ? .68 : .88);
+  const enemyStartRadial = enemy.prevRadial ?? enemy.radial ?? (enemy.boss ? .68 : .88);
+  const enemyEndRadial = enemy.radial ?? enemyStartRadial;
   const hitRadius = enemyCollisionRadius(enemy) + bulletCollisionRadius(bullet);
   const coarseZPad = enemy.boss ? Math.max(hitRadius + .24, enemyHitZWindow(enemy) + .42) : hitRadius + .24;
   if(!zRangesOverlap(bulletStartZ, bullet.z, enemyStartZ, enemy.z, coarseZPad)) return null;
 
-  const bulletEndRadial = bulletCollisionPathRadial(bullet.radial);
+  const bulletEndRadial = bulletCollisionPathRadial(bullet.visualRadial ?? bullet.radial);
   const bx0 = pipeX(bulletStartAngle, bulletStartRadial);
   const by0 = pipeY(bulletStartAngle, bulletStartRadial);
   const bz0 = bulletStartZ;
@@ -32391,11 +32427,11 @@ function bulletEnemyImpact(enemy, bullet){
   const by1 = pipeY(bullet.angle, bulletEndRadial);
   const bz1 = bullet.z;
 
-  const ex0 = pipeX(enemyStartAngle, enemyRadial);
-  const ey0 = pipeY(enemyStartAngle, enemyRadial);
+  const ex0 = pipeX(enemyStartAngle, enemyStartRadial);
+  const ey0 = pipeY(enemyStartAngle, enemyStartRadial);
   const ez0 = enemyStartZ;
-  const ex1 = pipeX(enemy.angle, enemyRadial);
-  const ey1 = pipeY(enemy.angle, enemyRadial);
+  const ex1 = pipeX(enemy.angle, enemyEndRadial);
+  const ey1 = pipeY(enemy.angle, enemyEndRadial);
   const ez1 = enemy.z;
   const impact = sweptPointImpact(
     bx0, by0, bz0, bx1, by1, bz1,
@@ -32439,10 +32475,11 @@ function bossBulletLaneImpact(enemy, bullet){
   const angleAllowance = enemyHitAngleWindow(enemy) + bulletCollisionRadius(bullet) / PIPE_RADIUS * .75;
   if(angleGap > angleAllowance) return null;
 
-  const bulletStartRadial = bulletCollisionPathRadial(bullet.prevRadial ?? bullet.radial);
-  const bulletEndRadial = bulletCollisionPathRadial(bullet.radial);
+  const bulletStartRadial = bulletCollisionPathRadial(bullet.prevVisualRadial ?? bullet.prevRadial ?? bullet.radial);
+  const bulletEndRadial = bulletCollisionPathRadial(bullet.visualRadial ?? bullet.radial);
   const bulletRadial = bulletStartRadial + (bulletEndRadial - bulletStartRadial) * t;
-  const enemyRadial = enemy.radial ?? .68;
+  const enemyStartRadial = enemy.prevRadial ?? enemy.radial ?? .68;
+  const enemyRadial = enemyStartRadial + ((enemy.radial ?? enemyStartRadial) - enemyStartRadial) * t;
   const radialGap = Math.abs(bulletRadial - enemyRadial) * PIPE_RADIUS;
   const radialAllowance = enemyCollisionRadius(enemy) + bulletCollisionRadius(bullet) + 2.15;
   if(radialGap > radialAllowance) return null;
@@ -32452,6 +32489,18 @@ function bossBulletLaneImpact(enemy, bullet){
     z: (bulletZ + enemyZ) * .5,
     t
   };
+}
+
+function pipePoint(angle, radial, z){
+  return {
+    x: pipeX(angle, radial),
+    y: pipeY(angle, radial),
+    z
+  };
+}
+
+function playerCollisionPoint(angle, z = PLAYER_Z){
+  return pipePoint(angle, PLAYER_COLLISION_RADIAL, z);
 }
 
 function interpolateAngle(from, to, t){
@@ -32503,6 +32552,32 @@ function sweptPointImpact(ax0, ay0, az0, ax1, ay1, az1, bx0, by0, bz0, bx1, by1,
   };
 }
 
+function sweptEllipsoidImpact(ax0, ay0, az0, ax1, ay1, az1, bx0, by0, bz0, bx1, by1, bz1, radiusXY, radiusZ){
+  const xy = Math.max(.001, radiusXY);
+  const zz = Math.max(.001, radiusZ);
+  const rx0 = (ax0 - bx0) / xy;
+  const ry0 = (ay0 - by0) / xy;
+  const rz0 = (az0 - bz0) / zz;
+  const rdx = ((ax1 - ax0) - (bx1 - bx0)) / xy;
+  const rdy = ((ay1 - ay0) - (by1 - by0)) / xy;
+  const rdz = ((az1 - az0) - (bz1 - bz0)) / zz;
+  const denom = rdx * rdx + rdy * rdy + rdz * rdz;
+  const t = denom > HIT_SWEEP_EPSILON ? clamp(-(rx0 * rdx + ry0 * rdy + rz0 * rdz) / denom, 0, 1) : 0;
+  const rx = rx0 + rdx * t;
+  const ry = ry0 + rdy * t;
+  const rz = rz0 + rdz * t;
+  if(rx * rx + ry * ry + rz * rz > 1) return null;
+  return {
+    t,
+    ax: ax0 + (ax1 - ax0) * t,
+    ay: ay0 + (ay1 - ay0) * t,
+    az: az0 + (az1 - az0) * t,
+    bx: bx0 + (bx1 - bx0) * t,
+    by: by0 + (by1 - by0) * t,
+    bz: bz0 + (bz1 - bz0) * t
+  };
+}
+
 function enemyCollisionRadius(enemy){
   const radius = Math.max(.2, enemy.radius || 1);
   return enemy.boss ? radius * 1.06 : radius * .94;
@@ -32513,7 +32588,7 @@ function bulletCollisionRadius(bullet){
 }
 
 function bulletCollisionPathRadial(radial){
-  return Math.max(BULLET_TARGET_RADIAL, Number(radial) || BULLET_TARGET_RADIAL);
+  return clamp(Number(radial) || BULLET_TARGET_RADIAL, PLAYER_RADIAL, BULLET_TARGET_RADIAL);
 }
 
 function enemyHitZWindow(enemy){
@@ -32534,27 +32609,28 @@ function enemyPlayerImpact(enemy){
 
   const enemyStartAngle = enemy.prevAngle ?? enemy.angle;
   const enemyEndAngle = enemy.angle;
+  const enemyStartRadial = enemy.prevRadial ?? enemy.radial ?? enemyApproachRadial(enemy, startZ);
+  const enemyEndRadial = enemy.radial ?? enemyStartRadial;
   const playerStartAngle = normalizeAngle(state.prevRoll ?? state.roll);
   const playerEndAngle = normalizeAngle(state.roll);
-  const laneScale = PIPE_RADIUS * enemyPlayerLaneRadial(enemy);
-  const startX = signedAngleDelta(enemyStartAngle, playerStartAngle) * laneScale;
-  const endX = signedAngleDelta(enemyEndAngle, playerEndAngle) * laneScale;
-  const startZGap = startZ - PLAYER_Z;
-  const endZGap = enemy.z - PLAYER_Z;
-  const dx = endX - startX;
-  const dz = endZGap - startZGap;
-  const nx0 = startX / hitBox.x;
-  const nz0 = startZGap / hitBox.z;
-  const ndx = dx / hitBox.x;
-  const ndz = dz / hitBox.z;
-  const denom = ndx * ndx + ndz * ndz;
-  const t = denom > HIT_SWEEP_EPSILON ? clamp(-(nx0 * ndx + nz0 * ndz) / denom, 0, 1) : 0;
-  const laneX = startX + dx * t;
-  const zGap = startZGap + dz * t;
-  if((laneX / hitBox.x) ** 2 + (zGap / hitBox.z) ** 2 > 1) return null;
 
-  const enemyAngle = interpolateAngle(enemyStartAngle, enemyEndAngle, t);
-  return {angle: enemyAngle, z: PLAYER_Z + zGap, t};
+  const enemyStart = pipePoint(enemyStartAngle, enemyStartRadial, startZ);
+  const enemyEnd = pipePoint(enemyEndAngle, enemyEndRadial, enemy.z);
+  const playerStart = playerCollisionPoint(playerStartAngle);
+  const playerEnd = playerCollisionPoint(playerEndAngle);
+  const impact = sweptEllipsoidImpact(
+    enemyStart.x, enemyStart.y, enemyStart.z,
+    enemyEnd.x, enemyEnd.y, enemyEnd.z,
+    playerStart.x, playerStart.y, playerStart.z,
+    playerEnd.x, playerEnd.y, playerEnd.z,
+    hitBox.x,
+    hitBox.z
+  );
+  if(!impact) return null;
+
+  const hitX = (impact.ax + impact.bx) * .5;
+  const hitY = (impact.ay + impact.by) * .5;
+  return {angle: pipeAngleFromXY(hitX, hitY), z: (impact.az + impact.bz) * .5, t: impact.t};
 }
 
 function enemyPlayerZWindow(enemy){
@@ -32567,29 +32643,42 @@ function enemyPlayerAngleWindow(enemy){
 }
 
 function enemyPlayerLaneRadial(enemy){
-  if(enemy?.boss) return .68;
-  return PLAYER_HURTBOX_LANE_RADIAL;
+  if(enemy?.boss) return enemy.radial ?? .68;
+  return Math.max(PLAYER_COLLISION_RADIAL, enemy.radial ?? PLAYER_HURTBOX_LANE_RADIAL);
 }
 
 function enemyPlayerHitBox(enemy){
   if(enemy?.boss){
-    return {x:2.70, z:1.12};
+    return {x:2.40, z:1.08};
   }
   if(enemy?.bossShard){
+    const enemyRadius = Math.max(.2, enemyCollisionRadius(enemy));
     return {
-      x: Math.min(1.28, Math.max(.94, BOSS_ATTACK_PLAYER_ANGLE_WINDOW * PIPE_RADIUS * PLAYER_HURTBOX_LANE_RADIAL * .58)),
-      z: BOSS_ATTACK_PLAYER_Z_WINDOW * .82
+      x: PLAYER_BODY_COLLISION_RADIUS + enemyRadius * .72,
+      z: PLAYER_BODY_COLLISION_Z * .78 + enemyRadius * .18
     };
   }
   const enemyRadius = Math.max(.2, enemyCollisionRadius(enemy));
   return {
-    x: PLAYER_HURTBOX_LATERAL + clamp(enemyRadius * .28, .26, .48),
-    z: clamp(PLAYER_HURTBOX_Z_BASE + enemyRadius * .10, .42, .58)
+    x: PLAYER_BODY_COLLISION_RADIUS + enemyRadius * .52,
+    z: PLAYER_BODY_COLLISION_Z + enemyRadius * .20
   };
 }
 
 function enemyPassedPlayer(enemy){
   return enemy.z > PLAYER_Z + enemyPlayerZWindow(enemy);
+}
+
+function enemyApproachRadial(enemy, z = enemy?.z ?? PLAYER_Z){
+  const base = enemy?.baseRadial ?? enemy?.radial ?? (enemy?.boss ? .68 : .88);
+  if(enemy?.boss) return base;
+  const startDistance = enemy?.bossShard ? BOSS_SHARD_APPROACH_RADIAL_START : ENEMY_APPROACH_RADIAL_START;
+  const endDistance = enemy?.bossShard ? BOSS_SHARD_APPROACH_RADIAL_END : ENEMY_APPROACH_RADIAL_END;
+  const startZ = PLAYER_Z - startDistance;
+  const endZ = PLAYER_Z - endDistance;
+  const t = smoothstep(clamp((z - startZ) / Math.max(.001, endZ - startZ), 0, 1));
+  const target = PLAYER_COLLISION_RADIAL + (enemy?.bossShard ? .05 : .03);
+  return base + (target - base) * t;
 }
 
 function defeatEnemy(enemy, enemyIndex){
@@ -32882,6 +32971,7 @@ function spawnEnemy(offset = 0){
     speed: 12.5 + Math.min(8.5, state.wave * .11) + Math.random() * 2.2,
     radius: type.radius * ENEMY_HITBOX_MULT,
     radial:.88,
+    baseRadial:.88,
     baseScale: ENEMY_SIZE_MULT,
     phase: Math.random() * TAU,
     drift: .026 + Math.random() * .030,
@@ -32892,6 +32982,7 @@ function spawnEnemy(offset = 0){
   };
   enemy.prevAngle = enemy.angle;
   enemy.prevZ = enemy.z;
+  enemy.prevRadial = enemy.radial;
   enemy.sin = Math.sin(enemy.angle);
   enemy.cos = Math.cos(enemy.angle);
   enemy.spawnZ = enemy.z;
@@ -32920,6 +33011,7 @@ function spawnBoss(){
     damage: 42 + Math.floor(state.wave * 1.2),
     radius:1.4 * ENEMY_HITBOX_MULT,
     radial:.68,
+    baseRadial:.68,
     baseScale:BOSS_VISUAL_SCALE,
     speed:0,
     phase:Math.random() * TAU,
@@ -32931,6 +33023,7 @@ function spawnBoss(){
   };
   enemy.prevAngle = enemy.angle;
   enemy.prevZ = enemy.z;
+  enemy.prevRadial = enemy.radial;
   enemy.sin = Math.sin(enemy.angle);
   enemy.cos = Math.cos(enemy.angle);
   enemy.spawnZ = enemy.z;
@@ -32962,6 +33055,7 @@ function spawnBossShard(boss){
       speed: 19.5 + Math.min(5.4, state.wave * .055),
       radius:BOSS_ATTACK_HIT_RADIUS * .92,
       radial:.88,
+      baseRadial:.88,
       baseScale:BOSS_ATTACK_VISUAL_SCALE * 1.62,
       attackLane:i,
       phase:Math.random() * TAU,
@@ -32973,6 +33067,7 @@ function spawnBossShard(boss){
     };
     shard.prevAngle = shard.angle;
     shard.prevZ = shard.z;
+    shard.prevRadial = shard.radial;
     shard.sin = Math.sin(shard.angle);
     shard.cos = Math.cos(shard.angle);
     shard.spawnZ = shard.z;
