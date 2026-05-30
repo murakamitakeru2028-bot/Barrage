@@ -127,6 +127,11 @@ const BOSS_SHARD_APPROACH_RADIAL_END = 6.4;
 const PLAYER_HURTBOX_LANE_RADIAL = PLAYER_COLLISION_RADIAL;
 const PLAYER_HURTBOX_LATERAL = PLAYER_SHIP_COLLISION_LATERAL;
 const PLAYER_HURTBOX_Z_BASE = PLAYER_SHIP_COLLISION_Z;
+const PLAYER_WING_VISUAL_INNER_X = .08 * PLAYER_VISUAL_SCALE;
+const PLAYER_WING_VISUAL_OUTER_X = 1.15 * PLAYER_VISUAL_SCALE;
+const PLAYER_WING_VISUAL_Z_MIN = -.52 * PLAYER_VISUAL_SCALE;
+const PLAYER_WING_VISUAL_Z_MAX = .86 * PLAYER_VISUAL_SCALE;
+const PLAYER_WING_COLLISION_PAD = .12;
 const ENEMY_HP_MULT = 1.34;
 const ENEMY_WAVE_HP_EXP = 1.043;
 const ENEMY_WAVE_HP_LINEAR = .028;
@@ -317,6 +322,13 @@ const SHIP_DEFS = [
   { id:'dr_hive', name:'DR-07 ハイヴ', role:'ドローン管制機', cost:1650, color:'#9dffd9', partPower:1.06, slots:{barrel:1, innerFrame:1, drone:3}, mult:{hp:1.02, defense:1.02, damage:.98, fireRate:1, speed:.98, xp:1.04, token:1.03} },
   { id:'om_ultima', name:'OM-99 アルティマ', role:'全拡張スロット機', cost:4200, color:'#ffd36a', partPower:1.00, slots:{barrel:3, innerFrame:3, drone:3}, mult:{hp:1.08, defense:1.06, damage:1.06, fireRate:1.05, speed:1.02, xp:1.02, token:1.02} }
 ];
+const SHIP_VISUAL_PROFILES = {
+  nu_arc: {body:[1,1,1], wing:[1,1,1], nose:[1,1,1], aura:1},
+  vx_razor: {body:[.72,1,1.20], wing:[1.34,1,.78], nose:[.74,1,1.34], aura:.90},
+  bg_bulwark: {body:[1.22,1,.96], wing:[1.22,1,1.12], nose:[1.08,1,.92], aura:1.04},
+  dr_hive: {body:[.92,1,.92], wing:[.88,1,.78], nose:[.88,1,.92], aura:.96},
+  om_ultima: {body:[1.04,1,1.12], wing:[1.48,1,1.08], nose:[.88,1,1.24], aura:1.12}
+};
 const SHIP_BY_ID = Object.fromEntries(SHIP_DEFS.map(ship => [ship.id, ship]));
 const DEFAULT_SHIP_ID = SHIP_DEFS[0].id;
 const PART_TYPES = ['barrel', 'innerFrame', 'drone'];
@@ -867,7 +879,7 @@ function applyUiPreviewMode(){
       revealEnemyHpBar(target, 999, 379);
       spawnBulletImpact(target, previewBullet, target.angle, target.z, target.type.color, 2);
     }
-  }else if(preview === 'collision'){
+  }else if(preview === 'collision' || preview === 'wing-collision'){
     state.mode = 'play';
     applySceneVisualMode('play');
     state.wave = Math.max(state.wave, 3);
@@ -880,10 +892,11 @@ function applyUiPreviewMode(){
     spawnEnemy(0);
     const target = enemies[0];
     if(target){
+      const wingPreviewAngle = preview === 'wing-collision' ? .15 : 0;
       target.z = PLAYER_Z - 3.8;
       target.prevZ = PLAYER_Z - 6.8;
-      target.angle = 0;
-      target.prevAngle = 0;
+      target.angle = wingPreviewAngle;
+      target.prevAngle = wingPreviewAngle;
       target.sin = Math.sin(target.angle);
       target.cos = Math.cos(target.angle);
       target.baseRadial = ENEMY_RAISED_RADIAL;
@@ -1404,6 +1417,10 @@ function specialTargetDamageMultiplier(enemy){
 
 function currentShip(){
   return SHIP_BY_ID[state.garage?.selectedShipId] || SHIP_BY_ID[DEFAULT_SHIP_ID];
+}
+
+function currentShipVisualProfile(){
+  return SHIP_VISUAL_PROFILES[currentShip().id] || SHIP_VISUAL_PROFILES[DEFAULT_SHIP_ID];
 }
 
 function storePreviewShip(){
@@ -2105,14 +2122,7 @@ function syncPlayerShipVariant(){
   if(!player?.variantVisuals) return;
   const ship = currentShip();
   const accent = colorHexValue(ship.color);
-  const profiles = {
-    nu_arc: {body:[1,1,1], wing:[1,1,1], nose:[1,1,1], aura:1},
-    vx_razor: {body:[.72,1,1.20], wing:[1.34,1,.78], nose:[.74,1,1.34], aura:.90},
-    bg_bulwark: {body:[1.22,1,.96], wing:[1.22,1,1.12], nose:[1.08,1,.92], aura:1.04},
-    dr_hive: {body:[.92,1,.92], wing:[.88,1,.78], nose:[.88,1,.92], aura:.96},
-    om_ultima: {body:[1.04,1,1.12], wing:[1.48,1,1.08], nose:[.88,1,1.24], aura:1.12}
-  };
-  const profile = profiles[ship.id] || profiles[DEFAULT_SHIP_ID];
+  const profile = currentShipVisualProfile();
   applyColor(shared.materials.playerCore, accent);
   applyColor(shared.materials.playerGlass, accent);
   applyLineColor(shared.materials.playerEdge, accent);
@@ -33041,8 +33051,13 @@ function pipePoint(angle, radial, z){
   };
 }
 
-function playerCollisionPoint(angle, z = PLAYER_Z){
-  return pipePoint(angle, PLAYER_COLLISION_RADIAL, z);
+function playerCollisionPoint(angle, z = PLAYER_Z, lateral = 0){
+  const point = pipePoint(angle, PLAYER_COLLISION_RADIAL, z);
+  if(lateral){
+    point.x += Math.cos(angle) * lateral;
+    point.y += Math.sin(angle) * lateral;
+  }
+  return point;
 }
 
 function interpolateAngle(from, to, t){
@@ -33144,7 +33159,8 @@ function enemyHitAngleWindow(enemy){
 }
 
 function enemyPlayerImpact(enemy){
-  const hitBox = enemyPlayerHitBox(enemy);
+  const regions = enemyPlayerHitRegions(enemy);
+  const hitBox = combinePlayerHitRegions(regions);
   const zPad = hitBox.z;
   const startZ = enemy.prevZ ?? enemy.z;
   if(!zRangesOverlap(startZ, enemy.z, PLAYER_Z, PLAYER_Z, zPad)) return null;
@@ -33158,16 +33174,20 @@ function enemyPlayerImpact(enemy){
 
   const enemyStart = pipePoint(enemyStartAngle, enemyStartRadial, startZ);
   const enemyEnd = pipePoint(enemyEndAngle, enemyEndRadial, enemy.z);
-  const playerStart = playerCollisionPoint(playerStartAngle);
-  const playerEnd = playerCollisionPoint(playerEndAngle);
-  const impact = sweptEllipsoidImpact(
-    enemyStart.x, enemyStart.y, enemyStart.z,
-    enemyEnd.x, enemyEnd.y, enemyEnd.z,
-    playerStart.x, playerStart.y, playerStart.z,
-    playerEnd.x, playerEnd.y, playerEnd.z,
-    hitBox.x,
-    hitBox.z
-  );
+  let impact = null;
+  for(const region of regions){
+    const playerStart = playerCollisionPoint(playerStartAngle, PLAYER_Z + region.zOffset, region.lateral);
+    const playerEnd = playerCollisionPoint(playerEndAngle, PLAYER_Z + region.zOffset, region.lateral);
+    const regionImpact = sweptEllipsoidImpact(
+      enemyStart.x, enemyStart.y, enemyStart.z,
+      enemyEnd.x, enemyEnd.y, enemyEnd.z,
+      playerStart.x, playerStart.y, playerStart.z,
+      playerEnd.x, playerEnd.y, playerEnd.z,
+      region.x,
+      region.z
+    );
+    if(regionImpact && (!impact || regionImpact.t < impact.t)) impact = regionImpact;
+  }
   if(!impact) return null;
 
   const hitX = (impact.ax + impact.bx) * .5;
@@ -33190,21 +33210,48 @@ function enemyPlayerLaneRadial(enemy){
 }
 
 function enemyPlayerHitBox(enemy){
+  return combinePlayerHitRegions(enemyPlayerHitRegions(enemy));
+}
+
+function combinePlayerHitRegions(regions){
+  return regions.reduce((box, region) => ({
+    x: Math.max(box.x, Math.abs(region.lateral) + region.x),
+    z: Math.max(box.z, Math.abs(region.zOffset) + region.z)
+  }), {x:0, z:0});
+}
+
+function enemyPlayerHitRegions(enemy){
   if(enemy?.boss){
-    return {x:2.40, z:1.08};
+    return [{lateral:0, zOffset:0, x:2.40, z:1.08}];
   }
+  const profile = currentShipVisualProfile();
+  const wingProfile = profile?.wing || [1, 1, 1];
+  const wingXScale = Math.max(.82, Number(wingProfile[0]) || 1);
+  const wingZScale = Math.max(.72, Number(wingProfile[2]) || 1);
+  const wingInner = PLAYER_WING_VISUAL_INNER_X;
+  const wingOuter = PLAYER_WING_VISUAL_OUTER_X * wingXScale;
+  const wingZMin = PLAYER_WING_VISUAL_Z_MIN * wingZScale;
+  const wingZMax = PLAYER_WING_VISUAL_Z_MAX * wingZScale;
+  const wingCenterX = (wingInner + wingOuter) * .5;
+  const wingCenterZ = (wingZMin + wingZMax) * .5;
   if(enemy?.bossShard){
     const enemyRadius = Math.max(.2, enemyCollisionRadius(enemy));
-    return {
-      x: PLAYER_SHIP_COLLISION_LATERAL * .92 + enemyRadius * .78,
-      z: PLAYER_SHIP_COLLISION_Z * .82 + enemyRadius * .62
-    };
+    const wingHalfX = Math.max(.48, (wingOuter - wingInner) * .5) + enemyRadius * .62 + PLAYER_WING_COLLISION_PAD;
+    const wingHalfZ = Math.max(.58, (wingZMax - wingZMin) * .5) + enemyRadius * .46 + PLAYER_WING_COLLISION_PAD;
+    return [
+      {lateral:0, zOffset:0, x: PLAYER_SHIP_COLLISION_LATERAL * .92 + enemyRadius * .78, z: PLAYER_SHIP_COLLISION_Z * .82 + enemyRadius * .62},
+      {lateral: wingCenterX, zOffset: wingCenterZ, x: wingHalfX, z: wingHalfZ},
+      {lateral:-wingCenterX, zOffset: wingCenterZ, x: wingHalfX, z: wingHalfZ}
+    ];
   }
   const enemyRadius = Math.max(.2, enemyCollisionRadius(enemy));
-  return {
-    x: PLAYER_SHIP_COLLISION_LATERAL + enemyRadius * .82,
-    z: PLAYER_SHIP_COLLISION_Z + enemyRadius * .86
-  };
+  const wingHalfX = Math.max(.48, (wingOuter - wingInner) * .5) + enemyRadius * .74 + PLAYER_WING_COLLISION_PAD;
+  const wingHalfZ = Math.max(.58, (wingZMax - wingZMin) * .5) + enemyRadius * .58 + PLAYER_WING_COLLISION_PAD;
+  return [
+    {lateral:0, zOffset:0, x: PLAYER_SHIP_COLLISION_LATERAL + enemyRadius * .82, z: PLAYER_SHIP_COLLISION_Z + enemyRadius * .86},
+    {lateral: wingCenterX, zOffset: wingCenterZ, x: wingHalfX, z: wingHalfZ},
+    {lateral:-wingCenterX, zOffset: wingCenterZ, x: wingHalfX, z: wingHalfZ}
+  ];
 }
 
 function enemyPassedPlayer(enemy){
