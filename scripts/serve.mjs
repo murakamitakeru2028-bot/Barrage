@@ -18,7 +18,7 @@ const types = {
   ".webp": "image/webp"
 };
 
-createServer(async (req, res) => {
+const server = createServer(async (req, res) => {
   const url = new URL(req.url || "/", "http://127.0.0.1");
   const pathname = decodeURIComponent(url.pathname);
   const filePath = resolve(join(root, pathname === "/" ? "index.html" : pathname));
@@ -42,3 +42,10 @@ createServer(async (req, res) => {
 }).listen(port, "127.0.0.1", () => {
   console.log(`Serving ${root} at http://127.0.0.1:${port}`);
 });
+
+function shutdown() {
+  server.close(() => process.exit(0));
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

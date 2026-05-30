@@ -13,8 +13,8 @@ const PIPE_RING_SPACING = 9.6;
 const PIPE_RING_LOOP = 304;
 const PLAYER_Z = -2.15;
 const PLAYER_RADIAL = .36;
-const ENEMY_RAISED_RADIAL = PLAYER_RADIAL + .004;
-const BOSS_SHARD_RAISED_RADIAL = PLAYER_RADIAL + .018;
+const ENEMY_RAISED_RADIAL = PLAYER_RADIAL;
+const BOSS_SHARD_RAISED_RADIAL = PLAYER_RADIAL;
 const PLAYER_Y = -PIPE_RADIUS * PLAYER_RADIAL;
 const PLAYER_VISUAL_SCALE = 1.38;
 const CAMERA_BASE_Y = 2.65;
@@ -120,10 +120,6 @@ const BOSS_CHASE_OFFSET_CHANGE_MAX = 3.7;
 const PLAYER_COLLISION_RADIAL = PLAYER_RADIAL;
 const PLAYER_SHIP_COLLISION_LATERAL = 2.05;
 const PLAYER_SHIP_COLLISION_Z = 3.05;
-const ENEMY_APPROACH_RADIAL_START = 24;
-const ENEMY_APPROACH_RADIAL_END = 5.2;
-const BOSS_SHARD_APPROACH_RADIAL_START = 34;
-const BOSS_SHARD_APPROACH_RADIAL_END = 6.4;
 const PLAYER_HURTBOX_LANE_RADIAL = PLAYER_COLLISION_RADIAL;
 const PLAYER_HURTBOX_LATERAL = PLAYER_SHIP_COLLISION_LATERAL;
 const PLAYER_HURTBOX_Z_BASE = PLAYER_SHIP_COLLISION_Z;
@@ -900,7 +896,6 @@ function applyUiPreviewMode(){
       target.sin = Math.sin(target.angle);
       target.cos = Math.cos(target.angle);
       target.baseRadial = ENEMY_RAISED_RADIAL;
-      target.spawnRaised = true;
       target.prevRadial = enemyApproachRadial(target, target.prevZ);
       target.radial = enemyApproachRadial(target, target.z);
       target.spawnZ = PIPE_Z_FAR + 24;
@@ -34314,6 +34309,7 @@ function bulletCollisionRadius(bullet){
 }
 
 function bulletCollisionPathRadial(radial){
+  if(BULLET_TARGET_RADIAL === PLAYER_RADIAL) return PLAYER_RADIAL;
   return clamp(Number(radial) || BULLET_TARGET_RADIAL, PLAYER_RADIAL, BULLET_TARGET_RADIAL);
 }
 
@@ -34427,17 +34423,9 @@ function enemyPassedPlayer(enemy){
   return enemy.z > PLAYER_Z + enemyPlayerZWindow(enemy);
 }
 
-function enemyApproachRadial(enemy, z = enemy?.z ?? PLAYER_Z){
-  const base = enemy?.baseRadial ?? enemy?.radial ?? (enemy?.boss ? .68 : ENEMY_RAISED_RADIAL);
-  if(enemy?.boss) return base;
-  const target = enemy?.bossShard ? BOSS_SHARD_RAISED_RADIAL : ENEMY_RAISED_RADIAL;
-  if(enemy?.spawnRaised || Math.abs(base - target) < .001) return target;
-  const startDistance = enemy?.bossShard ? BOSS_SHARD_APPROACH_RADIAL_START : ENEMY_APPROACH_RADIAL_START;
-  const endDistance = enemy?.bossShard ? BOSS_SHARD_APPROACH_RADIAL_END : ENEMY_APPROACH_RADIAL_END;
-  const startZ = PLAYER_Z - startDistance;
-  const endZ = PLAYER_Z - endDistance;
-  const t = smoothstep(clamp((z - startZ) / Math.max(.001, endZ - startZ), 0, 1));
-  return base + (target - base) * t;
+function enemyApproachRadial(enemy){
+  if(enemy?.boss) return enemy.baseRadial ?? enemy.radial ?? .68;
+  return enemy?.bossShard ? BOSS_SHARD_RAISED_RADIAL : ENEMY_RAISED_RADIAL;
 }
 
 function defeatEnemy(enemy, enemyIndex){
@@ -34731,7 +34719,6 @@ function spawnEnemy(offset = 0){
     radius: type.radius * ENEMY_HITBOX_MULT,
     radial:ENEMY_RAISED_RADIAL,
     baseRadial:ENEMY_RAISED_RADIAL,
-    spawnRaised:true,
     baseScale: ENEMY_SIZE_MULT,
     phase: Math.random() * TAU,
     drift: .026 + Math.random() * .030,
@@ -34828,7 +34815,6 @@ function spawnBossShard(boss){
       radius:BOSS_ATTACK_HIT_RADIUS * .92,
       radial:BOSS_SHARD_RAISED_RADIAL,
       baseRadial:BOSS_SHARD_RAISED_RADIAL,
-      spawnRaised:true,
       baseScale:BOSS_ATTACK_VISUAL_SCALE * 1.62,
       attackLane:lane,
       phase:Math.random() * TAU,

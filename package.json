@@ -6,12 +6,18 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "npm run build && node scripts/serve.mjs dist",
-    "preview": "node scripts/serve.mjs dist"
+    "preview": "node scripts/serve.mjs dist",
+    "pretest:visual": "npm run build",
+    "test:visual": "playwright test --project=mobile-chromium",
+    "pretest:visual:update": "npm run build",
+    "test:visual:update": "playwright test --project=mobile-chromium --update-snapshots",
+    "playwright:install": "playwright install chromium"
   },
   "dependencies": {
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "terser": "^5.48.0"
   }
 }
