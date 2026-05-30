@@ -196,8 +196,20 @@ function makeIcon(size) {
   ]);
 }
 
-await writeFile(join(distDir, "icon-192.png"), makeIcon(192));
-await writeFile(join(distDir, "icon-512.png"), makeIcon(512));
+const icon192Path = join(projectRoot, "public", "icon-192.png");
+const icon512Path = join(projectRoot, "public", "icon-512.png");
+const iconFiles = await Promise.allSettled([
+  readFile(icon192Path),
+  readFile(icon512Path)
+]);
+
+if (iconFiles.every(result => result.status === "fulfilled")) {
+  await writeFile(join(distDir, "icon-192.png"), iconFiles[0].value);
+  await writeFile(join(distDir, "icon-512.png"), iconFiles[1].value);
+} else {
+  await writeFile(join(distDir, "icon-192.png"), makeIcon(192));
+  await writeFile(join(distDir, "icon-512.png"), makeIcon(512));
+}
 
 async function listFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
