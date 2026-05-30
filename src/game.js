@@ -30112,6 +30112,101 @@ function createUi(){
         padding:4px !important;
       }
     }
+    /* Skill select: keep the combat header readable and pin acquired skill slots below it. */
+    #barrage-ui .game-hud.leveling{
+      opacity:1 !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-hud.leveling .game-top{
+      opacity:1 !important;
+      filter:none !important;
+      transform:translateX(-50%) !important;
+      pointer-events:none !important;
+      z-index:120 !important;
+    }
+    #barrage-ui .game-hud.leveling .game-pause:not(.page-back):not(.showroom-back){
+      pointer-events:auto !important;
+    }
+    #barrage-ui .game-hud.leveling :is(.game-score,.game-xpbar){
+      opacity:1 !important;
+      visibility:visible !important;
+      filter:none !important;
+      transform:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on{
+      background:linear-gradient(180deg,transparent 0 42%,rgba(0,0,0,.12) 56%,rgba(0,0,0,.58) 100%) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+      left:max(9px,calc((100vw - 720px) / 2)) !important;
+      right:max(9px,calc((100vw - 720px) / 2)) !important;
+      width:auto !important;
+      transform:none !important;
+      grid-template-rows:30px 30px minmax(0,1fr) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-head{
+      grid-row:1 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots{
+      position:fixed !important;
+      left:50% !important;
+      right:auto !important;
+      top:calc(58px + env(safe-area-inset-top)) !important;
+      bottom:auto !important;
+      width:min(430px,calc(100vw - 18px)) !important;
+      max-width:430px !important;
+      height:36px !important;
+      min-height:36px !important;
+      max-height:36px !important;
+      display:grid !important;
+      grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+      gap:6px !important;
+      padding:0 !important;
+      transform:translateX(-50%) !important;
+      z-index:125 !important;
+      pointer-events:none !important;
+      overflow:visible !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot{
+      height:36px !important;
+      min-height:36px !important;
+      max-height:36px !important;
+      padding:4px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot b{
+      width:24px !important;
+      height:24px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot b .special-icon{
+      width:18px !important;
+      height:18px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot small{
+      min-width:10px !important;
+      height:10px !important;
+      font-size:6px !important;
+      line-height:10px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row{
+      grid-row:2 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+      grid-row:3 !important;
+    }
+    @media (max-width: 520px){
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots{
+        top:calc(56px + env(safe-area-inset-top)) !important;
+        width:calc(100vw - 18px) !important;
+        height:34px !important;
+        min-height:34px !important;
+        max-height:34px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot{
+        height:34px !important;
+        min-height:34px !important;
+        max-height:34px !important;
+      }
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
       #barrage-ui .brand-lockup,
@@ -30414,6 +30509,9 @@ function renderUi2(){
       </div>
     </div>
     <div class="upgrade-overlay special-overlay ${state.mode==='levelup'?'on':''}">
+      <div class="level-special-slots" aria-label="取得中のスキル">
+        ${renderSpecialSlotsHud()}
+      </div>
       <div class="level-dialog glass-panel">
         <div class="level-head">
           <div>
@@ -30421,9 +30519,6 @@ function renderUi2(){
             <div class="level-note">武装・弾種・コア・防御・領域から選択</div>
           </div>
           <div class="level-sp">SP ${state.skillPoints}</div>
-        </div>
-        <div class="level-special-slots" aria-label="取得中のスキル">
-          ${renderSpecialSlotsHud()}
         </div>
         <div class="skill-reroll-row">
           <button data-action="rerollSkill" ${canSpendTokens(skillRerollCost()) ? '' : 'disabled'}>
