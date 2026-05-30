@@ -114,16 +114,16 @@ const BOSS_CHASE_OFFSET_RESPONSE = .24;
 const BOSS_CHASE_OFFSET_WOBBLE = .032;
 const BOSS_CHASE_OFFSET_CHANGE_MIN = 1.8;
 const BOSS_CHASE_OFFSET_CHANGE_MAX = 3.7;
-const PLAYER_COLLISION_RADIAL = PLAYER_RADIAL + .02;
-const PLAYER_BODY_COLLISION_RADIUS = .50;
-const PLAYER_BODY_COLLISION_Z = .96;
+const PLAYER_COLLISION_RADIAL = PLAYER_RADIAL;
+const PLAYER_SHIP_COLLISION_LATERAL = 2.05;
+const PLAYER_SHIP_COLLISION_Z = 3.05;
 const ENEMY_APPROACH_RADIAL_START = 24;
 const ENEMY_APPROACH_RADIAL_END = 5.2;
 const BOSS_SHARD_APPROACH_RADIAL_START = 34;
 const BOSS_SHARD_APPROACH_RADIAL_END = 6.4;
 const PLAYER_HURTBOX_LANE_RADIAL = PLAYER_COLLISION_RADIAL;
-const PLAYER_HURTBOX_LATERAL = .48;
-const PLAYER_HURTBOX_Z_BASE = .34;
+const PLAYER_HURTBOX_LATERAL = PLAYER_SHIP_COLLISION_LATERAL;
+const PLAYER_HURTBOX_Z_BASE = PLAYER_SHIP_COLLISION_Z;
 const ENEMY_HP_MULT = 1.34;
 const ENEMY_WAVE_HP_EXP = 1.043;
 const ENEMY_WAVE_HP_LINEAR = .028;
@@ -32737,14 +32737,14 @@ function enemyPlayerHitBox(enemy){
   if(enemy?.bossShard){
     const enemyRadius = Math.max(.2, enemyCollisionRadius(enemy));
     return {
-      x: PLAYER_BODY_COLLISION_RADIUS + enemyRadius * .72,
-      z: PLAYER_BODY_COLLISION_Z * .78 + enemyRadius * .18
+      x: PLAYER_SHIP_COLLISION_LATERAL * .92 + enemyRadius * .78,
+      z: PLAYER_SHIP_COLLISION_Z * .82 + enemyRadius * .62
     };
   }
   const enemyRadius = Math.max(.2, enemyCollisionRadius(enemy));
   return {
-    x: PLAYER_BODY_COLLISION_RADIUS + enemyRadius * .52,
-    z: PLAYER_BODY_COLLISION_Z + enemyRadius * .20
+    x: PLAYER_SHIP_COLLISION_LATERAL + enemyRadius * .82,
+    z: PLAYER_SHIP_COLLISION_Z + enemyRadius * .86
   };
 }
 
@@ -32760,7 +32760,7 @@ function enemyApproachRadial(enemy, z = enemy?.z ?? PLAYER_Z){
   const startZ = PLAYER_Z - startDistance;
   const endZ = PLAYER_Z - endDistance;
   const t = smoothstep(clamp((z - startZ) / Math.max(.001, endZ - startZ), 0, 1));
-  const target = PLAYER_COLLISION_RADIAL + (enemy?.bossShard ? .05 : .03);
+  const target = PLAYER_COLLISION_RADIAL + (enemy?.bossShard ? .018 : .004);
   return base + (target - base) * t;
 }
 
