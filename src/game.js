@@ -1683,7 +1683,13 @@ function buyRunBasicUpgrade(id){
     state.maxHp = safeHpMax();
     state.hp = Math.min(state.maxHp, state.hp + Math.max(0, state.maxHp - beforeMax) + 18);
   }
-  if(state.basicPoints <= 0) state.basicPickerOpen = false;
+  if(state.basicPoints <= 0){
+    state.basicPickerOpen = false;
+    renderUi2();
+    return;
+  }
+  state.basicPickerOpen = true;
+  if(state.mode === 'play' && refreshHudBasicUpgradePicker()) return;
   renderUi2();
 }
 
@@ -31016,14 +31022,31 @@ function isBasicPickerActive(){
 function renderHudBasicUpgradeStrip(){
   return `
     <div class="hud-basic-picker" aria-label="Basic upgrade selector">
-      <div class="hud-basic-track">
-        ${RUN_BASIC_PATHS.map(path => {
-          const visible = isRunBasicMaxed(path.base) ? BASIC_SKILL_DEFS_BY_ID[path.advanced] : BASIC_SKILL_DEFS_BY_ID[path.base];
-          return renderHudBasicUpgradeCard(visible);
-        }).join('')}
+      <div class="hud-basic-track" data-ref="hudBasicTrack">
+        ${renderHudBasicUpgradeCards()}
       </div>
     </div>
   `;
+}
+
+function renderHudBasicUpgradeCards(){
+  return RUN_BASIC_PATHS.map(path => {
+    const visible = isRunBasicMaxed(path.base) ? BASIC_SKILL_DEFS_BY_ID[path.advanced] : BASIC_SKILL_DEFS_BY_ID[path.base];
+    return renderHudBasicUpgradeCard(visible);
+  }).join('');
+}
+
+function refreshHudBasicUpgradePicker(){
+  const track = ui.refs?.hudBasicTrack || ui.root?.querySelector?.('.hud-basic-track');
+  if(!track) return false;
+  const scrollLeft = track.scrollLeft;
+  track.innerHTML = renderHudBasicUpgradeCards();
+  track.scrollLeft = scrollLeft;
+  requestAnimationFrame(() => {
+    if(track.isConnected) track.scrollLeft = scrollLeft;
+  });
+  syncRunBasicHudText();
+  return true;
 }
 
 function renderHudBasicUpgradeCard(node){
@@ -31275,6 +31298,11 @@ function updateHud(){
   setHudText('xpLabel', state.level);
   setHudText('xpText', `${Math.floor(state.xp)}/${threshold}`);
   updateBossHud(bossHud);
+  syncRunBasicHudText(basicPickerOpen);
+}
+
+function syncRunBasicHudText(basicPickerOpen = isBasicPickerActive()){
+  setHudText('bpChip', state.basicPoints);
   setHudText('skillControl', `${basicPickerOpen ? '閉じる' : 'アップグレード'} ${state.basicPoints}`);
 }
 
