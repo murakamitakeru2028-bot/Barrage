@@ -29687,6 +29687,133 @@ function createUi(){
       font-weight:850 !important;
       text-shadow:0 1px 0 #000 !important;
     }
+    /* Compact skill picker: keep the play field readable while choosing. */
+    #barrage-ui .upgrade-overlay.special-overlay.on{
+      background:linear-gradient(180deg,transparent 0 58%,rgba(0,0,0,.14) 68%,rgba(0,0,0,.58) 100%) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on::before{
+      top:auto !important;
+      bottom:calc(min(31vh,240px) + 16px) !important;
+      opacity:.28 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+      bottom:calc(8px + env(safe-area-inset-bottom)) !important;
+      width:min(720px,calc(100vw - 18px)) !important;
+      height:min(31vh,240px) !important;
+      max-height:min(31vh,240px) !important;
+      min-height:216px !important;
+      padding:8px !important;
+      grid-template-rows:30px 25px 30px minmax(0,1fr) !important;
+      gap:5px !important;
+      border-top-width:3px !important;
+      box-shadow:0 16px 34px rgba(0,0,0,.54),0 0 24px rgba(141,245,255,.10),inset 0 1px 0 rgba(255,255,255,.08) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-head{
+      min-height:30px !important;
+      grid-template-columns:minmax(0,1fr) 86px !important;
+      gap:7px !important;
+      align-items:center !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-title{
+      font-size:19px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-note{
+      margin-top:2px !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-sp{
+      width:86px !important;
+      min-width:86px !important;
+      height:28px !important;
+      min-height:28px !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots{
+      height:25px !important;
+      min-height:25px !important;
+      gap:5px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot{
+      height:25px !important;
+      min-height:25px !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot b{
+      width:18px !important;
+      height:18px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot b .special-icon{
+      width:14px !important;
+      height:14px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot small{
+      min-width:10px !important;
+      height:10px !important;
+      font-size:6px !important;
+      line-height:10px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row{
+      grid-template-columns:112px minmax(0,1fr) !important;
+      gap:7px !important;
+      min-height:30px !important;
+      margin:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button{
+      height:30px !important;
+      min-height:30px !important;
+      padding:0 8px !important;
+      gap:5px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row b,
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row .token-number{
+      font-size:9px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row small{
+      font-size:8px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+      gap:6px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+      padding:5px !important;
+      grid-template-rows:minmax(42px,1fr) 10px 28px 23px !important;
+      grid-template-areas:"icon" "meta" "title" "action" !important;
+      gap:3px !important;
+      min-height:0 !important;
+      border-top-width:3px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon{
+      min-height:42px !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon{
+      width:38px !important;
+      height:38px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice b{
+      font-size:7px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice span{
+      min-height:28px !important;
+      font-size:12px !important;
+      line-height:1.08 !important;
+      -webkit-line-clamp:2 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice small{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice strong{
+      height:23px !important;
+      min-height:23px !important;
+      font-size:9px !important;
+    }
     #barrage-ui .settings-screen .settings-toggle-row,
     #barrage-ui .settings-screen .settings-danger-row{
       min-height:118px !important;
