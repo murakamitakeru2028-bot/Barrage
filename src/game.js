@@ -2019,6 +2019,8 @@ function applyHomeShipCosmeticFinish(ship = visualPreviewShip(), visual = cosmet
   applyMeshFinish(homeShip.materials.panel, visual.armor.panel, {emissive:blendHex(visual.armor.panel, visual.coat.line, .45), emissiveIntensity:visual.armor.glow, metalness:Math.max(.62, visual.armor.metalness), roughness:visual.armor.roughness + .02});
   applyMeshFinish(homeShip.materials.core, blendHex(visual.bullet.core, frameAccent, .16));
   applyMeshFinish(homeShip.materials.glass, blendHex(visual.armor.glass, visual.bullet.shot, .46), {emissive:visual.bullet.glow, emissiveIntensity:1.65 * visual.bullet.pulse, opacity:.84});
+  applyMeshFinish(homeShip.materials.trim, visual.armor.trim, {opacity:.86});
+  applyMeshFinish(homeShip.materials.accent, blendHex(visual.coat.hot, visual.bullet.glow, .30), {opacity:.78});
   applyLineFinish(homeShip.materials.edge, coatLine, .70);
   applyLineFinish(homeShip.materials.goldLine, visual.armor.trim, .66);
   applyLineFinish(homeShip.materials.roseLine, blendHex(visual.coat.hot, visual.bullet.glow, .34), .62);
@@ -2379,6 +2381,97 @@ function addShipRail(root, from, to, width, material, y = .18, thickness = .020)
   mesh.position.y = y;
   root.add(mesh);
   return mesh;
+}
+
+function addShipSurfaceDetails(root, kit = {}, options = {}){
+  if(!root) return null;
+  const group = new THREE.Group();
+  group.name = 'ship-surface-details';
+  root.add(group);
+  const mirrorPoints = points => points.map(([x, z]) => [-x, z]).reverse();
+  const panel = kit.panel || kit.hull || kit.plate;
+  const plate = kit.plate || panel;
+  const glass = kit.glass || kit.core || plate;
+  const core = kit.core || glass;
+  const trim = kit.trim || core;
+  const accent = kit.accent || core;
+  const edge = kit.edge || kit.trimLine || kit.accentLine;
+  const trimLine = kit.trimLine || edge;
+  const accentLine = kit.accentLine || edge;
+  const y = options.y ?? .205;
+  const lineY = y + .032;
+  const detailScale = options.detailScale ?? 1;
+  const addPlate = (points, material = panel, thickness = .022, yOffset = y, edgeMaterial = edge) => {
+    if(!material) return null;
+    const mesh = addShipPlate(group, points, material, thickness, edgeMaterial);
+    mesh.position.y = yOffset;
+    mesh.scale.set(detailScale, 1, detailScale);
+    return mesh;
+  };
+  const addSymPlate = (points, material = panel, thickness = .022, yOffset = y, edgeMaterial = edge) => {
+    addPlate(points, material, thickness, yOffset, edgeMaterial);
+    addPlate(mirrorPoints(points), material, thickness, yOffset, edgeMaterial);
+  };
+  const addLine = (points, material = edge, yOffset = lineY) => {
+    if(!material) return null;
+    const line = makeShipLine(points, material, yOffset);
+    line.scale.set(detailScale, 1, detailScale);
+    group.add(line);
+    return line;
+  };
+  const addSymLine = (points, material = edge, yOffset = lineY) => {
+    addLine(points, material, yOffset);
+    addLine(mirrorPoints(points), material, yOffset);
+  };
+  const addRail = (from, to, width, material = trim, yOffset = lineY, thickness = .012) => {
+    if(!material) return null;
+    const mesh = addShipRail(group, from, to, width, material, yOffset, thickness);
+    mesh.scale.set(detailScale, 1, detailScale);
+    return mesh;
+  };
+  const addSymRail = (from, to, width, material = trim, yOffset = lineY, thickness = .012) => {
+    addRail(from, to, width, material, yOffset, thickness);
+    addRail([-from[0], from[1]], [-to[0], to[1]], width, material, yOffset, thickness);
+  };
+
+  addPlate([[0,-1.42],[.074,-1.06],[.062,-.66],[0,-.50],[-.062,-.66],[-.074,-1.06]], plate, .026, y + .018, trimLine);
+  addPlate([[0,-.40],[.152,-.16],[.132,.34],[0,.56],[-.132,.34],[-.152,-.16]], panel, .024, y + .010, edge);
+  addPlate([[0,.58],[.096,.80],[.072,1.05],[0,1.16],[-.072,1.05],[-.096,.80]], plate, .020, y + .006, trimLine);
+  addPlate([[0,-.70],[.078,-.42],[.064,-.12],[0,.02],[-.064,-.12],[-.078,-.42]], glass, .018, y + .048, edge);
+
+  addSymPlate([[.18,-1.00],[.32,-.72],[.30,-.25],[.16,-.38]], panel, .020, y, accentLine);
+  addSymPlate([[.28,-.58],[.58,-.40],[.48,-.10],[.24,-.24]], plate, .018, y + .020, trimLine);
+  addSymPlate([[.42,-.04],[.86,.08],[.76,.25],[.44,.21]], plate, .018, y + .012, trimLine);
+  addSymPlate([[.62,.30],[1.02,.44],[.84,.61],[.58,.50]], panel, .020, y + .006, edge);
+  addSymPlate([[.20,.64],[.48,1.08],[.30,1.00],[.10,.78]], plate, .018, y + .016, trimLine);
+
+  addRail([0,-1.54], [0,.94], .028, trim, lineY + .018, .010);
+  addSymRail([.18,-.90], [.22,.60], .020, accent, lineY + .006, .010);
+  addSymRail([.38,-.12], [.94,.24], .026, trim, lineY + .002, .010);
+  addSymRail([.52,.38], [.84,.56], .020, accent, lineY + .010, .010);
+
+  addLine([[0,-1.70],[.09,-1.22],[.02,-.84],[.10,-.42],[0,-.22]], accentLine, lineY + .026);
+  addLine([[0,-1.70],[-.09,-1.22],[-.02,-.84],[-.10,-.42],[0,-.22]], trimLine, lineY + .024);
+  addSymLine([[.24,-.76],[.42,-.56],[.38,-.28]], edge, lineY + .018);
+  addSymLine([[.22,.22],[.40,.46],[.34,.80]], accentLine, lineY + .016);
+
+  const coreNode = new THREE.Mesh(new THREE.SphereGeometry(.048 * detailScale, 10, 6), core);
+  coreNode.position.set(0, lineY + .052, -.18);
+  coreNode.scale.y = .58;
+  group.add(coreNode);
+
+  const ringMaterial = kit.engineLine || accentLine || edge;
+  if(ringMaterial){
+    const rings = options.engineRings || [[-.33,-.035,1.16,.142],[.33,-.035,1.16,.142]];
+    for(const [x, ringY, z, radius] of rings){
+      const ring = new THREE.Line(makeRingCircleGeometry(radius * detailScale, SMALL_SCREEN ? 36 : 30), ringMaterial);
+      ring.position.set(x * detailScale, ringY, z * detailScale);
+      ring.scale.y = .68;
+      group.add(ring);
+    }
+  }
+
+  return group;
 }
 
 function makeSkinKitMaterial(color, opacity = .86){
@@ -2778,6 +2871,21 @@ function makePlayer(){
     bodyRoot.add(tipGlow);
   }
 
+  const playerSurfaceKit = {
+    hull: shared.materials.player,
+    panel: shared.materials.playerPanel,
+    plate: shared.materials.playerPlate,
+    glass: shared.materials.playerGlass,
+    core: shared.materials.playerCore,
+    trim: shared.materials.playerGold,
+    accent: shared.materials.playerRose,
+    edge: shared.materials.playerEdge,
+    trimLine: shared.materials.playerGoldLine,
+    accentLine: shared.materials.playerRoseLine,
+    engineLine: shared.materials.playerGoldLine
+  };
+  addShipSurfaceDetails(bodyRoot, playerSurfaceKit, {y:.194, detailScale:1});
+
   const aura = new THREE.Line(makeRingCircleGeometry(.72, 56), shared.materials.railCyan);
   aura.rotation.x = Math.PI / 2;
   aura.position.z = .18;
@@ -2903,6 +3011,12 @@ function makePlayer(){
   addVariantEngine(ultima, .32, 1.00, .082, .40, -.036, .98);
   addVariantEngine(ultima, 0, 1.16, .068, .34, -.034, .90);
 
+  for(const [id, group] of Object.entries(variantVisuals)){
+    if(id === DEFAULT_SHIP_ID) continue;
+    const detailScale = id === 'bg_bulwark' ? 1.10 : id === 'vx_razor' ? .92 : id === 'dr_hive' ? .92 : 1.04;
+    addShipSurfaceDetails(group, playerSurfaceKit, {y:.200, detailScale, engineRings:[]});
+  }
+
   const skinKit = makeShipSkinKit(root, {y:.252});
   return {root, body:mainBody, wings:leftWing, rightWing, core, aura, nose, hitShield, variantVisuals, animatedCoreVisuals, afterburners, skinKit};
 }
@@ -2925,6 +3039,8 @@ function makeHomePreviewShip(){
     edge: new THREE.LineBasicMaterial({ color:0x9ef5ff, transparent:true, opacity:.68, fog:false }),
     goldLine: new THREE.LineBasicMaterial({ color:0xd8e2ea, transparent:true, opacity:.62, fog:false }),
     roseLine: new THREE.LineBasicMaterial({ color:0x8eefff, transparent:true, opacity:.56, fog:false }),
+    trim: new THREE.MeshBasicMaterial({ color:0xd8e2ea, transparent:true, opacity:.86, fog:false }),
+    accent: new THREE.MeshBasicMaterial({ color:0x8eefff, transparent:true, opacity:.78, fog:false }),
     shadow: new THREE.MeshBasicMaterial({ color:0x071017, transparent:true, opacity:.28, depthWrite:false, fog:false })
   };
 
@@ -3050,6 +3166,21 @@ function makeHomePreviewShip(){
     tipGlow.scale.set(1, .58, 1);
     bodyRoot.add(tipGlow);
   }
+
+  const previewSurfaceKit = {
+    hull: materials.hull,
+    panel: materials.panel,
+    plate: materials.plate,
+    glass: materials.glass,
+    core: materials.core,
+    trim: materials.trim,
+    accent: materials.accent,
+    edge: materials.edge,
+    trimLine: materials.goldLine,
+    accentLine: materials.roseLine,
+    engineLine: materials.goldLine
+  };
+  addShipSurfaceDetails(bodyRoot, previewSurfaceKit, {y:.226, detailScale:1});
 
   const variantVisuals = {[DEFAULT_SHIP_ID]: bodyRoot};
   const addVariantPlate = (group, points, material, thickness = .10, edgeMaterial = materials.edge, y = 0) => {
@@ -3182,6 +3313,12 @@ function makeHomePreviewShip(){
   addVariantEngine(ultima, -.34, 1.02, .090, .44, -.045, 1.0);
   addVariantEngine(ultima, .34, 1.02, .090, .44, -.045, 1.0);
   addVariantEngine(ultima, 0, 1.18, .075, .38, -.040, .90);
+
+  for(const [id, group] of Object.entries(variantVisuals)){
+    if(id === DEFAULT_SHIP_ID) continue;
+    const detailScale = id === 'bg_bulwark' ? 1.10 : id === 'vx_razor' ? .92 : id === 'dr_hive' ? .92 : 1.04;
+    addShipSurfaceDetails(group, previewSurfaceKit, {y:.230, detailScale, engineRings:[]});
+  }
 
   const partVisuals = {};
   const makePartMaterial = () => new THREE.MeshStandardMaterial({
