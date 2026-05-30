@@ -125,6 +125,15 @@ const PLAYER_HURTBOX_LANE_RADIAL = PLAYER_COLLISION_RADIAL;
 const PLAYER_HURTBOX_LATERAL = .48;
 const PLAYER_HURTBOX_Z_BASE = .34;
 const ENEMY_HP_MULT = 1.34;
+const ENEMY_WAVE_HP_EXP = 1.043;
+const ENEMY_WAVE_HP_LINEAR = .028;
+const ENEMY_WAVE_DAMAGE_LINEAR = .024;
+const ENEMY_WAVE_SPEED_LINEAR = .145;
+const ENEMY_WAVE_SPEED_CAP = 10.5;
+const ENEMY_PACK_WAVE_STEP = 7;
+const ENEMY_SPAWN_INTERVAL_START = .92;
+const ENEMY_SPAWN_INTERVAL_WAVE_REDUCTION = .012;
+const ENEMY_SPAWN_INTERVAL_MIN = .28;
 const BOSS_HP_MULT = 1.24;
 const BOSS_SHARD_HP_MULT = 1.18;
 const ENEMY_HP_BAR_VISIBLE_TIME = 4.15;
@@ -174,9 +183,9 @@ const ENEMY_TYPES = [
   { id:'orb', name:'オーブ', sides:0, unlock:1, color:0x1ed6ff, hp:10, damage:14, radius:.42 },
   { id:'tri', name:'トライ', sides:3, unlock:11, color:0xff3b62, hp:17, damage:21, radius:.52 },
   { id:'quad', name:'クアッド', sides:4, unlock:30, color:0xffd36a, hp:32, damage:32, radius:.56 },
-  { id:'octa', name:'オクタ', sides:8, unlock:60, color:0x36f39b, hp:56, damage:48, radius:.60 },
-  { id:'dodeca', name:'ドデカ', sides:12, unlock:88, color:0xb8a7ff, hp:76, damage:58, radius:.64 },
-  { id:'icosa', name:'イコサ', sides:20, unlock:118, color:0xff7a3d, hp:104, damage:74, radius:.68 }
+  { id:'octa', name:'オクタ', sides:8, unlock:52, color:0x36f39b, hp:56, damage:48, radius:.60 },
+  { id:'dodeca', name:'ドデカ', sides:12, unlock:76, color:0xb8a7ff, hp:76, damage:58, radius:.64 },
+  { id:'icosa', name:'イコサ', sides:20, unlock:102, color:0xff7a3d, hp:104, damage:74, radius:.68 }
 ];
 
 const BASIC_STAT_DEFS = [
@@ -33020,7 +33029,7 @@ function reserveBulletSlot(){
 }
 
 function spawnEnemyPack(){
-  const count = Math.min(5, 1 + Math.floor(state.wave / 9) + (Math.random() < .38 ? 1 : 0));
+  const count = Math.min(5, 1 + Math.floor(state.wave / ENEMY_PACK_WAVE_STEP) + (Math.random() < .44 ? 1 : 0));
   for(let i=0;i<count && enemies.length<MAX_ENEMIES;i++){
     spawnEnemy(Math.random() * .85 + i * .08);
   }
@@ -33030,8 +33039,8 @@ function spawnEnemy(offset = 0){
   const type = pickEnemyType();
   const root = acquireEnemyObject(type, false);
   tintEnemyObject(root, type.color, type.color, .72);
-  const wavePower = Math.pow(1.035, state.wave - 1);
-  const enemyHp = Math.ceil(type.hp * wavePower * (1 + state.wave * .022) * ENEMY_HP_MULT);
+  const wavePower = Math.pow(ENEMY_WAVE_HP_EXP, state.wave - 1);
+  const enemyHp = Math.ceil(type.hp * wavePower * (1 + state.wave * ENEMY_WAVE_HP_LINEAR) * ENEMY_HP_MULT);
   const enemy = {
     root,
     type,
@@ -33041,8 +33050,8 @@ function spawnEnemy(offset = 0){
     hp: enemyHp,
     maxHp: enemyHp,
     initialHp: enemyHp,
-    damage: Math.ceil(type.damage * (1 + state.wave * .018)),
-    speed: 12.5 + Math.min(8.5, state.wave * .11) + Math.random() * 2.2,
+    damage: Math.ceil(type.damage * (1 + state.wave * ENEMY_WAVE_DAMAGE_LINEAR)),
+    speed: 12.5 + Math.min(ENEMY_WAVE_SPEED_CAP, state.wave * ENEMY_WAVE_SPEED_LINEAR) + Math.random() * 2.2,
     radius: type.radius * ENEMY_HITBOX_MULT,
     radial:.88,
     baseRadial:.88,
@@ -33071,7 +33080,7 @@ function spawnBoss(){
   state.bossAlive = true;
   const type = { id:'boss', name:'トライ・レイド', color:0xff3b62, radius:1.4 };
   const root = acquireEnemyObject(type, true);
-  const bossHp = Math.ceil((220 + state.wave * 38) * Math.pow(1.035, state.wave - 10) * BOSS_HP_MULT);
+  const bossHp = Math.ceil((220 + state.wave * 44) * Math.pow(1.042, state.wave - 10) * BOSS_HP_MULT);
   const enemy = {
     root,
     type,
@@ -33082,7 +33091,7 @@ function spawnBoss(){
     hp: bossHp,
     maxHp: bossHp,
     initialHp: bossHp,
-    damage: 42 + Math.floor(state.wave * 1.2),
+    damage: 42 + Math.floor(state.wave * 1.55),
     radius:1.4 * ENEMY_HITBOX_MULT,
     radial:.68,
     baseRadial:.68,
@@ -33116,7 +33125,7 @@ function spawnBossShard(boss){
   const lanes = patternRoll < .18 ? [-.56, .56] : patternRoll < .34 ? [-1.12, .08, 1.04] : [-1, 0, 1];
   const spacing = BOSS_ATTACK_LANE_SPACING + (Math.random() - .5) * BOSS_ATTACK_SPACING_JITTER;
   const centerOffset = (Math.random() - .5) * BOSS_ATTACK_AIM_JITTER;
-  const speedBase = 19.5 + Math.min(5.4, state.wave * .055);
+  const speedBase = 19.5 + Math.min(6.6, state.wave * .075);
   for(const lane of lanes){
     if(enemies.length >= MAX_ENEMIES) return;
     const centered = Math.abs(lane) < .12;
@@ -33124,7 +33133,7 @@ function spawnBossShard(boss){
     const type = {...ENEMY_TYPES[0], color:centered ? 0xfff0b8 : 0xffd36a, radius:.64};
     const root = acquireEnemyObject(ENEMY_TYPES[0], false);
     tintEnemyObject(root, type.color, 0xff7a3d, 1.55);
-    const shardHp = Math.ceil((8 + state.wave * .6) * BOSS_SHARD_HP_MULT);
+    const shardHp = Math.ceil((8 + state.wave * .85) * BOSS_SHARD_HP_MULT);
     const shardAngle = boss.angle + centerOffset + lane * spacing + (Math.random() - .5) * BOSS_ATTACK_LANE_JITTER;
     const shardSpeed = speedBase + (Math.random() - .5) * BOSS_ATTACK_SPEED_JITTER;
     const shard = {
@@ -33137,7 +33146,7 @@ function spawnBossShard(boss){
       hp: shardHp,
       maxHp: shardHp,
       initialHp: shardHp,
-      damage: Math.ceil(18 + state.wave * .4),
+      damage: Math.ceil(18 + state.wave * .55),
       speed: Math.max(16.4, shardSpeed),
       radius:BOSS_ATTACK_HIT_RADIUS * .92,
       radial:.88,
@@ -33901,7 +33910,7 @@ function randomPipeAngle(){
 }
 
 function spawnInterval(){
-  return Math.max(.34, .95 - state.wave * .009) * (.82 + Math.random() * .38);
+  return Math.max(ENEMY_SPAWN_INTERVAL_MIN, ENEMY_SPAWN_INTERVAL_START - state.wave * ENEMY_SPAWN_INTERVAL_WAVE_REDUCTION) * (.82 + Math.random() * .38);
 }
 
 function waveDuration(){
