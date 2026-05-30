@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { minify } from "terser";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = resolve(projectRoot, "dist");
@@ -209,6 +210,107 @@ if (iconFiles.every(result => result.status === "fulfilled")) {
 } else {
   await writeFile(join(distDir, "icon-192.png"), makeIcon(192));
   await writeFile(join(distDir, "icon-512.png"), makeIcon(512));
+}
+
+async function minifyJs(relativePath) {
+  const file = join(distDir, relativePath);
+  let source = await readFile(file, "utf8");
+  if (relativePath === "src/game.js") {
+    source = compactStyleTemplates(source);
+  }
+  const result = await minify(source, {
+    module: true,
+    compress: {
+      passes: 2
+    },
+    mangle: true,
+    format: {
+      comments: false
+    }
+  });
+  if (!result.code) {
+    throw new Error(`Failed to minify ${relativePath}`);
+  }
+  await writeFile(file, `${result.code}\n`, "utf8");
+}
+
+await minifyJs("src/game.js");
+await minifyJs("src/features/ranking.js");
+
+function compactStyleTemplates(source) {
+  const marker = "style.textContent = `";
+  const start = source.indexOf(marker);
+  if (start < 0) return source;
+
+  const cssStart = start + marker.length;
+  let end = cssStart;
+  while (end < source.length) {
+    if (source[end] === "`" && source[end - 1] !== "\\") break;
+    end++;
+  }
+  if (end >= source.length) return source;
+
+  const css = source.slice(cssStart, end);
+  return `${source.slice(0, cssStart)}${compactCss(css)}${source.slice(end)}`;
+}
+
+function compactCss(css) {
+  let out = "";
+  let quote = "";
+  let pendingSpace = false;
+
+  for (let i = 0; i < css.length; i++) {
+    const ch = css[i];
+    const next = css[i + 1];
+
+    if (quote) {
+      out += ch;
+      if (ch === "\\" && next) {
+        out += next;
+        i++;
+      } else if (ch === quote) {
+        quote = "";
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      if (pendingSpace && shouldKeepCssSpace(out.at(-1), ch)) out += " ";
+      pendingSpace = false;
+      quote = ch;
+      out += ch;
+      continue;
+    }
+
+    if (ch === "/" && next === "*") {
+      const close = css.indexOf("*/", i + 2);
+      if (close < 0) break;
+      i = close + 1;
+      continue;
+    }
+
+    if (/\s/.test(ch)) {
+      pendingSpace = true;
+      continue;
+    }
+
+    if (pendingSpace && shouldKeepCssSpace(out.at(-1), ch)) out += " ";
+    pendingSpace = false;
+
+    if ("{};:>,~".includes(ch)) out = out.replace(/\s+$/u, "");
+    out += ch;
+    if ("{};:>,~".includes(ch)) pendingSpace = false;
+  }
+
+  return out
+    .replace(/;\}/gu, "}")
+    .trim();
+}
+
+function shouldKeepCssSpace(prev, next) {
+  if (!prev || !next) return false;
+  if (prev === "+" || next === "+" || prev === "-" || next === "-") return true;
+  return /[A-Za-z0-9_%.)#-]/.test(prev) && /[A-Za-z0-9_.#(-]/.test(next);
 }
 
 async function listFiles(dir) {
