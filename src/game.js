@@ -31050,22 +31050,66 @@ function renderHudBasicUpgradeStrip(){
 
 function renderHudBasicUpgradeCards(){
   return RUN_BASIC_PATHS.map(path => {
-    const visible = isRunBasicMaxed(path.base) ? BASIC_SKILL_DEFS_BY_ID[path.advanced] : BASIC_SKILL_DEFS_BY_ID[path.base];
+    const visible = visibleRunBasicDefForPath(path);
     return renderHudBasicUpgradeCard(visible);
   }).join('');
+}
+
+function visibleRunBasicDefForPath(path){
+  return isRunBasicMaxed(path.base) ? BASIC_SKILL_DEFS_BY_ID[path.advanced] : BASIC_SKILL_DEFS_BY_ID[path.base];
 }
 
 function refreshHudBasicUpgradePicker(){
   const track = ui.refs?.hudBasicTrack || ui.root?.querySelector?.('.hud-basic-track');
   if(!track) return false;
   const scrollLeft = track.scrollLeft;
-  track.innerHTML = renderHudBasicUpgradeCards();
+  let allUpdated = true;
+  for(const path of RUN_BASIC_PATHS){
+    const fullDef = visibleRunBasicDefForPath(path);
+    const card = track.querySelector(`[data-basic-path="${fullDef.pathIndex}"]`);
+    if(!card){
+      allUpdated = false;
+      break;
+    }
+    updateHudBasicUpgradeCard(card, fullDef);
+  }
+  if(!allUpdated) track.innerHTML = renderHudBasicUpgradeCards();
   track.scrollLeft = scrollLeft;
   requestAnimationFrame(() => {
     if(track.isConnected) track.scrollLeft = scrollLeft;
   });
   syncRunBasicHudText();
   return true;
+}
+
+function updateHudBasicUpgradeCard(card, fullDef){
+  if(!card || !fullDef) return;
+  const lv = runBasicLevel(fullDef.id);
+  const unlocked = isRunBasicUnlocked(fullDef.id);
+  const maxed = isRunBasicMaxed(fullDef.id);
+  const cost = runBasicUpgradeCost(fullDef.id);
+  const canBuy = unlocked && !maxed && Number.isFinite(cost) && state.basicPoints >= cost;
+  const tierLabel = fullDef.tier === 'advanced' ? `Lv.${lv}` : `${lv}/${fullDef.cap || RUN_BASIC_CAP}`;
+  const costLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : `${cost}BP`;
+  const icon = fullDef.icon || fullDef.pathTag || fullDef.tag || 'UP';
+  card.className = `hud-basic-card ${!unlocked ? 'locked' : ''} ${maxed ? 'maxed' : ''} ${!canBuy ? 'disabled' : ''}`;
+  card.disabled = !canBuy;
+  card.dataset.action = `buyRunBasic:${fullDef.id}`;
+  card.dataset.basicId = fullDef.id;
+  card.title = fullDef.name;
+  card.style.setProperty('--accent', colorCss(fullDef.color));
+  const iconEl = card.querySelector('i');
+  const tagEl = card.querySelector('span b');
+  const nameEl = card.querySelector('span strong');
+  const levelEl = card.querySelector('em');
+  const textEl = card.querySelector('small');
+  const costEl = card.querySelector('mark');
+  if(iconEl) iconEl.textContent = icon;
+  if(tagEl) tagEl.textContent = fullDef.pathTag || fullDef.tag || 'UP';
+  if(nameEl) nameEl.textContent = fullDef.name;
+  if(levelEl) levelEl.textContent = tierLabel;
+  if(textEl) textEl.textContent = fullDef.text || '';
+  if(costEl) costEl.textContent = costLabel;
 }
 
 function renderHudBasicUpgradeCard(node){
@@ -31080,7 +31124,7 @@ function renderHudBasicUpgradeCard(node){
   const costLabel = !unlocked ? 'LOCK' : maxed ? 'MAX' : `${cost}BP`;
   const icon = fullDef.icon || fullDef.pathTag || fullDef.tag || 'UP';
   return `
-    <button class="hud-basic-card ${!unlocked ? 'locked' : ''} ${maxed ? 'maxed' : ''} ${!canBuy ? 'disabled' : ''}" type="button" ${canBuy ? '' : 'disabled'} data-action="buyRunBasic:${fullDef.id}" style="--accent:${colorCss(fullDef.color)}" title="${escapeHtml(fullDef.name)}">
+    <button class="hud-basic-card ${!unlocked ? 'locked' : ''} ${maxed ? 'maxed' : ''} ${!canBuy ? 'disabled' : ''}" type="button" ${canBuy ? '' : 'disabled'} data-action="buyRunBasic:${fullDef.id}" data-basic-path="${fullDef.pathIndex}" data-basic-id="${fullDef.id}" style="--accent:${colorCss(fullDef.color)}" title="${escapeHtml(fullDef.name)}">
       <i>${escapeHtml(icon)}</i>
       <span><b>${escapeHtml(fullDef.pathTag || fullDef.tag || 'UP')}</b><strong>${escapeHtml(fullDef.name)}</strong></span>
       <em>${escapeHtml(tierLabel)}</em>
