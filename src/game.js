@@ -31167,6 +31167,281 @@ function createUi(){
         font-size:10px !important;
       }
     }
+    /* Full-screen UI audit: keep phone-width controls inside the viewport. */
+    #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .page-back,
+    #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .showroom-back{
+      color:transparent !important;
+      font-size:0 !important;
+      line-height:0 !important;
+      text-indent:-999px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .page-back::before,
+    #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .showroom-back::before{
+      content:"" !important;
+      position:absolute !important;
+      left:20px !important;
+      top:21px !important;
+      width:15px !important;
+      height:15px !important;
+      border-left:4px solid #c8fbff !important;
+      border-bottom:4px solid #c8fbff !important;
+      background:transparent !important;
+      box-shadow:-2px 2px 0 rgba(0,0,0,.42),0 0 14px rgba(141,245,255,.46) !important;
+      opacity:1 !important;
+      transform:rotate(45deg) !important;
+    }
+    #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .page-back::after,
+    #barrage-ui :is(.ranking-screen,.store-screen,.garage-screen,.gacha-screen,.upgrade-screen,.settings-screen) .showroom-back::after{
+      content:"" !important;
+      position:absolute !important;
+      left:21px !important;
+      top:29px !important;
+      width:20px !important;
+      height:4px !important;
+      border:0 !important;
+      background:#c8fbff !important;
+      box-shadow:0 1px 0 rgba(0,0,0,.48),0 0 14px rgba(141,245,255,.45) !important;
+      opacity:1 !important;
+      transform:none !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .commerce-bottom-dock{
+      left:8px !important;
+      right:auto !important;
+      bottom:calc(10px + env(safe-area-inset-bottom)) !important;
+      width:calc(100vw - 16px) !important;
+      max-width:390px !important;
+      height:54px !important;
+      display:grid !important;
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+      gap:6px !important;
+    }
+    #barrage-ui :is(.store-screen,.garage-screen) .commerce-bottom-dock button{
+      min-width:0 !important;
+      width:100% !important;
+      height:54px !important;
+      min-height:54px !important;
+      padding:0 4px !important;
+      font-size:10px !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .settings-screen .settings-summary{
+      grid-template-columns:minmax(0,1fr) !important;
+      min-height:78px !important;
+    }
+    #barrage-ui .settings-screen .settings-summary strong{
+      display:none !important;
+    }
+    #barrage-ui .modal-screen .pause-dialog{
+      left:12px !important;
+      right:12px !important;
+      width:auto !important;
+      max-width:none !important;
+      transform:translateY(-38%) !important;
+      padding:16px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .pause-dialog .pause-actions{
+      grid-template-columns:1fr !important;
+      gap:8px !important;
+      width:100% !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .pause-dialog .pause-actions button{
+      min-width:0 !important;
+      width:100% !important;
+      height:42px !important;
+      min-height:42px !important;
+      padding:0 5px !important;
+      font-size:10px !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .modal-screen .pause-dialog .pause-actions{
+      grid-template-columns:1fr !important;
+    }
+    #barrage-ui .modal-screen .pause-dialog .pause-actions button{
+      justify-self:stretch !important;
+      max-width:100% !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+      --skill-card-w:clamp(104px,calc((100vw - 88px) / 3),160px);
+      grid-template-columns:repeat(3,var(--skill-card-w)) !important;
+      justify-content:center !important;
+      gap:6px !important;
+      overflow:hidden !important;
+      width:100% !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+      width:var(--skill-card-w) !important;
+      min-width:var(--skill-card-w) !important;
+      max-width:var(--skill-card-w) !important;
+      flex:0 0 var(--skill-card-w) !important;
+      box-sizing:border-box !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot{
+      width:100% !important;
+      min-width:0 !important;
+      max-width:100% !important;
+      box-sizing:border-box !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots{
+      display:flex !important;
+      flex-wrap:nowrap !important;
+      width:min(350px,calc(100vw - 54px)) !important;
+      transform:translateX(-50%) scale(.86) !important;
+      transform-origin:center top !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots .special-slot{
+      flex:1 1 0 !important;
+      width:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog .upgrade-grid{
+      display:flex !important;
+      flex-wrap:nowrap !important;
+      align-items:stretch !important;
+      width:100% !important;
+      min-width:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+      flex:1 1 0 !important;
+      width:0 !important;
+      min-width:0 !important;
+      max-width:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+      left:9px !important;
+      right:auto !important;
+      width:calc(100vw - 18px) !important;
+      transform:scale(.86) !important;
+      transform-origin:left bottom !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple,
+    #barrage-ui .gacha-terminal.gacha-simple *{
+      box-sizing:border-box !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple{
+      width:100% !important;
+      max-width:100% !important;
+      min-width:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-screen .gacha-panel{
+      left:10px !important;
+      right:10px !important;
+      overflow-x:hidden !important;
+    }
+    #barrage-ui .gacha-simple-roll{
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      gap:7px !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .gacha-simple-roll > *{
+      min-width:0 !important;
+      max-width:100% !important;
+    }
+    #barrage-ui .gacha-simple-action{
+      display:block !important;
+      min-width:0 !important;
+      width:100% !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple .signal-search-button{
+      justify-self:stretch !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:none !important;
+      height:48px !important;
+      min-height:48px !important;
+    }
+    #barrage-ui .gacha-screen .gacha-terminal.gacha-simple section.gacha-simple-roll{
+      display:grid !important;
+      grid-template-columns:1fr !important;
+    }
+    #barrage-ui .gacha-screen .gacha-terminal.gacha-simple .gacha-simple-roll .signal-search-button{
+      width:100% !important;
+      max-width:none !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple .signal-cost-card{
+      min-width:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple .signal-cost-card span{
+      min-width:0 !important;
+      max-width:100% !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple .gacha-simple-result{
+      grid-template-columns:1fr !important;
+      gap:7px !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple .supply-odds{
+      display:grid !important;
+      grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      gap:5px !important;
+      min-width:0 !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple .supply-odds span{
+      min-width:0 !important;
+      padding:5px 3px !important;
+    }
+    #barrage-ui .gacha-terminal.gacha-simple .supply-odds span :is(b,em){
+      font-size:7px !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .gacha-screen .equipped-grid{
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:6px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card{
+      min-width:0 !important;
+      width:100% !important;
+      padding:8px 6px !important;
+    }
+    #barrage-ui .gacha-screen .equipped-card :is(b,span,small){
+      min-width:0 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+    }
+    @media (max-width:370px){
+      #barrage-ui :is(.store-screen,.garage-screen) .commerce-bottom-dock{
+        left:7px !important;
+        width:calc(100vw - 14px) !important;
+        height:50px !important;
+      }
+      #barrage-ui :is(.store-screen,.garage-screen) .commerce-bottom-dock button{
+        height:50px !important;
+        min-height:50px !important;
+        font-size:9px !important;
+      }
+      #barrage-ui .modal-screen .pause-dialog{
+        width:calc(100vw - 24px) !important;
+        padding:14px !important;
+      }
+      #barrage-ui .pause-dialog .pause-actions{
+        grid-template-columns:1fr !important;
+      }
+      #barrage-ui .gacha-simple-roll{
+        grid-template-columns:1fr !important;
+      }
+      #barrage-ui .gacha-terminal.gacha-simple .signal-search-button{
+        width:100% !important;
+        max-width:none !important;
+      }
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
       #barrage-ui .brand-lockup,
@@ -32544,6 +32819,8 @@ function renderSupplyPanel(equippedSummary, gachaResult){
           <strong>${tokenAmount(GACHA_COST, 'supply-cost')}</strong>
           <span>${ownedUnique}/${COSMETIC_ITEMS.length} 種 / ${ownedTotal} 個</span>
         </div>
+      </section>
+      <section class="gacha-simple-action">
         <button class="gacha-roll signal-search-button" ${ready ? '' : 'disabled'} data-action="rollGacha">
           <b>抽選する</b>
           <span>${ready ? 'READY' : 'TOKEN不足'}</span>
