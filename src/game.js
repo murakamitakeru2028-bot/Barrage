@@ -107,6 +107,13 @@ const BOSS_CHASE_TURN_SPEED = .42;
 const BOSS_CHASE_CATCHUP_TURN = .48;
 const BOSS_CHASE_LEAD_TIME = .22;
 const BOSS_CHASE_WOBBLE = .025;
+const BOSS_CHASE_SOFT_ZONE = .070;
+const BOSS_CHASE_OFFSET_MIN = .10;
+const BOSS_CHASE_OFFSET_MAX = .28;
+const BOSS_CHASE_OFFSET_RESPONSE = .24;
+const BOSS_CHASE_OFFSET_WOBBLE = .032;
+const BOSS_CHASE_OFFSET_CHANGE_MIN = 1.8;
+const BOSS_CHASE_OFFSET_CHANGE_MAX = 3.7;
 const PLAYER_COLLISION_RADIAL = PLAYER_RADIAL + .02;
 const PLAYER_BODY_COLLISION_RADIUS = .50;
 const PLAYER_BODY_COLLISION_Z = .96;
@@ -32398,16 +32405,40 @@ function updateEnemies(dt, t, syncVisuals = true){
 }
 
 function updateBossChase(boss, dt, t, stasisSlow = 1){
-  const targetAngle = normalizeAngle(state.roll + state.rollVel * BOSS_CHASE_LEAD_TIME);
+  updateBossChaseOffset(boss, dt, t);
+  const targetAngle = normalizeAngle(state.roll + state.rollVel * BOSS_CHASE_LEAD_TIME + (boss.chaseOffset || 0));
   const delta = signedAngleDelta(targetAngle, boss.angle);
   const gap = Math.abs(delta);
-  const chaseRate = BOSS_CHASE_TURN_SPEED + Math.min(BOSS_CHASE_CATCHUP_TURN, gap * .34);
+  const softenedGap = Math.max(0, gap - BOSS_CHASE_SOFT_ZONE);
+  const chaseRate = BOSS_CHASE_TURN_SPEED + Math.min(BOSS_CHASE_CATCHUP_TURN, softenedGap * .34);
   const maxStep = chaseRate * dt * stasisSlow;
-  const chaseStep = clamp(delta, -maxStep, maxStep);
+  const chaseDelta = gap < BOSS_CHASE_SOFT_ZONE ? delta * .35 : delta;
+  const chaseStep = clamp(chaseDelta, -maxStep, maxStep);
   const wobbleFade = 1 - clamp(gap / .75, 0, 1) * .65;
   const wobble = Math.sin(t * .55 + boss.phase) * dt * BOSS_CHASE_WOBBLE * wobbleFade;
   boss.angle = normalizeAngle(boss.angle + chaseStep + wobble);
   boss.chaseGap = gap;
+}
+
+function updateBossChaseOffset(boss, dt, t){
+  if(!Number.isFinite(boss.chaseOffset)) boss.chaseOffset = randomBossChaseOffset();
+  if(!Number.isFinite(boss.chaseTargetOffset)) boss.chaseTargetOffset = boss.chaseOffset;
+  boss.chaseOffsetTimer = (Number.isFinite(boss.chaseOffsetTimer) ? boss.chaseOffsetTimer : 0) - dt;
+  if(boss.chaseOffsetTimer <= 0){
+    boss.chaseTargetOffset = randomBossChaseOffset(boss.chaseOffset);
+    boss.chaseOffsetTimer = BOSS_CHASE_OFFSET_CHANGE_MIN + Math.random() * (BOSS_CHASE_OFFSET_CHANGE_MAX - BOSS_CHASE_OFFSET_CHANGE_MIN);
+  }
+  const offsetDelta = boss.chaseTargetOffset - boss.chaseOffset;
+  boss.chaseOffset += clamp(offsetDelta, -BOSS_CHASE_OFFSET_RESPONSE * dt, BOSS_CHASE_OFFSET_RESPONSE * dt);
+  boss.chaseOffset += Math.sin(t * .43 + boss.phase * .7) * BOSS_CHASE_OFFSET_WOBBLE * dt;
+  boss.chaseOffset = clamp(boss.chaseOffset, -BOSS_CHASE_OFFSET_MAX, BOSS_CHASE_OFFSET_MAX);
+}
+
+function randomBossChaseOffset(previous = 0){
+  const previousSign = Math.sign(previous) || (Math.random() < .5 ? -1 : 1);
+  const sign = Math.random() < .62 ? -previousSign : previousSign;
+  const amount = BOSS_CHASE_OFFSET_MIN + Math.random() * (BOSS_CHASE_OFFSET_MAX - BOSS_CHASE_OFFSET_MIN);
+  return sign * amount;
 }
 
 function nextBossFireInterval(){
@@ -33057,6 +33088,9 @@ function spawnBoss(){
     phase:Math.random() * TAU,
     fire:.95 + Math.random() * .65,
     chaseGap:0,
+    chaseOffset:randomBossChaseOffset(),
+    chaseTargetOffset:randomBossChaseOffset(),
+    chaseOffsetTimer:BOSS_CHASE_OFFSET_CHANGE_MIN + Math.random() * (BOSS_CHASE_OFFSET_CHANGE_MAX - BOSS_CHASE_OFFSET_CHANGE_MIN),
     spinX:.30,
     spinY:.48,
     spinZ:.22
