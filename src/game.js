@@ -13,6 +13,8 @@ const PIPE_RING_SPACING = 9.6;
 const PIPE_RING_LOOP = 304;
 const PLAYER_Z = -2.15;
 const PLAYER_RADIAL = .36;
+const ENEMY_RAISED_RADIAL = PLAYER_RADIAL + .004;
+const BOSS_SHARD_RAISED_RADIAL = PLAYER_RADIAL + .018;
 const PLAYER_Y = -PIPE_RADIUS * PLAYER_RADIAL;
 const PLAYER_VISUAL_SCALE = 1.38;
 const CAMERA_BASE_Y = 2.65;
@@ -80,7 +82,7 @@ const FIRE_INTERVAL_MIN = .09;
 const FIRE_INTERVAL_WAVE_REDUCTION = .0011;
 const FIRE_INTERVAL_WAVE_REDUCTION_MAX = .06;
 const FIRE_RATE_STAT_STEP = .065;
-const BULLET_TARGET_RADIAL = .86;
+const BULLET_TARGET_RADIAL = ENEMY_RAISED_RADIAL;
 const BULLET_VISUAL_RADIAL_SETTLE = 10;
 const BULLET_VISUAL_Z_SETTLE = 14;
 const BULLET_VISUAL_ANGLE_SETTLE = 4.8;
@@ -884,7 +886,8 @@ function applyUiPreviewMode(){
       target.prevAngle = 0;
       target.sin = Math.sin(target.angle);
       target.cos = Math.cos(target.angle);
-      target.baseRadial = .88;
+      target.baseRadial = ENEMY_RAISED_RADIAL;
+      target.spawnRaised = true;
       target.prevRadial = enemyApproachRadial(target, target.prevZ);
       target.radial = enemyApproachRadial(target, target.z);
       target.spawnZ = PIPE_Z_FAR + 24;
@@ -32794,7 +32797,7 @@ function updateEnemies(dt, t, syncVisuals = true){
     const e = enemies[i];
     e.prevZ = e.z;
     e.prevAngle = e.angle;
-    e.prevRadial = e.radial ?? e.baseRadial ?? (e.boss ? .68 : .88);
+    e.prevRadial = e.radial ?? e.baseRadial ?? (e.boss ? .68 : ENEMY_RAISED_RADIAL);
     const approachDistance = angleDistance(e.angle, state.roll);
     const stasisSlow = stasisLevel > 0 && e.z > -72 && approachDistance < (.30 + stasisLevel * .038)
       ? Math.max(.62, 1 - stasisLevel * .075)
@@ -32828,7 +32831,7 @@ function updateEnemies(dt, t, syncVisuals = true){
     e.hpBarPulse = Math.max(0, (e.hpBarPulse || 0) - dt * ENEMY_HP_BAR_PULSE_DECAY);
     if(!visible) hideEnemyHpBar(e);
     if(syncVisuals && visible){
-      setPipePositionFromTrig(e.root, e.sin, e.cos, e.z, e.radial ?? (e.boss ? .68 : .88));
+      setPipePositionFromTrig(e.root, e.sin, e.cos, e.z, e.radial ?? (e.boss ? .68 : ENEMY_RAISED_RADIAL));
       const presence = enemyDepthPresence(e);
       e.root.scale.setScalar(enemyVisualScale(e, t, presence) * (1 + (e.hitFlash || 0) * .20));
       setEnemyOpacity(e.root, enemyVisualOpacity(e, presence));
@@ -32952,7 +32955,7 @@ function bulletEnemyImpact(enemy, bullet){
   const bulletStartRadial = bulletCollisionPathRadial(bullet.prevVisualRadial ?? bullet.prevRadial ?? bullet.radial);
   const enemyStartZ = enemy.prevZ ?? enemy.z;
   const enemyStartAngle = enemy.prevAngle ?? enemy.angle;
-  const enemyStartRadial = enemy.prevRadial ?? enemy.radial ?? (enemy.boss ? .68 : .88);
+  const enemyStartRadial = enemy.prevRadial ?? enemy.radial ?? (enemy.boss ? .68 : ENEMY_RAISED_RADIAL);
   const enemyEndRadial = enemy.radial ?? enemyStartRadial;
   const hitRadius = enemyCollisionRadius(enemy) + bulletCollisionRadius(bullet);
   const coarseZPad = enemy.boss ? Math.max(hitRadius + .24, enemyHitZWindow(enemy) + .42) : hitRadius + .24;
@@ -33209,14 +33212,15 @@ function enemyPassedPlayer(enemy){
 }
 
 function enemyApproachRadial(enemy, z = enemy?.z ?? PLAYER_Z){
-  const base = enemy?.baseRadial ?? enemy?.radial ?? (enemy?.boss ? .68 : .88);
+  const base = enemy?.baseRadial ?? enemy?.radial ?? (enemy?.boss ? .68 : ENEMY_RAISED_RADIAL);
   if(enemy?.boss) return base;
+  const target = enemy?.bossShard ? BOSS_SHARD_RAISED_RADIAL : ENEMY_RAISED_RADIAL;
+  if(enemy?.spawnRaised || Math.abs(base - target) < .001) return target;
   const startDistance = enemy?.bossShard ? BOSS_SHARD_APPROACH_RADIAL_START : ENEMY_APPROACH_RADIAL_START;
   const endDistance = enemy?.bossShard ? BOSS_SHARD_APPROACH_RADIAL_END : ENEMY_APPROACH_RADIAL_END;
   const startZ = PLAYER_Z - startDistance;
   const endZ = PLAYER_Z - endDistance;
   const t = smoothstep(clamp((z - startZ) / Math.max(.001, endZ - startZ), 0, 1));
-  const target = PLAYER_COLLISION_RADIAL + (enemy?.bossShard ? .018 : .004);
   return base + (target - base) * t;
 }
 
@@ -33509,8 +33513,9 @@ function spawnEnemy(offset = 0){
     damage: Math.ceil(type.damage * (1 + state.wave * ENEMY_WAVE_DAMAGE_LINEAR)),
     speed: 12.5 + Math.min(ENEMY_WAVE_SPEED_CAP, state.wave * ENEMY_WAVE_SPEED_LINEAR) + Math.random() * 2.2,
     radius: type.radius * ENEMY_HITBOX_MULT,
-    radial:.88,
-    baseRadial:.88,
+    radial:ENEMY_RAISED_RADIAL,
+    baseRadial:ENEMY_RAISED_RADIAL,
+    spawnRaised:true,
     baseScale: ENEMY_SIZE_MULT,
     phase: Math.random() * TAU,
     drift: .026 + Math.random() * .030,
@@ -33605,8 +33610,9 @@ function spawnBossShard(boss){
       damage: Math.ceil(18 + state.wave * .55),
       speed: Math.max(16.4, shardSpeed),
       radius:BOSS_ATTACK_HIT_RADIUS * .92,
-      radial:.88,
-      baseRadial:.88,
+      radial:BOSS_SHARD_RAISED_RADIAL,
+      baseRadial:BOSS_SHARD_RAISED_RADIAL,
+      spawnRaised:true,
       baseScale:BOSS_ATTACK_VISUAL_SCALE * 1.62,
       attackLane:lane,
       phase:Math.random() * TAU,
@@ -33646,7 +33652,7 @@ function spawnBossAttackCue(angle, startZ, laneIndex = 0){
       sin: Math.sin(particleAngle),
       cos: Math.cos(particleAngle),
       z: startZ + (PLAYER_Z - startZ) * laneT,
-      radial: .84 + laneT * .050,
+      radial: BOSS_SHARD_RAISED_RADIAL,
       va: (Math.random() - .5) * .040,
       vz: 1.8 + laneT * 1.8,
       vr: .004 + laneT * .010,
