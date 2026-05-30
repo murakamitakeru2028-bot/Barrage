@@ -28,7 +28,8 @@ const BOSS_VISUAL_SCALE = 2.02;
 const CONTROL_TURN_SPEED = 0.178;
 const CONTROL_RESPONSE = 5.9;
 const CONTROL_POINTER_RANGE = .46;
-const CONTROL_MODE_DEFAULT = 'direct';
+const TOUCH_OPTIMIZED_DEVICE = (navigator.maxTouchPoints || 0) > 0 || !!window.matchMedia?.('(pointer: coarse)')?.matches;
+const CONTROL_MODE_DEFAULT = TOUCH_OPTIMIZED_DEVICE ? 'stick' : 'direct';
 const CONTROL_MODES = {
   direct: {label:'ダイレクト', sub:'触れた横位置へ機体を寄せる現在の操作'},
   stick: {label:'スティック', sub:'触り始めた位置から倒した量で旋回'}
@@ -633,7 +634,7 @@ let loadoutMultCache = null;
 let statLevelCache = null;
 let statMultCache = null;
 let uiMotionTimer = 0;
-const uiBoundsCache = {left:null, top:null, width:null, height:null, scale:null};
+const uiBoundsCache = {left:null, top:null, width:null, height:null, scale:null, visualHeight:null};
 const canvasBoundsCache = {left:0, top:0, width:W, height:H, scale:1};
 let canvasVisibilityState = null;
 const CANVAS_VISIBLE_MODES = new Set(['home', 'store', 'garage', 'play', 'levelup', 'pause', 'crash', 'dead']);
@@ -1030,16 +1031,20 @@ function normalizeCosmeticState(raw){
 function freshSettingsState(){
   return {
     controlMode: CONTROL_MODE_DEFAULT,
+    controlModePinned: false,
     unlimitedTokens: false
   };
 }
 
 function normalizeSettingsState(raw){
   const base = freshSettingsState();
-  const controlMode = CONTROL_MODES[raw?.controlMode] ? raw.controlMode : base.controlMode;
+  const rawMode = CONTROL_MODES[raw?.controlMode] ? raw.controlMode : null;
+  const pinned = !!raw?.controlModePinned;
+  const controlMode = pinned && rawMode ? rawMode : base.controlMode;
   return {
     ...base,
     controlMode,
+    controlModePinned: pinned,
     unlimitedTokens: !!raw?.unlimitedTokens
   };
 }
@@ -1102,6 +1107,7 @@ function setControlMode(mode){
   if(!state.settings) state.settings = freshSettingsState();
   if(state.settings.controlMode === mode) return;
   state.settings.controlMode = mode;
+  state.settings.controlModePinned = true;
   state.pointer = 0;
   resetTurnHold();
   resetTouchStick();
@@ -29946,6 +29952,166 @@ function createUi(){
         gap:7px !important;
       }
     }
+    /* Smartphone operation pass: larger touch targets, visible stick feedback, and safer bottom HUD. */
+    @media (pointer: coarse), (max-width: 520px){
+      #canvas{
+        touch-action:none !important;
+      }
+      #barrage-ui{
+        --mobile-tap:46px;
+      }
+      #barrage-ui :is(.page-back,.showroom-back,.home-settings-button,.action-tile,.store-category-tab,.store-offer-action,.part-buy-chip,.garage-ship,.settings-segment button,.gacha-roll,.game-upgrade,.game-pause){
+        min-height:var(--mobile-tap) !important;
+        touch-action:manipulation !important;
+      }
+      #barrage-ui .home-actions{
+        gap:8px !important;
+      }
+      #barrage-ui .action-tile{
+        padding-block:8px !important;
+      }
+      #barrage-ui .game-hud.on .game-pause:not(.page-back):not(.showroom-back){
+        width:44px !important;
+        min-width:44px !important;
+        max-width:44px !important;
+        height:44px !important;
+        min-height:44px !important;
+        max-height:44px !important;
+      }
+      #barrage-ui .game-hud.on .game-top{
+        grid-template-columns:44px minmax(0,1fr) 106px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom{
+        position:fixed !important;
+        left:50% !important;
+        right:auto !important;
+        top:auto !important;
+        bottom:calc(8px + env(safe-area-inset-bottom)) !important;
+        width:min(430px,calc(100vw - 18px)) !important;
+        max-width:430px !important;
+        display:grid !important;
+        opacity:1 !important;
+        visibility:visible !important;
+        transform:translateX(-50%) !important;
+        z-index:10 !important;
+        border-radius:8px !important;
+      }
+      #barrage-ui .game-hud.on .game-upgrade{
+        min-height:46px !important;
+        font-size:10px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .game-bottom{
+        height:166px !important;
+        min-height:166px !important;
+        max-height:166px !important;
+        grid-template-rows:34px 50px 48px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .game-bottom > .game-bars,
+      #barrage-ui .game-hud.basic-open.on .game-bars,
+      #barrage-ui .game-hud.basic-open.on .game-meter.is-hp.is-basic-picker{
+        height:50px !important;
+        min-height:50px !important;
+        max-height:50px !important;
+      }
+      #barrage-ui .hud-basic-card{
+        flex-basis:clamp(136px,42vw,164px) !important;
+        grid-template-columns:30px minmax(0,1fr) 38px !important;
+        grid-template-rows:18px 18px !important;
+        padding:5px !important;
+      }
+      #barrage-ui .touch-stick{
+        width:128px !important;
+        height:128px !important;
+        margin:-64px 0 0 -64px !important;
+        transform:scale(.96) !important;
+      }
+      #barrage-ui .touch-stick.on{
+        opacity:.72 !important;
+        transform:scale(1) !important;
+      }
+      #barrage-ui .touch-stick i{
+        width:128px !important;
+        height:128px !important;
+        margin:-64px 0 0 -64px !important;
+        border-color:rgba(238,247,255,.34) !important;
+        background:
+          radial-gradient(circle at 50% 50%,rgba(141,245,255,.24),rgba(141,245,255,.08) 44%,rgba(2,5,6,.18) 70%,transparent 72%),
+          linear-gradient(180deg,rgba(11,27,31,.38),rgba(2,5,7,.16)) !important;
+      }
+      #barrage-ui .touch-stick i::before{width:86px !important}
+      #barrage-ui .touch-stick i::after{height:86px !important}
+      #barrage-ui .touch-stick b{
+        width:42px !important;
+        height:42px !important;
+        margin:-21px 0 0 -21px !important;
+      }
+    }
+    @media (max-width: 520px) and (max-height: 680px), (pointer: coarse) and (max-height: 680px){
+      #barrage-ui .game-hud.on .game-bottom{
+        top:calc(100dvh - 150px - env(safe-area-inset-bottom)) !important;
+        top:calc(var(--ui-visual-height, 100dvh) - 150px - env(safe-area-inset-bottom)) !important;
+        bottom:auto !important;
+        height:136px !important;
+        min-height:136px !important;
+        max-height:136px !important;
+        padding:7px !important;
+        grid-template-rows:29px 29px 38px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .game-bottom{
+        top:calc(100dvh - 160px - env(safe-area-inset-bottom)) !important;
+        top:calc(var(--ui-visual-height, 100dvh) - 160px - env(safe-area-inset-bottom)) !important;
+        height:146px !important;
+        min-height:146px !important;
+        max-height:146px !important;
+        grid-template-rows:28px 46px 36px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-wave,
+      #barrage-ui .game-hud.on .game-bottom > .game-special-slots,
+      #barrage-ui .game-hud.on .game-bottom > .game-bars,
+      #barrage-ui .game-hud.on .game-bottom > .game-console{
+        min-height:0 !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .game-bottom > .game-bars,
+      #barrage-ui .game-hud.basic-open.on .game-bars,
+      #barrage-ui .game-hud.basic-open.on .game-meter.is-hp.is-basic-picker{
+        height:46px !important;
+        min-height:46px !important;
+        max-height:46px !important;
+      }
+      #barrage-ui .game-hud.on .game-bottom > .game-console,
+      #barrage-ui .game-hud.on .game-console,
+      #barrage-ui .game-hud.on .game-chips{
+        height:36px !important;
+        min-height:36px !important;
+        max-height:36px !important;
+      }
+      #barrage-ui .game-hud.on .game-chip,
+      #barrage-ui .game-hud.on .game-upgrade{
+        height:36px !important;
+        min-height:36px !important;
+        max-height:36px !important;
+      }
+      #barrage-ui .game-hud.on .game-chip{
+        padding:3px 2px !important;
+      }
+      #barrage-ui .game-hud.on .game-chip span{
+        font-size:10px !important;
+      }
+      #barrage-ui .game-hud.on .game-upgrade{
+        width:82px !important;
+        min-width:82px !important;
+        max-width:82px !important;
+        padding:0 4px !important;
+        font-size:8px !important;
+      }
+      #barrage-ui .hud-basic-card{
+        flex-basis:128px !important;
+        grid-template-columns:25px minmax(0,1fr) 31px !important;
+        grid-template-rows:15px 15px !important;
+        padding:4px !important;
+      }
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
       #barrage-ui .brand-lockup,
@@ -31643,6 +31809,9 @@ function clearRunObjects(){
 
 function bindInput(){
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => requestAnimationFrame(resize));
+  window.visualViewport?.addEventListener('resize', resize);
+  window.visualViewport?.addEventListener('scroll', resize);
   window.addEventListener('keydown', e => {
     if(e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') state.keyboard = -1;
     if(e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') state.keyboard = 1;
@@ -31891,6 +32060,13 @@ function syncUiBounds(rect = canvas.getBoundingClientRect()){
   const width = `${rect.width}px`;
   const height = `${rect.height}px`;
   const scale = `${Math.min(rect.width / W, rect.height / H)}`;
+  const visualHeightCandidates = [
+    window.visualViewport?.height,
+    window.innerHeight,
+    document.documentElement?.clientHeight,
+    rect.height
+  ].filter(value => Number.isFinite(value) && value > 0);
+  const visualHeight = `${Math.max(1, Math.min(...visualHeightCandidates))}px`;
   canvasBoundsCache.scale = Number(scale) || 1;
   if(uiBoundsCache.left !== left){
     uiBoundsCache.left = left;
@@ -31911,6 +32087,10 @@ function syncUiBounds(rect = canvas.getBoundingClientRect()){
   if(uiBoundsCache.scale !== scale){
     uiBoundsCache.scale = scale;
     ui.root.style.setProperty('--ui-scale', scale);
+  }
+  if(uiBoundsCache.visualHeight !== visualHeight){
+    uiBoundsCache.visualHeight = visualHeight;
+    ui.root.style.setProperty('--ui-visual-height', visualHeight);
   }
 }
 
