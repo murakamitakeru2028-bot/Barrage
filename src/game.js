@@ -150,6 +150,9 @@ const ENEMY_PACK_WAVE_STEP = 7;
 const ENEMY_SPAWN_INTERVAL_START = .92;
 const ENEMY_SPAWN_INTERVAL_WAVE_REDUCTION = .012;
 const ENEMY_SPAWN_INTERVAL_MIN = .28;
+const WAVE1_OPENING_ENEMY_COUNT = 3;
+const WAVE1_OPENING_LANE_OFFSETS = [-.42, .38, .08];
+const WAVE1_OPENING_Z_DISTANCES = [12, 25, 39];
 const BOSS_HP_MULT = 1.24;
 const BOSS_SHARD_HP_MULT = 1.18;
 const ENEMY_HP_BAR_VISIBLE_TIME = 4.15;
@@ -703,6 +706,7 @@ let sceneVisualMode = '';
 let lastVisualFrameAt = 0;
 let bulletsDirty = true;
 let particlesDirty = true;
+let particleColorsDirty = true;
 let particleSyncClock = 0;
 let cosmeticBuffCache = null;
 let loadoutBuffCache = null;
@@ -34928,6 +34932,232 @@ function createUi(){
         line-height:1.26 !important;
       }
     }
+    /* Skill picker compact pass: three choices visible, same footprint as the in-run upgrade tray. */
+    #barrage-ui .upgrade-overlay.special-overlay.on::before{
+      bottom:222px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+      left:9px !important;
+      right:9px !important;
+      bottom:8px !important;
+      height:222px !important;
+      min-height:222px !important;
+      max-height:222px !important;
+      padding:9px !important;
+      grid-template-rows:31px 128px 39px !important;
+      gap:7px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-head{
+      height:31px !important;
+      min-height:31px !important;
+      padding:0 3px 6px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-title{
+      font-size:16px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-sp{
+      height:26px !important;
+      min-height:26px !important;
+      min-width:50px !important;
+      font-size:9px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid,
+    #barrage-ui .upgrade-overlay.on .level-dialog .upgrade-grid{
+      grid-row:2 !important;
+      width:100% !important;
+      height:128px !important;
+      min-height:128px !important;
+      max-height:128px !important;
+      padding:0 !important;
+      margin:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      grid-template-rows:128px !important;
+      grid-auto-rows:128px !important;
+      gap:6px !important;
+      overflow:hidden !important;
+      scroll-snap-type:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+      flex:1 1 auto !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:none !important;
+      height:128px !important;
+      min-height:128px !important;
+      max-height:128px !important;
+      padding:8px 7px 7px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) !important;
+      grid-template-rows:22px 13px 32px 30px 20px !important;
+      gap:4px !important;
+      align-items:start !important;
+      text-align:left !important;
+      scroll-snap-align:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      position:relative !important;
+      left:auto !important;
+      top:auto !important;
+      width:22px !important;
+      height:22px !important;
+      min-width:22px !important;
+      min-height:22px !important;
+      margin:0 !important;
+      justify-self:start !important;
+      align-self:start !important;
+      border-radius:5px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon{
+      width:16px !important;
+      height:16px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > b,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > b{
+      grid-column:1 !important;
+      grid-row:2 !important;
+      padding:0 !important;
+      color:color-mix(in srgb,var(--accent,#8eefff) 78%,#ffffff) !important;
+      font-size:7px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name{
+      grid-column:1 !important;
+      grid-row:3 !important;
+      padding:0 !important;
+      color:#f7ffff !important;
+      font-size:11px !important;
+      line-height:1.15 !important;
+      font-weight:1000 !important;
+      white-space:normal !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:2 !important;
+      -webkit-box-orient:vertical !important;
+      overflow:hidden !important;
+      text-align:left !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-short,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-short{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain{
+      grid-column:1 !important;
+      grid-row:4 !important;
+      padding:0 !important;
+      color:rgba(238,247,255,.82) !important;
+      font-size:8px !important;
+      line-height:1.22 !important;
+      font-weight:850 !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:2 !important;
+      -webkit-box-orient:vertical !important;
+      overflow:hidden !important;
+      text-align:left !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > em,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > em{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > strong,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > strong{
+      position:relative !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      grid-column:1 !important;
+      grid-row:5 !important;
+      width:100% !important;
+      min-width:0 !important;
+      height:20px !important;
+      min-height:20px !important;
+      margin:0 !important;
+      padding:0 5px !important;
+      font-size:8px !important;
+      border-radius:5px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row{
+      grid-row:3 !important;
+      height:39px !important;
+      min-height:39px !important;
+      max-height:39px !important;
+      grid-template-columns:minmax(0,1fr) 88px !important;
+      gap:7px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button{
+      width:88px !important;
+      min-width:88px !important;
+      max-width:88px !important;
+      height:32px !important;
+      min-height:32px !important;
+      max-height:32px !important;
+      align-self:center !important;
+      font-size:8px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row small{
+      font-size:8px !important;
+      line-height:1.16 !important;
+      white-space:normal !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:2 !important;
+      -webkit-box-orient:vertical !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .upgrade-overlay.special-overlay.on::before{
+        bottom:214px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+        height:214px !important;
+        min-height:214px !important;
+        max-height:214px !important;
+        grid-template-rows:30px 122px 38px !important;
+        gap:6px !important;
+        padding:8px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid,
+      #barrage-ui .upgrade-overlay.on .level-dialog .upgrade-grid{
+        height:122px !important;
+        min-height:122px !important;
+        max-height:122px !important;
+        grid-template-rows:122px !important;
+        grid-auto-rows:122px !important;
+        gap:5px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+        height:122px !important;
+        min-height:122px !important;
+        max-height:122px !important;
+        padding:7px 6px 6px !important;
+        grid-template-rows:20px 12px 30px 28px 19px !important;
+        gap:3px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon{
+        width:20px !important;
+        height:20px !important;
+        min-width:20px !important;
+        min-height:20px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name{
+        font-size:10px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain{
+        font-size:7px !important;
+      }
+    }
     /* Gameplay HUD audit: keep the upgrade button readable on combat previews. */
     #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
     #barrage-ui .game-hud.on:not(.basic-open) .game-console{
@@ -34958,6 +35188,716 @@ function createUi(){
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading .game-meter-track::before{
         animation:none !important;
+      }
+    }
+    /* Combat footer home rebuild: compact command cards with the home screen visual language. */
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom{
+      left:50% !important;
+      right:auto !important;
+      bottom:calc(8px + env(safe-area-inset-bottom)) !important;
+      width:min(430px,calc(100vw - 18px)) !important;
+      max-width:430px !important;
+      height:182px !important;
+      min-height:182px !important;
+      max-height:182px !important;
+      padding:8px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr) !important;
+      grid-template-rows:46px 64px 41px !important;
+      gap:7px !important;
+      align-items:stretch !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      border-bottom:3px solid #8eefff !important;
+      border-radius:10px !important;
+      background:
+        linear-gradient(118deg,rgba(142,239,255,.11) 0 13%,transparent 13%),
+        linear-gradient(180deg,rgba(7,10,12,.92),rgba(3,5,6,.96)) !important;
+      box-shadow:0 -18px 38px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.06),0 0 22px rgba(142,239,255,.10) !important;
+      clip-path:none !important;
+      transform:translateX(-50%) !important;
+      box-sizing:border-box !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom::before,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom::after,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave::before,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave::after,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bars::before,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bars::after,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade::before,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade::after{
+      display:none !important;
+      content:none !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+      position:relative !important;
+      min-width:0 !important;
+      border:1px solid rgba(238,247,255,.15) !important;
+      border-top:2px solid var(--accent,#8eefff) !important;
+      border-radius:8px !important;
+      background:
+        linear-gradient(118deg,rgba(142,239,255,.08) 0 18%,transparent 18%),
+        rgba(8,9,11,.86) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 8px 18px rgba(0,0,0,.24) !important;
+      clip-path:none !important;
+      text-shadow:none !important;
+      box-sizing:border-box !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave{
+      --accent:#8eefff;
+      grid-column:1 !important;
+      grid-row:1 !important;
+      width:100% !important;
+      height:46px !important;
+      min-height:46px !important;
+      max-height:46px !important;
+      padding:7px 9px 6px !important;
+      display:grid !important;
+      grid-template-columns:auto minmax(30px,auto) minmax(0,1fr) !important;
+      grid-template-rows:20px 8px !important;
+      gap:4px 8px !important;
+      align-items:center !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave b{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      color:#8eefff !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      text-shadow:0 0 12px rgba(142,239,255,.24) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave span{
+      grid-column:2 !important;
+      grid-row:1 !important;
+      color:#f6f8fa !important;
+      font-size:22px !important;
+      line-height:.88 !important;
+      font-weight:1000 !important;
+      white-space:nowrap !important;
+      text-align:left !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave small{
+      grid-column:3 !important;
+      grid-row:1 !important;
+      justify-self:end !important;
+      color:rgba(216,226,234,.76) !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:900 !important;
+      white-space:nowrap !important;
+      text-align:right !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave .game-wave-track{
+      grid-column:1 / -1 !important;
+      grid-row:2 !important;
+      height:8px !important;
+      min-height:8px !important;
+      max-height:8px !important;
+      border:1px solid rgba(238,247,255,.12) !important;
+      border-radius:999px !important;
+      background:rgba(238,247,255,.08) !important;
+      box-shadow:none !important;
+      clip-path:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave .game-wave-track i{
+      background:#8eefff !important;
+      box-shadow:0 0 12px rgba(142,239,255,.36) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots{
+      grid-column:2 !important;
+      grid-row:1 !important;
+      width:100% !important;
+      height:46px !important;
+      min-height:46px !important;
+      max-height:46px !important;
+      padding:6px !important;
+      display:grid !important;
+      grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+      justify-content:stretch !important;
+      align-content:center !important;
+      gap:5px !important;
+      border:1px solid rgba(238,247,255,.12) !important;
+      border-top:2px solid rgba(238,247,255,.34) !important;
+      border-radius:8px !important;
+      background:rgba(8,9,11,.74) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.045) !important;
+      box-sizing:border-box !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots .special-slot{
+      width:100% !important;
+      min-width:0 !important;
+      max-width:none !important;
+      height:32px !important;
+      min-height:32px !important;
+      max-height:32px !important;
+      border-radius:6px !important;
+      border-color:rgba(238,247,255,.16) !important;
+      background:rgba(238,247,255,.045) !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots .special-slot b .special-icon{
+      width:19px !important;
+      height:19px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-bars,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bars{
+      grid-column:1 / -1 !important;
+      grid-row:2 !important;
+      width:100% !important;
+      height:64px !important;
+      min-height:64px !important;
+      max-height:64px !important;
+      padding:0 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) !important;
+      grid-template-rows:29px 29px !important;
+      gap:6px !important;
+      border:0 !important;
+      border-radius:0 !important;
+      background:transparent !important;
+      box-shadow:none !important;
+      overflow:hidden !important;
+      box-sizing:border-box !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading{
+      height:29px !important;
+      min-height:29px !important;
+      max-height:29px !important;
+      padding:5px 9px !important;
+      display:grid !important;
+      grid-template-columns:54px minmax(0,1fr) 68px !important;
+      grid-template-rows:1fr !important;
+      gap:8px !important;
+      align-items:center !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp{
+      --accent:#ff6b93;
+      grid-row:2 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo{
+      --accent:#ffd36a;
+      grid-row:1 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter b{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      color:var(--accent,#8eefff) !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter span{
+      grid-column:3 !important;
+      grid-row:1 !important;
+      color:#f6f8fa !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-align:right !important;
+      white-space:nowrap !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter-track,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp .game-meter-track,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo .game-meter-track{
+      grid-column:2 !important;
+      grid-row:1 !important;
+      height:12px !important;
+      min-height:12px !important;
+      max-height:12px !important;
+      border:1px solid rgba(238,247,255,.11) !important;
+      border-radius:999px !important;
+      background:rgba(238,247,255,.08) !important;
+      box-shadow:none !important;
+      clip-path:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading{
+      border-color:rgba(255,211,106,.58) !important;
+      border-radius:8px !important;
+      box-shadow:0 0 18px rgba(255,211,106,.16),inset 0 1px 0 rgba(255,255,255,.055) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading b{
+      font-size:10px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading span{
+      font-size:12px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading .game-meter-track{
+      height:12px !important;
+      min-height:12px !important;
+      max-height:12px !important;
+      border-radius:999px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter-track i{
+      background:linear-gradient(90deg,var(--meter-a),var(--meter-b)) !important;
+      box-shadow:0 0 12px color-mix(in srgb,var(--meter-a) 36%,transparent) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-console{
+      grid-column:1 / -1 !important;
+      grid-row:3 !important;
+      width:100% !important;
+      height:41px !important;
+      min-height:41px !important;
+      max-height:41px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 92px !important;
+      gap:7px !important;
+      overflow:hidden !important;
+      box-sizing:border-box !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chips{
+      height:41px !important;
+      min-height:41px !important;
+      max-height:41px !important;
+      display:grid !important;
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+      gap:6px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip{
+      height:41px !important;
+      min-height:41px !important;
+      max-height:41px !important;
+      padding:7px 4px 5px !important;
+      display:grid !important;
+      grid-template-rows:10px minmax(0,1fr) !important;
+      gap:4px !important;
+      text-align:center !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip b{
+      color:rgba(142,239,255,.88) !important;
+      font-size:7px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip span{
+      color:#f6f8fa !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      font-weight:1000 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+      width:92px !important;
+      min-width:92px !important;
+      max-width:92px !important;
+      height:41px !important;
+      min-height:41px !important;
+      max-height:41px !important;
+      padding:0 7px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      background:
+        linear-gradient(118deg,rgba(255,255,255,.42) 0 20%,transparent 20%),
+        #8eefff !important;
+      border-color:rgba(142,239,255,.68) !important;
+      border-top-color:#f7ffff !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.28),0 0 18px rgba(142,239,255,.18),inset 0 1px 0 rgba(255,255,255,.46) !important;
+      font-size:11px !important;
+      font-weight:1000 !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+      text-overflow:ellipsis !important;
+      overflow:hidden !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open):not(.has-bp) .game-upgrade{
+      color:rgba(216,226,234,.56) !important;
+      background:
+        linear-gradient(118deg,rgba(238,247,255,.055) 0 18%,transparent 18%),
+        rgba(8,9,11,.62) !important;
+      border-color:rgba(238,247,255,.12) !important;
+      border-top-color:rgba(238,247,255,.18) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 16px rgba(0,0,0,.20) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .token-diamond{
+      width:8px !important;
+      height:8px !important;
+      margin-right:2px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .token-number,
+    #barrage-ui .game-hud.on:not(.basic-open) .token-value{
+      color:#f6f8fa !important;
+      font-size:11px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-hud.critical.on:not(.basic-open) .game-meter.is-hp{
+      border-color:rgba(255,107,147,.44) !important;
+      box-shadow:0 0 16px rgba(255,107,147,.16),inset 0 1px 0 rgba(255,255,255,.055) !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom{
+        height:166px !important;
+        min-height:166px !important;
+        max-height:166px !important;
+        grid-template-rows:42px 58px 38px !important;
+        gap:6px !important;
+        padding:7px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots{
+        height:42px !important;
+        min-height:42px !important;
+        max-height:42px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave{
+        padding:6px 7px 5px !important;
+        grid-template-rows:18px 7px !important;
+        column-gap:6px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave span{
+        font-size:20px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave small{
+        font-size:8px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots{
+        padding:5px !important;
+        gap:4px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots .special-slot{
+        height:29px !important;
+        min-height:29px !important;
+        max-height:29px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-bars,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bars{
+        height:58px !important;
+        min-height:58px !important;
+        max-height:58px !important;
+        grid-template-rows:26px 26px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading{
+        height:26px !important;
+        min-height:26px !important;
+        max-height:26px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading{
+        padding:4px 7px !important;
+        grid-template-columns:48px minmax(0,1fr) 58px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter b,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading b{
+        font-size:9px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter span,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading span{
+        font-size:11px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-console,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chips,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chip,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+        height:38px !important;
+        min-height:38px !important;
+        max-height:38px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-console{
+        grid-template-columns:minmax(0,1fr) 84px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+        width:84px !important;
+        min-width:84px !important;
+        max-width:84px !important;
+        font-size:10px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chips{
+        gap:5px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chip{
+        padding:6px 3px 4px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chip span{
+        font-size:11px !important;
+      }
+    }
+    /* Touch control pass-through: status panels stay visible but no longer block steering. */
+    #barrage-ui .touch-stick,
+    #barrage-ui .touch-stick.on{
+      opacity:0 !important;
+    }
+    #barrage-ui .touch-stick i,
+    #barrage-ui .touch-stick b,
+    #barrage-ui .touch-stick i::before,
+    #barrage-ui .touch-stick i::after{
+      border-color:transparent !important;
+      background:transparent !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-bottom,
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-wave,
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-special-slots,
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .special-slot,
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-bars,
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-meter,
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-meter-track,
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-console,
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-chips,
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-chip{
+      pointer-events:none !important;
+      touch-action:none !important;
+    }
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-pause,
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open).has-bp .game-upgrade{
+      pointer-events:auto !important;
+      touch-action:manipulation !important;
+    }
+    #barrage-ui .game-hud.on:not(.leveling):not(.basic-open):not(.has-bp) .game-upgrade{
+      pointer-events:none !important;
+      touch-action:none !important;
+    }
+    /* Final command-button pass: preserve the current layouts, but make run controls match the hard-edged home command style. */
+    #barrage-ui .game-pause,
+    #barrage-ui .game-upgrade,
+    #barrage-ui .game-hud.basic-open.on .game-console.is-basic-picker .game-upgrade,
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button,
+    #barrage-ui .basic-actions button{
+      border-radius:0 !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+      border:1px solid rgba(238,247,255,.22) !important;
+      border-top:2px solid var(--accent,#8eefff) !important;
+      background:
+        linear-gradient(135deg,color-mix(in srgb,var(--accent,#8eefff) 18%,transparent),transparent 34%),
+        linear-gradient(180deg,rgba(12,17,19,.95),rgba(3,6,8,.98)) !important;
+      color:#f7ffff !important;
+      box-shadow:0 10px 22px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.08) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-pause::before,
+    #barrage-ui .game-upgrade::before,
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button::before,
+    #barrage-ui .basic-actions button::before{
+      content:"" !important;
+      display:block !important;
+      position:absolute !important;
+      left:7px !important;
+      top:7px !important;
+      width:6px !important;
+      height:6px !important;
+      border:2px solid currentColor !important;
+      border-radius:0 !important;
+      opacity:.58 !important;
+      background:transparent !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-pause::after,
+    #barrage-ui .game-upgrade::after,
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button::after,
+    #barrage-ui .basic-actions button::after{
+      content:"" !important;
+      display:block !important;
+      position:absolute !important;
+      right:8px !important;
+      bottom:7px !important;
+      width:17px !important;
+      height:2px !important;
+      background:currentColor !important;
+      opacity:.52 !important;
+      box-shadow:0 0 10px color-mix(in srgb,currentColor 40%,transparent) !important;
+      pointer-events:none !important;
+    }
+    #barrage-ui .game-pause span,
+    #barrage-ui .game-upgrade,
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button :is(b,span),
+    #barrage-ui .basic-actions button{
+      min-width:0 !important;
+      color:inherit !important;
+      font-weight:1000 !important;
+      letter-spacing:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .game-pause{
+      --accent:#f7ffff;
+      color:#061014 !important;
+      background:
+        linear-gradient(135deg,transparent 0 10px,#f7ffff 10px),
+        #f7ffff !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .game-hud.has-bp .game-upgrade{
+      --accent:#8eefff;
+      color:#061014 !important;
+      background:
+        linear-gradient(135deg,transparent 0 10px,#f7ffff 10px 47%,#8eefff 47% 100%),
+        #8eefff !important;
+      text-shadow:none !important;
+      box-shadow:0 0 22px rgba(142,239,255,.26),0 10px 22px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.42) !important;
+    }
+    #barrage-ui .game-hud.has-bp .game-upgrade::before,
+    #barrage-ui .game-hud.has-bp .game-upgrade::after,
+    #barrage-ui .game-pause::before,
+    #barrage-ui .game-pause::after{
+      color:#061014 !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card,
+    #barrage-ui .run-basic-card{
+      border-radius:0 !important;
+      border:1px solid rgba(238,247,255,.18) !important;
+      border-top:2px solid var(--accent,#8eefff) !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      background:
+        linear-gradient(135deg,color-mix(in srgb,var(--accent,#8eefff) 16%,transparent),transparent 32%),
+        linear-gradient(180deg,rgba(12,17,19,.96),rgba(4,7,9,.98)) !important;
+      box-shadow:0 10px 22px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.07) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice::before,
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card::before,
+    #barrage-ui .run-basic-card::before{
+      border-radius:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice::after,
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card::after,
+    #barrage-ui .run-basic-card::after{
+      height:2px !important;
+      border-radius:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > strong,
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > mark,
+    #barrage-ui .run-basic-card strong{
+      border-radius:0 !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      border-color:color-mix(in srgb,var(--accent,#8eefff) 58%,rgba(238,247,255,.18)) !important;
+      color:#f7ffff !important;
+      background:color-mix(in srgb,var(--accent,#8eefff) 18%,rgba(238,247,255,.07)) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > span strong,
+    #barrage-ui .run-basic-card span{
+      color:#f7ffff !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > small,
+    #barrage-ui .run-basic-card small{
+      color:rgba(238,247,255,.90) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud.on:not(.basic-open) .game-console{
+        grid-template-columns:minmax(0,1fr) 94px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+        width:94px !important;
+        min-width:94px !important;
+        max-width:94px !important;
+        font-size:11px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name{
+        font-size:11px !important;
+        line-height:1.16 !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain{
+        font-size:8px !important;
+        line-height:1.24 !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .hud-basic-card > span strong{
+        font-size:12px !important;
+        line-height:1.12 !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .hud-basic-card > small{
+        font-size:9px !important;
+        line-height:1.24 !important;
+      }
+    }
+    /* Readability pass: skill choices are three-across, so prioritize name and explanation over tiny metadata. */
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card{
+      grid-template-rows:22px 35px 42px 20px !important;
+      gap:4px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice::before,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice::before,
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card::before,
+    #barrage-ui .run-basic-card::before{
+      display:none !important;
+      content:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > b,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > b,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > b,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > b{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > span.skill-name,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > span.skill-name{
+      grid-row:2 !important;
+      font-size:12px !important;
+      line-height:1.15 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain{
+      grid-row:3 !important;
+      font-size:9px !important;
+      line-height:1.25 !important;
+      -webkit-line-clamp:3 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > strong,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > strong,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > strong,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > strong{
+      grid-row:4 !important;
+      font-size:9px !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card{
+        grid-template-rows:20px 32px 42px 20px !important;
+        gap:3px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > span.skill-name,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > span.skill-name{
+        font-size:11px !important;
+        line-height:1.15 !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain{
+        font-size:8.5px !important;
+        line-height:1.24 !important;
       }
     }
     @media (prefers-reduced-motion: reduce){
@@ -35242,18 +36182,20 @@ function renderUi2(){
           ${renderSpecialSlotsHud()}
         </div>
         <div class="game-bars">
-          <div class="game-meter is-hp ${basicPickerOpen ? 'is-basic-picker' : ''}" style="--meter-a:#ff3b62;--meter-b:#ffc3ce">
-            ${basicPickerOpen ? renderHudBasicUpgradeStrip() : `
-              <b>HP</b>
-              <div class="game-meter-track"><i data-ref="hp" style="width:${hpFillPercent()}%"></i></div>
-              <span data-ref="hpText">${Math.ceil(visibleHp())}/${visibleHpMax()}</span>
-            `}
-          </div>
-          ${basicPickerOpen ? '' : `
+          ${basicPickerOpen ? `
+            <div class="game-meter is-hp is-basic-picker" style="--meter-a:#ff3b62;--meter-b:#ffc3ce">
+              ${renderHudBasicUpgradeStrip()}
+            </div>
+          ` : `
             <div class="game-meter is-ammo ${state.reloading ? 'reloading' : ''}" data-ref="ammoMeter" style="--meter-a:#ffd36a;--meter-b:#9cf5ff">
               <b data-ref="ammoLabel">${ammoHudLabel()}</b>
               <div class="game-meter-track"><i data-ref="ammo" style="width:${ammoFillPercent()}%"></i></div>
               <span data-ref="ammoText">${ammoHudText()}</span>
+            </div>
+            <div class="game-meter is-hp" style="--meter-a:#ff3b62;--meter-b:#ffc3ce">
+              <b>HP</b>
+              <div class="game-meter-track"><i data-ref="hp" style="width:${hpFillPercent()}%"></i></div>
+              <span data-ref="hpText">${Math.ceil(visibleHp())}/${visibleHpMax()}</span>
             </div>
           `}
         </div>
@@ -36775,6 +37717,8 @@ function startRun(){
   camera.lookAt(0, CAMERA_LOOK_Y, CAMERA_LOOK_Z);
   state.spawnTimer = .45;
   state.bossAlive = false;
+  spawnWave1OpeningEnemies();
+  state.spawnTimer = .72;
   state.nextHudAt = 0;
   state.deathTimer = 0;
   state.playerDeathAge = 0;
@@ -36796,6 +37740,7 @@ function clearRunObjects(){
   clearBossAttackBeams();
   bulletsDirty = true;
   particlesDirty = true;
+  particleColorsDirty = true;
   particleSyncClock = 0;
   bulletMesh.count = 0;
   bulletGlowMesh.count = 0;
@@ -37231,11 +38176,13 @@ function beginDeathCrash(){
   state.mode = 'crash';
   state.hurtFlash = Math.max(state.hurtFlash || 0, 1);
   state.playerHitFlash = Math.max(state.playerHitFlash || 0, 1);
-  state.shake = Math.max(state.shake, .92);
+  state.shake = Math.max(state.shake, .18);
   state.hitConfirm = 0;
   preparePlayerBreakup();
-  triggerPlayerDamageEffect({angle:state.roll, z:PLAYER_Z, t:0}, {taken:42});
-  for(let i=0;i<3;i++){
+  triggerPlayerDamageEffect({angle:state.roll, z:PLAYER_Z, t:0}, {taken:42, subdued:true});
+  state.playerHitFlash = 0;
+  if(player.hitShield) player.hitShield.visible = false;
+  for(let i=0;i<2;i++){
     spawnPlayerDamageBurst(normalizeAngle(state.roll + (i - 1) * .18), PLAYER_Z + (i - 1) * .08, i === 1 ? 0xffd36a : 0xff3b62, false);
   }
   uiDirty = true;
@@ -37260,16 +38207,18 @@ function updateDeathCrash(dt, t){
   state.deathTimer = Math.max(0, (state.deathTimer || 0) - dt);
   state.playerDeathAge = (state.playerDeathAge || 0) + dt;
   const progress = 1 - clamp(state.deathTimer / PLAYER_DEATH_CRASH_DURATION, 0, 1);
-  const shudder = Math.sin(t * 58) * (1 - progress) * .035;
+  const fall = smoothstep(progress);
   player.root.visible = true;
-  player.root.position.z = PLAYER_Z + progress * 1.05;
-  player.root.rotation.x = -.13 + progress * .34;
-  player.root.rotation.y = Math.sin(t * 18) * progress * .18;
-  player.root.rotation.z = shudder + progress * .72;
-  player.root.scale.setScalar(PLAYER_VISUAL_SCALE * Math.max(.72, 1 - progress * .18));
+  player.root.position.z = PLAYER_Z + fall * .78;
+  player.root.position.y = PLAYER_Y - fall * .16;
+  player.root.rotation.x = -.13 + fall * .24;
+  player.root.rotation.y = fall * .10;
+  player.root.rotation.z = fall * .58;
+  player.root.scale.setScalar(PLAYER_VISUAL_SCALE * Math.max(.76, 1 - fall * .14));
   updatePlayerBreakupPieces(progress, state.playerDeathAge);
-  if(progress > .18 && Math.random() < .66){
-    spawnPlayerDamageBurst(normalizeAngle(state.roll + (Math.random() - .5) * .50), PLAYER_Z + (Math.random() - .5) * .24, Math.random() < .45 ? 0xffd36a : 0xff3b62, false);
+  if(player.hitShield) player.hitShield.visible = false;
+  if(progress > .22 && progress < .72 && Math.random() < .16){
+    spawnPlayerDamageBurst(normalizeAngle(state.roll + (Math.random() - .5) * .34), PLAYER_Z + (Math.random() - .5) * .18, Math.random() < .45 ? 0xffd36a : 0xff3b62, false);
   }
   syncBulletInstances();
   syncParticleInstances();
@@ -37603,7 +38552,7 @@ function updateStage(dt, t){
   );
   updatePlayerDamageVisual(t);
 
-  if(state.shake > 0){
+  if(state.shake > 0 && state.mode !== 'crash'){
     camera.position.x = (Math.random() - .5) * state.shake * .08;
     camera.position.y = CAMERA_BASE_Y + (Math.random() - .5) * state.shake * .05;
   }else{
@@ -38198,15 +39147,17 @@ function damagePlayer(amount, impact = null){
 
 function triggerPlayerDamageEffect(impact = null, options = {}){
   const evaded = !!options.evaded;
+  const subdued = !!options.subdued;
   const color = evaded ? 0x1ed6ff : 0xff3b62;
   const amount = Math.max(0, Number(options.taken) || 0);
   const visualImpact = playerDamageImpactPoint(impact);
   state.hurtFlashColor = color;
   state.hurtFlashRgb = colorRgbCss(color);
   state.hurtEvade = evaded;
-  state.hurtFlash = Math.max(state.hurtFlash || 0, evaded ? .56 : 1.15);
-  state.playerHitFlash = Math.max(state.playerHitFlash || 0, evaded ? .42 : 1.18);
-  state.shake = Math.max(state.shake, evaded ? .30 : Math.min(1.04, .70 + amount * .018));
+  state.hurtFlash = Math.max(state.hurtFlash || 0, subdued ? .62 : evaded ? .56 : 1.15);
+  state.playerHitFlash = Math.max(state.playerHitFlash || 0, subdued ? .60 : evaded ? .42 : 1.18);
+  const shake = subdued ? .16 : evaded ? .30 : Math.min(1.04, .70 + amount * .018);
+  state.shake = Math.max(state.shake, shake);
   spawnPlayerDamageBurst(visualImpact.angle, visualImpact.z, color, evaded);
 }
 
@@ -38241,6 +39192,7 @@ function spawnPlayerDamageBurst(angle, z, color, evaded = false){
     });
   }
   particlesDirty = true;
+  particleColorsDirty = true;
 }
 
 function fireShot(){
@@ -38417,6 +39369,7 @@ function spawnMuzzleFlash(angle, z, radial, crit = false){
     });
   }
   particlesDirty = true;
+  particleColorsDirty = true;
 }
 
 function reserveBulletSlot(){
@@ -38440,6 +39393,32 @@ function spawnEnemyPack(){
   for(let i=0;i<count && enemies.length<MAX_ENEMIES;i++){
     spawnEnemy(Math.random() * .85 + i * .08);
   }
+}
+
+function spawnWave1OpeningEnemies(){
+  const count = Math.min(WAVE1_OPENING_ENEMY_COUNT, MAX_ENEMIES);
+  for(let i=0;i<count;i++){
+    const enemy = spawnEnemy(i * .05);
+    placeWave1OpeningEnemy(enemy, i);
+  }
+}
+
+function placeWave1OpeningEnemy(enemy, index){
+  if(!enemy) return;
+  const lane = WAVE1_OPENING_LANE_OFFSETS[index % WAVE1_OPENING_LANE_OFFSETS.length];
+  const distance = WAVE1_OPENING_Z_DISTANCES[index % WAVE1_OPENING_Z_DISTANCES.length];
+  enemy.angle = normalizeAngle(state.roll + lane + (Math.random() - .5) * .035);
+  enemy.prevAngle = enemy.angle;
+  enemy.z = PLAYER_Z - distance - Math.random() * 2.5;
+  enemy.prevZ = enemy.z - Math.max(1.2, enemy.speed * .10);
+  enemy.radial = enemyApproachRadial(enemy, enemy.z);
+  enemy.baseRadial = ENEMY_RAISED_RADIAL;
+  enemy.prevRadial = enemy.radial;
+  enemy.sin = Math.sin(enemy.angle);
+  enemy.cos = Math.cos(enemy.angle);
+  enemy.spawnZ = enemy.z - ENEMY_FADE_DISTANCE * .92;
+  setPipePositionFromTrig(enemy.root, enemy.sin, enemy.cos, enemy.z, enemy.radial);
+  applyEnemyVisual(enemy, performance.now() / 1000);
 }
 
 function spawnEnemy(offset = 0){
@@ -38480,6 +39459,7 @@ function spawnEnemy(offset = 0){
   enemyRoot.add(root);
   setPipePositionFromTrig(root, enemy.sin, enemy.cos, enemy.z, enemy.radial);
   applyEnemyVisual(enemy, 0);
+  return enemy;
 }
 
 function spawnBoss(){
@@ -38696,6 +39676,7 @@ function spawnBossAttackCue(originAngle, originZ, targetAngle = originAngle, sta
     });
   }
   particlesDirty = true;
+  particleColorsDirty = true;
 }
 
 function acquireEnemyObject(type, boss = false){
@@ -38743,7 +39724,11 @@ function releaseEnemyObject(enemy){
 function startEnemyDefeatAnimation(enemy){
   hideEnemyHpBar(enemy);
   spawnEnemyDefeatBurst(enemy);
-  state.shake = Math.max(state.shake, enemy.boss ? .24 : .075);
+  state.shake = Math.max(state.shake, enemy.boss ? .16 : .035);
+  if(!enemy.boss){
+    releaseEnemyObject(enemy);
+    return;
+  }
 
   const root = enemy.root;
   root.visible = true;
@@ -38752,13 +39737,13 @@ function startEnemyDefeatAnimation(enemy){
   prepareEnemyBreakup(enemy);
 
   enemy.deathAge = 0;
-  enemy.deathMaxLife = enemy.boss ? 3.2 : 2.35;
-  enemy.deathMinAirTime = enemy.boss ? .28 : .18;
+  enemy.deathMaxLife = enemy.boss ? 1.45 : .58;
+  enemy.deathMinAirTime = enemy.boss ? .18 : .06;
   enemy.deathBaseScale = Math.max(.05, root.scale.x || 1);
-  enemy.deathAngleVel = (Math.random() < .5 ? -1 : 1) * (enemy.boss ? .82 : 1.12);
-  enemy.deathZVel = enemy.boss ? -30 : -38;
-  enemy.deathRadialVel = enemy.boss ? .035 : .045;
-  enemy.deathSpinBoost = (Math.random() < .5 ? -1 : 1) * (enemy.boss ? 5.8 : 8.6);
+  enemy.deathAngleVel = (Math.random() < .5 ? -1 : 1) * (enemy.boss ? .46 : .22);
+  enemy.deathZVel = enemy.boss ? -42 : -72;
+  enemy.deathRadialVel = enemy.boss ? .020 : .018;
+  enemy.deathSpinBoost = (Math.random() < .5 ? -1 : 1) * (enemy.boss ? 2.6 : 1.6);
   enemy.radial = enemy.radial ?? enemy.baseRadial ?? (enemy.boss ? .68 : ENEMY_RAISED_RADIAL);
   enemy.hitCue = 1;
   enemy.hitCueColor = 0xf4fbff;
@@ -38773,28 +39758,28 @@ function updateEnemyDefeatAnimations(dt, t){
     const enemy = enemyDefeatAnimations[i];
     enemy.deathAge = (enemy.deathAge || 0) + dt;
     const progress = clamp(enemy.deathAge / Math.max(.001, enemy.deathMaxLife || 2.35), 0, 1);
-    const pop = 1 + Math.sin(Math.min(1, enemy.deathAge / .42) * Math.PI) * (enemy.boss ? .34 : .58);
+    const pop = 1 + Math.sin(Math.min(1, enemy.deathAge / (enemy.boss ? .32 : .16)) * Math.PI) * (enemy.boss ? .16 : .10);
     enemy.angle = normalizeAngle((enemy.angle || 0) + (enemy.deathAngleVel || 0) * dt);
     enemy.z += (enemy.deathZVel || 0) * dt;
     enemy.radial = clamp((enemy.radial ?? enemy.baseRadial ?? ENEMY_RAISED_RADIAL) + (enemy.deathRadialVel || 0) * dt, .44, 1.10);
     enemy.sin = Math.sin(enemy.angle);
     enemy.cos = Math.cos(enemy.angle);
     setPipePositionFromTrig(enemy.root, enemy.sin, enemy.cos, enemy.z, enemy.radial);
-    const fallbackFade = progress > .86 ? 1 - smoothstep((progress - .86) / .14) : 1;
-    enemy.root.scale.setScalar(Math.max(.05, (enemy.deathBaseScale || 1) * pop * Math.max(.64, 1 - progress * .18)));
-    enemy.root.rotation.x += dt * ((enemy.spinX || 0) + (enemy.deathSpinBoost || 0) * .48);
-    enemy.root.rotation.y += dt * ((enemy.spinY || 0) - (enemy.deathSpinBoost || 0) * .34);
-    enemy.root.rotation.z += dt * ((enemy.spinZ || 0) + (enemy.deathSpinBoost || 0));
-    updateEnemyBreakupPieces(enemy, progress);
-    setEnemyOpacity(enemy.root, Math.max(.18, fallbackFade));
-    setEnemyFlash(enemy.root, Math.max(0, (1 - clamp(enemy.deathAge / .52, 0, 1)) * .92));
-    enemy.hitCue = Math.max(0, 1 - clamp(enemy.deathAge / (enemy.boss ? .42 : .26), 0, 1));
-    enemy.hitCueColor = enemy.deathAge < .28 ? 0xf4fbff : colorHexValue(enemy.type?.color);
+    const fade = 1 - smoothstep(progress);
+    enemy.root.scale.setScalar(Math.max(.05, (enemy.deathBaseScale || 1) * pop * Math.max(.22, 1 - progress * (enemy.boss ? .36 : .58))));
+    enemy.root.rotation.x += dt * ((enemy.spinX || 0) + (enemy.deathSpinBoost || 0) * .18);
+    enemy.root.rotation.y += dt * ((enemy.spinY || 0) - (enemy.deathSpinBoost || 0) * .12);
+    enemy.root.rotation.z += dt * ((enemy.spinZ || 0) + (enemy.deathSpinBoost || 0) * .34);
+    if(enemy.boss) updateEnemyBreakupPieces(enemy, progress);
+    setEnemyOpacity(enemy.root, Math.max(0, fade));
+    setEnemyFlash(enemy.root, Math.max(0, (1 - clamp(enemy.deathAge / (enemy.boss ? .34 : .18), 0, 1)) * (enemy.boss ? .72 : .56)));
+    enemy.hitCue = Math.max(0, 1 - clamp(enemy.deathAge / (enemy.boss ? .30 : .14), 0, 1));
+    enemy.hitCueColor = enemy.deathAge < .16 ? 0xf4fbff : colorHexValue(enemy.type?.color);
     syncEnemyHitVisual(enemy, t, 1);
     const core = enemy.root.userData?.core;
     if(core){
       const base = enemy.root.userData.coreBase || 1;
-      core.scale.setScalar(base * (1 + Math.min(1, enemy.deathAge / .46) * (enemy.boss ? .62 : .92)));
+      core.scale.setScalar(base * (1 + Math.min(1, enemy.deathAge / (enemy.boss ? .36 : .16)) * (enemy.boss ? .28 : .18)));
     }
     if((enemy.deathAge >= (enemy.deathMinAirTime || .18) && enemyDefeatIsOffscreen(enemy)) || progress >= 1){
       releaseEnemyObject(enemy);
@@ -38844,11 +39829,12 @@ function resetEnemyBreakup(root){
 }
 
 function prepareEnemyBreakup(enemy){
+  if(!enemy?.boss) return;
   const pieces = enemyBreakupPieces(enemy.root);
   if(!pieces.length) return;
   const boss = !!enemy.boss;
-  const power = boss ? 1.32 : 1;
-  const spinPower = boss ? 1.15 : 1;
+  const power = .72;
+  const spinPower = .62;
   const fallbackStep = TAU / Math.max(1, pieces.length);
   for(let i=0;i<pieces.length;i++){
     const part = pieces[i];
@@ -38856,9 +39842,9 @@ function prepareEnemyBreakup(enemy){
     const offsetAngle = base && (Math.abs(base.x) + Math.abs(base.y) > .001)
       ? Math.atan2(base.y, base.x)
       : (enemy.angle || 0) + i * fallbackStep;
-    const spray = offsetAngle + (Math.random() - .5) * .62;
-    const radialSpeed = (1.75 + Math.random() * 1.35 + i * .18) * power;
-    const zKick = ((Math.random() - .5) * (boss ? 4.2 : 3.2) - .18) * power;
+    const spray = offsetAngle + (Math.random() - .5) * .34;
+    const radialSpeed = (1.20 + Math.random() * .82 + i * .08) * power;
+    const zKick = ((Math.random() - .5) * 2.2 - .10) * power;
     part.userData.breakupBaseVisible = part.visible;
     part.userData.breakup = {
       vx: Math.cos(spray) * radialSpeed,
@@ -38867,10 +39853,10 @@ function prepareEnemyBreakup(enemy){
       ax: Math.cos(spray) * (.34 + Math.random() * .24) * power,
       ay: Math.sin(spray) * (.34 + Math.random() * .24) * power,
       az: (Math.random() - .5) * .38 * power,
-      rx: (Math.random() - .5) * 7.2 * spinPower,
-      ry: (Math.random() - .5) * 7.2 * spinPower,
-      rz: (Math.random() - .5) * 9.4 * spinPower,
-      scale: .82 + Math.random() * .24
+      rx: (Math.random() - .5) * 4.2 * spinPower,
+      ry: (Math.random() - .5) * 4.2 * spinPower,
+      rz: (Math.random() - .5) * 5.4 * spinPower,
+      scale: .90 + Math.random() * .14
     };
     part.visible = true;
   }
@@ -38880,8 +39866,8 @@ function updateEnemyBreakupPieces(enemy, progress){
   const pieces = enemy.root.userData?.breakupPieces;
   if(!pieces?.length) return;
   const age = enemy.deathAge || 0;
-  const burst = smoothstep(clamp(age / (enemy.boss ? .42 : .24), 0, 1));
-  const fadeScale = Math.max(.24, 1 - progress * (enemy.boss ? .34 : .46));
+  const burst = smoothstep(clamp(age / .34, 0, 1));
+  const fadeScale = Math.max(.36, 1 - progress * .36);
   for(const part of pieces){
     const data = part.userData;
     const breakup = data.breakup;
@@ -39409,6 +40395,7 @@ function spawnBulletImpact(enemy, bullet, angle, z, color, amount = 1){
     });
   }
   particlesDirty = true;
+  particleColorsDirty = true;
 }
 
 function makeParticleRoom(minSlots){
@@ -39426,57 +40413,57 @@ function spawnEnemyDefeatBurst(enemy){
   const originAngle = normalizeAngle(enemy.angle ?? 0);
   const originZ = enemy.z ?? PIPE_Z_FAR;
   const originRadial = clamp(enemy.radial ?? enemy.baseRadial ?? (boss ? .68 : ENEMY_RAISED_RADIAL), .44, 1.02);
-  const flashTarget = boss ? 4 : 3;
-  const ringTarget = boss ? (VISUAL_LOW_POWER ? 12 : 18) : (VISUAL_LOW_POWER ? 8 : 12);
-  const sparkTarget = boss ? (VISUAL_LOW_POWER ? 12 : 20) : (VISUAL_LOW_POWER ? 9 : 15);
+  const flashTarget = boss ? 2 : 1;
+  const ringTarget = boss ? (VISUAL_LOW_POWER ? 5 : 7) : (VISUAL_LOW_POWER ? 1 : 2);
+  const sparkTarget = boss ? (VISUAL_LOW_POWER ? 5 : 7) : (VISUAL_LOW_POWER ? 2 : 3);
   const desired = flashTarget + ringTarget + sparkTarget;
-  makeParticleRoom(Math.min(desired, boss ? 28 : 22));
+  makeParticleRoom(Math.min(desired, boss ? 14 : 6));
   let remaining = Math.max(0, Math.min(MAX_PARTICLES - particles.length, desired));
   if(!remaining) return;
 
   const palette = [0xf4fbff, baseColor, 0xffd36a, boss ? 0xff3b62 : 0x8eefff];
   const flashCount = Math.min(remaining, flashTarget);
   for(let i=0;i<flashCount;i++){
-    const life = .28 + Math.random() * .16;
+    const life = (boss ? .22 : .14) + Math.random() * (boss ? .10 : .06);
     particles.push({
       color: i === 0 ? 0xf4fbff : baseColor,
       angle: originAngle,
       sin: Math.sin(originAngle),
       cos: Math.cos(originAngle),
-      z: originZ + (Math.random() - .5) * (boss ? .72 : .42),
+      z: originZ + (Math.random() - .5) * (boss ? .52 : .22),
       radial: originRadial + .02,
-      va: (Math.random() - .5) * .48,
-      vz: (Math.random() - .5) * (boss ? 6.0 : 3.6),
-      vr: .18 + Math.random() * (boss ? .22 : .16),
+      va: (Math.random() - .5) * .20,
+      vz: (Math.random() - .5) * (boss ? 3.8 : 1.8),
+      vr: .08 + Math.random() * (boss ? .14 : .08),
       life,
       maxLife: life,
-      size: (boss ? 6.4 : 4.8) + Math.random() * (boss ? 1.8 : 1.2),
+      size: (boss ? 3.8 : 2.6) + Math.random() * (boss ? .8 : .4),
       minScale: .22
     });
   }
   remaining -= flashCount;
 
   const ringCount = Math.min(remaining, ringTarget);
-  const ringArc = boss ? 1.38 : .94;
+  const ringArc = boss ? .86 : .42;
   for(let i=0;i<ringCount;i++){
     const t = ringCount > 1 ? i / (ringCount - 1) : .5;
-    const offset = (t - .5) * ringArc + (Math.random() - .5) * .08;
+    const offset = (t - .5) * ringArc + (Math.random() - .5) * .04;
     const direction = Math.sign(offset) || (Math.random() < .5 ? -1 : 1);
     const angle = normalizeAngle(originAngle + offset);
-    const life = .38 + Math.random() * (boss ? .22 : .18);
+    const life = (boss ? .30 : .18) + Math.random() * (boss ? .14 : .08);
     particles.push({
       color: palette[(i + 1) % palette.length],
       angle,
       sin: Math.sin(angle),
       cos: Math.cos(angle),
-      z: originZ + (Math.random() - .5) * (boss ? 1.18 : .82),
-      radial: clamp(originRadial + (Math.random() - .5) * .08, .44, 1.02),
-      va: direction * ((boss ? 2.45 : 1.85) + Math.random() * .82),
-      vz: (Math.random() - .5) * (boss ? 9.5 : 6.0),
-      vr: .22 + Math.random() * (boss ? .36 : .28),
+      z: originZ + (Math.random() - .5) * (boss ? .82 : .36),
+      radial: clamp(originRadial + (Math.random() - .5) * .04, .44, 1.02),
+      va: direction * ((boss ? 1.32 : .72) + Math.random() * .34),
+      vz: (Math.random() - .5) * (boss ? 5.5 : 2.2),
+      vr: .10 + Math.random() * (boss ? .18 : .10),
       life,
       maxLife: life,
-      size: (boss ? 2.75 : 1.95) + Math.random() * (boss ? 1.05 : .70),
+      size: (boss ? 1.75 : 1.04) + Math.random() * (boss ? .54 : .28),
       minScale: .10
     });
   }
@@ -39484,26 +40471,27 @@ function spawnEnemyDefeatBurst(enemy){
 
   const sparkCount = Math.min(remaining, sparkTarget);
   for(let i=0;i<sparkCount;i++){
-    const spray = (Math.random() - .5) * (boss ? 1.24 : .82);
+    const spray = (Math.random() - .5) * (boss ? .76 : .34);
     const angle = normalizeAngle(originAngle + spray);
-    const life = .50 + Math.random() * (boss ? .30 : .22);
+    const life = (boss ? .34 : .20) + Math.random() * (boss ? .18 : .08);
     particles.push({
       color: palette[i % palette.length],
       angle,
       sin: Math.sin(angle),
       cos: Math.cos(angle),
-      z: originZ + (Math.random() - .5) * (boss ? 1.55 : .95),
-      radial: clamp(originRadial + (Math.random() - .5) * .10, .44, 1.02),
-      va: spray * (boss ? 4.2 : 3.1) + (Math.random() - .5) * .72,
-      vz: (Math.random() - .5) * (boss ? 20 : 13) - (boss ? 1.8 : .8),
-      vr: .12 + Math.random() * (boss ? .44 : .34),
+      z: originZ + (Math.random() - .5) * (boss ? 1.00 : .44),
+      radial: clamp(originRadial + (Math.random() - .5) * .06, .44, 1.02),
+      va: spray * (boss ? 2.0 : 1.2) + (Math.random() - .5) * .32,
+      vz: (Math.random() - .5) * (boss ? 9 : 4.8) - (boss ? .7 : .2),
+      vr: .06 + Math.random() * (boss ? .20 : .12),
       life,
       maxLife: life,
-      size: (boss ? 1.58 : 1.18) + Math.random() * (boss ? .78 : .54),
+      size: (boss ? 1.08 : .72) + Math.random() * (boss ? .40 : .22),
       minScale: .05
     });
   }
   particlesDirty = true;
+  particleColorsDirty = true;
 }
 
 function spawnXpBurst(enemy, amount){
@@ -39578,6 +40566,7 @@ function spawnXpBurst(enemy, amount){
     });
   }
   particlesDirty = true;
+  particleColorsDirty = true;
 }
 
 function spawnXpCollectFlash(source){
@@ -39603,6 +40592,7 @@ function spawnXpCollectFlash(source){
     });
   }
   particlesDirty = true;
+  particleColorsDirty = true;
 }
 
 function burst(angle, z, color, amount = 1){
@@ -39626,6 +40616,7 @@ function burst(angle, z, color, amount = 1){
     particles.push(p);
   }
   particlesDirty = true;
+  particleColorsDirty = true;
 }
 
 function updateParticles(dt){
@@ -39675,6 +40666,7 @@ function removeParticle(index){
   const last = particles.pop();
   if(index < particles.length) particles[index] = last;
   particlesDirty = true;
+  particleColorsDirty = true;
 }
 
 function pickEnemyType(){
@@ -39761,8 +40753,10 @@ function syncParticleInstances(){
   particleMesh.count = count;
   if(count === 0){
     particlesDirty = false;
+    particleColorsDirty = false;
     return;
   }
+  const syncColors = particleColorsDirty;
   for(let i=0;i<count;i++){
     const p = particles[i];
     const lifeRatio = p.maxLife > 0 ? clamp(p.life / p.maxLife, 0, 1) : 0;
@@ -39774,12 +40768,15 @@ function syncParticleInstances(){
       p.z
     );
     particleMesh.setMatrixAt(i, particleMatrix);
-    particleColor.set(p.color);
-    particleMesh.setColorAt(i, particleColor);
+    if(syncColors){
+      particleColor.set(p.color);
+      particleMesh.setColorAt(i, particleColor);
+    }
   }
   particleMesh.instanceMatrix.needsUpdate = true;
-  if(particleMesh.instanceColor) particleMesh.instanceColor.needsUpdate = true;
+  if(syncColors && particleMesh.instanceColor) particleMesh.instanceColor.needsUpdate = true;
   particlesDirty = false;
+  particleColorsDirty = false;
 }
 
 function applyEnemyVisual(enemy, t){

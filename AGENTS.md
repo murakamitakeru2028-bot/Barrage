@@ -6,7 +6,7 @@ This repo is a single-page Three.js canvas game. Keep changes small and verify b
 
 - `src/game.js` is the main app: game state, Three.js scene setup, gameplay, UI markup, and CSS live in this file.
 - `src/features/ranking.js` contains ranking integration.
-- `scripts/build.mjs` copies `index.html`, `public/`, and `src/` into `dist/`, generates app icons if needed, minifies first-party JS, compacts embedded CSS, and rewrites the service worker precache.
+- `scripts/build.mjs` copies `index.html`, `public/`, and `src/` into `dist/`, removes `src/dev/`, generates app icons if needed, minifies first-party JS, compacts embedded CSS, and rewrites the service worker precache.
 - `scripts/serve.mjs` serves a directory locally. It defaults to `dist/` on `http://127.0.0.1:4173`.
 - `public/` contains PWA files and source app icons.
 - `dist/`, `.tmp-*`, `.vercel/`, and `node_modules/` are ignored.
@@ -17,6 +17,12 @@ This repo is a single-page Three.js canvas game. Keep changes small and verify b
 - Build: `npm run build`
 - Build and serve: `npm run dev`
 - Serve existing build: `npm run preview`
+- Full local verification: `npm run verify`
+- Capture one 390 x 700 preview screenshot: `npm run shot -- --ui=reload`
+- Print build size and service worker cache weight: `npm run size`
+- Print a current `src/game.js` function/section map: `npm run map`
+- Dry-run ignored temp cleanup: `npm run clean:tmp`
+- Delete ignored temp artifacts: `npm run clean:tmp -- --yes`
 - Use another local port in PowerShell: `$env:PORT=4183; npm.cmd run preview`
 
 ## Verification
@@ -26,6 +32,7 @@ Run these after code changes:
 - `npm run build`
 - `node --check scripts\build.mjs`
 - `node --check dist\src\game.js`
+- `npm run test:visual`
 
 For UI changes, open the local build and capture at least a 390 x 700 screenshot. Useful local preview URLs:
 
@@ -49,8 +56,11 @@ For UI changes, open the local build and capture at least a 390 x 700 screenshot
 - Crash: `http://127.0.0.1:4173/?ui=crash`
 - Game over: `http://127.0.0.1:4173/?ui=dead`
 
+The canonical preview list lives in `src/dev/previews.js`; update it when adding or renaming `?ui=` preview modes.
+
 ## `src/game.js` Map
 
+- Run `npm run map` when line numbers have drifted.
 - Top constants tune rendering, controls, bullets, enemies, boss behavior, collision, economy, and UI values.
 - Save/settings helpers are near `loadSave`, `saveProgress`, `resetSaveData`, and token helpers.
 - Player and showroom ship meshes are created by `makePlayer` and `makeHomePreviewShip`.

@@ -1,12 +1,12 @@
 const CACHE_NAME = "barrage-__CACHE_VERSION__";
-const ASSETS = __PRECACHE_ASSETS__;
+const PRECACHE_ASSETS = __PRECACHE_ASSETS__;
 const INDEX_URL = "index.html";
 
 self.addEventListener("install", event => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then(cache => cache.addAll(ASSETS.map(url => new Request(url, { cache: "reload" }))))
+      .then(cache => cache.addAll(PRECACHE_ASSETS.map(url => new Request(url, { cache: "reload" }))))
       .then(() => self.skipWaiting())
   );
 });

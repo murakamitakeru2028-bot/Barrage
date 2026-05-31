@@ -22,6 +22,7 @@ await copyFile(join(projectRoot, "index.html"), join(distDir, "index.html"));
 await cp(join(projectRoot, "public"), distDir, { recursive: true });
 await cp(join(projectRoot, "src"), join(distDir, "src"), { recursive: true });
 await rm(join(distDir, "audio", "README.md"), { force: true });
+await rm(join(distDir, "src", "dev"), { recursive: true, force: true });
 
 const crcTable = new Uint32Array(256);
 for (let i = 0; i < 256; i++) {
@@ -332,7 +333,12 @@ const distFiles = (await listFiles(distDir))
   .filter(file => !file.endsWith(`${sep}sw.js`))
   .map(file => relative(distDir, file).split(sep).join("/"))
   .sort();
-const precacheAssets = ["./", ...distFiles];
+const appShellAssets = new Set([
+  "icon-192.png",
+  "index.html",
+  "manifest.webmanifest"
+]);
+const precacheAssets = ["./", ...distFiles.filter(file => appShellAssets.has(file))];
 const sw = await readFile(join(distDir, "sw.js"), "utf8");
 const cacheInputs = await Promise.all(distFiles.map(file => readFile(join(distDir, file))));
 cacheInputs.push(Buffer.from(sw));

@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { VISUAL_SNAPSHOT_ROUTES } from '../src/dev/previews.js';
 
 const PORT = Number(process.env.PORT || 4173);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -14,16 +15,6 @@ const MIME_TYPES = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.png': 'image/png'
 };
-
-const PREVIEWS = [
-  ['home', '/'],
-  ['gameplay-basic', '/?ui=basic'],
-  ['skill-selection', '/?ui=special'],
-  ['garage', '/?ui=garage'],
-  ['gacha', '/?ui=gacha'],
-  ['settings', '/?ui=settings'],
-  ['game-over', '/?ui=dead']
-];
 
 let staticServer;
 
@@ -91,7 +82,7 @@ async function startStaticServer() {
   });
 }
 
-for (const [name, path] of PREVIEWS) {
+for (const { name, path } of VISUAL_SNAPSHOT_ROUTES) {
   test(`${name} matches the 390x700 mobile snapshot`, async ({ page }) => {
     await page.goto(path, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#barrage-ui')).toBeVisible();
