@@ -150,9 +150,16 @@ const ENEMY_PACK_WAVE_STEP = 7;
 const ENEMY_SPAWN_INTERVAL_START = .92;
 const ENEMY_SPAWN_INTERVAL_WAVE_REDUCTION = .012;
 const ENEMY_SPAWN_INTERVAL_MIN = .28;
-const WAVE1_OPENING_ENEMY_COUNT = 3;
-const WAVE1_OPENING_LANE_OFFSETS = [-.42, .38, .08];
-const WAVE1_OPENING_Z_DISTANCES = [12, 25, 39];
+const WAVE1_OPENING_ENEMY_COUNT = 12;
+const WAVE1_OPENING_LANE_OFFSETS = [-.42, .38, .08, -.22, .52, -.56, .24, -.08, .64, -.68, .16, -.34];
+const WAVE1_OPENING_Z_DISTANCES = [11, 24, 39, 56, 75, 96, 119, 144, 171, 200, 230, 260];
+const WAVE1_OPENING_SPEED_ESTIMATE = 13.8;
+const WAVE1_OPENING_INITIAL_LOOKAHEAD = 72;
+const WAVE1_OPENING_LOOKAHEAD = 74;
+const WAVE1_OPENING_ACTIVE_CAP = VISUAL_LOW_POWER ? 6 : 7;
+const WAVE0_INTRO_ENEMY_DISTANCE = 34;
+const WAVE0_INTRO_LANE_OFFSET = .46;
+const WAVE0_INTRO_FADE_PRESENCE = .72;
 const BOSS_HP_MULT = 1.24;
 const BOSS_SHARD_HP_MULT = 1.18;
 const ENEMY_HP_BAR_VISIBLE_TIME = 4.15;
@@ -591,6 +598,9 @@ const state = {
   reloadTotal: RELOAD_DURATION_BASE,
   reloading: false,
   spawnTimer: 0,
+  wave0IntroSpawned: false,
+  wave1OpeningIndex: WAVE1_OPENING_ENEMY_COUNT,
+  wave1OpeningStartedAt: 0,
   bossAlive: false,
   shake: 0,
   hurtFlash: 0,
@@ -36175,8 +36185,8 @@ function renderUi2(){
         <div class="game-top-card game-wave">
           <b>WAVE</b>
           <span data-ref="wave">${state.wave}</span>
-          <small>残り <i data-ref="time">${waveSeconds()}秒</i></small>
-          <div class="game-wave-track"><i data-ref="waveProgress" style="width:${Math.min(100, state.waveTime / waveDuration() * 100)}%"></i></div>
+          <small>${waveTimeMarkup()}</small>
+          <div class="game-wave-track"><i data-ref="waveProgress" style="width:${waveProgressPercent()}%"></i></div>
         </div>
         <div class="game-special-slots" data-ref="specialSlots">
           ${renderSpecialSlotsHud()}
@@ -37429,8 +37439,9 @@ function updateHud(){
   }
   setHudText('wave', state.wave);
   setHudText('score', formatNumber(state.score));
-  setHudText('time', `${waveSeconds()}s`);
-  setHudWidth('waveProgress', Math.min(100, state.waveTime / waveDuration() * 100));
+  setHudText('waveTimePrefix', waveTimePrefix());
+  setHudText('time', waveTimeLabel());
+  setHudWidth('waveProgress', waveProgressPercent());
   setHudWidth('hp', hp / maxHp * 100);
   setHudText('hpText', `${Math.ceil(hp)}/${maxHp}`);
   updateAmmoHudState();
@@ -37681,7 +37692,7 @@ function startRun(){
   state.settingsReturnMode = 'home';
   state.mode = 'play';
   applySceneVisualMode('play');
-  state.wave = 1;
+  state.wave = 0;
   state.waveTime = 0;
   state.score = 0;
   state.xp = 0;
@@ -37706,6 +37717,9 @@ function startRun(){
   state.rollVel = 0;
   resetTurnHold();
   state.shake = 0;
+  state.wave0IntroSpawned = false;
+  state.wave1OpeningIndex = WAVE1_OPENING_ENEMY_COUNT;
+  state.wave1OpeningStartedAt = 0;
   state.hurtFlash = 0;
   state.hurtEvade = false;
   state.playerHitFlash = 0;
@@ -37715,10 +37729,9 @@ function startRun(){
   resetPlayerRunPose();
   camera.position.set(0, CAMERA_BASE_Y, CAMERA_BASE_Z);
   camera.lookAt(0, CAMERA_LOOK_Y, CAMERA_LOOK_Z);
-  state.spawnTimer = .45;
-  state.bossAlive = false;
-  spawnWave1OpeningEnemies();
   state.spawnTimer = .72;
+  state.bossAlive = false;
+  spawnWave0IntroEnemy();
   state.nextHudAt = 0;
   state.deathTimer = 0;
   state.playerDeathAge = 0;
@@ -38124,9 +38137,11 @@ function updatePlay(dt, t){
   state.prevRoll = state.roll;
   state.rollVel += (targetVel - state.rollVel) * Math.min(1, dt * CONTROL_RESPONSE * holdControl.response * (1 + speedLevel * .02 + loadoutBuff('speed') * .55 + (specialMove - 1) * .42));
   state.roll += state.rollVel * dt;
-  state.waveTime += dt;
   state.runTime += dt;
-  state.score += Math.floor((24 + state.wave * 1.8) * dt);
+  if(state.wave > 0){
+    state.waveTime += dt;
+    state.score += Math.floor((24 + state.wave * 1.8) * dt);
+  }
   state.shake = Math.max(0, state.shake - dt * 6);
   state.hurtFlash = Math.max(0, (state.hurtFlash || 0) - dt * PLAYER_HIT_FLASH_DECAY);
   state.playerHitFlash = Math.max(0, (state.playerHitFlash || 0) - dt * PLAYER_HIT_CORE_DECAY);
@@ -38138,7 +38153,7 @@ function updatePlay(dt, t){
     state.hp = Math.min(state.maxHp, state.hp + regen * dt);
   }
 
-  if(state.waveTime >= waveDuration()){
+  if(state.wave > 0 && state.waveTime >= waveDuration()){
     state.wave++;
     state.waveTime = 0;
     state.spawnTimer = Math.min(state.spawnTimer, .35);
@@ -38146,11 +38161,16 @@ function updatePlay(dt, t){
   }
 
   updateWeaponFire(dt);
+  if(state.wave === 1 && state.wave1OpeningIndex < WAVE1_OPENING_ENEMY_COUNT){
+    spawnWave1OpeningEnemies();
+  }
 
-  state.spawnTimer -= dt;
-  if(state.spawnTimer <= 0 && enemies.length < MAX_ENEMIES && !state.bossAlive){
-    spawnEnemyPack();
-    state.spawnTimer = spawnInterval();
+  if(state.wave > 0){
+    state.spawnTimer -= dt;
+    if(state.spawnTimer <= 0 && enemies.length < MAX_ENEMIES && !state.bossAlive){
+      spawnEnemyPack();
+      state.spawnTimer = spawnInterval();
+    }
   }
 
   updateCombat(dt, t);
@@ -38702,7 +38722,11 @@ function updateEnemies(dt, t, syncVisuals = true){
         }
         damagePlayer(e.damage, playerImpact);
       }
-      if(playerImpact || enemyPassedPlayer(e)){
+      const passedPlayer = enemyPassedPlayer(e);
+      if(e.openingIntro && (playerImpact || passedPlayer)){
+        beginWaveOneFromIntro();
+      }
+      if(playerImpact || passedPlayer){
         removeEnemy(i, false);
         continue;
       }
@@ -39121,6 +39145,7 @@ function enemyApproachRadial(enemy){
 }
 
 function defeatEnemy(enemy, enemyIndex){
+  if(enemy?.openingIntro && state.wave === 0) beginWaveOneFromIntro();
   state.score += enemy.boss ? 5200 + state.wave * 140 : 90 + state.wave * 12;
   state.kills++;
   const xpGain = enemy.boss ? 95 + state.wave * 8 : 18 + state.wave * 2;
@@ -39395,38 +39420,104 @@ function spawnEnemyPack(){
   }
 }
 
-function spawnWave1OpeningEnemies(){
-  const count = Math.min(WAVE1_OPENING_ENEMY_COUNT, MAX_ENEMIES);
-  for(let i=0;i<count;i++){
-    const enemy = spawnEnemy(i * .05);
-    placeWave1OpeningEnemy(enemy, i);
-  }
-}
-
-function placeWave1OpeningEnemy(enemy, index){
-  if(!enemy) return;
-  const lane = WAVE1_OPENING_LANE_OFFSETS[index % WAVE1_OPENING_LANE_OFFSETS.length];
-  const distance = WAVE1_OPENING_Z_DISTANCES[index % WAVE1_OPENING_Z_DISTANCES.length];
-  enemy.angle = normalizeAngle(state.roll + lane + (Math.random() - .5) * .035);
+function spawnWave0IntroEnemy(){
+  if(state.wave !== 0 || state.wave0IntroSpawned || enemies.length >= MAX_ENEMIES) return null;
+  const enemy = spawnEnemy(0);
+  const distance = WAVE0_INTRO_ENEMY_DISTANCE;
+  enemy.angle = normalizeAngle(state.roll + WAVE0_INTRO_LANE_OFFSET + (Math.random() - .5) * .025);
   enemy.prevAngle = enemy.angle;
-  enemy.z = PLAYER_Z - distance - Math.random() * 2.5;
+  enemy.z = Math.max(PIPE_Z_FAR + 14, PLAYER_Z - distance);
   enemy.prevZ = enemy.z - Math.max(1.2, enemy.speed * .10);
   enemy.radial = enemyApproachRadial(enemy, enemy.z);
   enemy.baseRadial = ENEMY_RAISED_RADIAL;
   enemy.prevRadial = enemy.radial;
   enemy.sin = Math.sin(enemy.angle);
   enemy.cos = Math.cos(enemy.angle);
-  enemy.spawnZ = enemy.z - ENEMY_FADE_DISTANCE * .92;
+  enemy.openingIntro = true;
+  enemy.openingWave1 = false;
+  enemy.spawnZ = enemy.z - ENEMY_FADE_DISTANCE * WAVE0_INTRO_FADE_PRESENCE;
+  state.wave0IntroSpawned = true;
   setPipePositionFromTrig(enemy.root, enemy.sin, enemy.cos, enemy.z, enemy.radial);
   applyEnemyVisual(enemy, performance.now() / 1000);
+  return enemy;
+}
+
+function beginWaveOneFromIntro(){
+  if(state.wave !== 0) return;
+  state.wave = 1;
+  state.waveTime = 0;
+  state.spawnTimer = .72;
+  state.wave1OpeningIndex = 0;
+  state.wave1OpeningStartedAt = state.runTime;
+  state.nextHudAt = 0;
+  updateHud();
+  spawnWave1OpeningEnemies();
+}
+
+function spawnWave1OpeningEnemies(){
+  if(state.wave !== 1 || state.wave1OpeningIndex >= WAVE1_OPENING_ENEMY_COUNT || state.bossAlive) return false;
+  const openingElapsed = Math.max(0, state.runTime - (state.wave1OpeningStartedAt || 0));
+  const lead = openingElapsed <= .04 ? WAVE1_OPENING_INITIAL_LOOKAHEAD : WAVE1_OPENING_LOOKAHEAD;
+  let activeOpening = wave1OpeningActiveCount();
+  let spawned = false;
+  while(
+    state.wave1OpeningIndex < WAVE1_OPENING_ENEMY_COUNT &&
+    activeOpening < WAVE1_OPENING_ACTIVE_CAP &&
+    enemies.length < MAX_ENEMIES
+  ){
+    const index = state.wave1OpeningIndex;
+    const plannedDistance = WAVE1_OPENING_Z_DISTANCES[index % WAVE1_OPENING_Z_DISTANCES.length];
+    const currentDistance = plannedDistance - openingElapsed * WAVE1_OPENING_SPEED_ESTIMATE;
+    if(currentDistance > lead) break;
+    const enemy = spawnEnemy(index * .05);
+    placeWave1OpeningEnemy(enemy, index, currentDistance);
+    state.wave1OpeningIndex++;
+    activeOpening++;
+    spawned = true;
+  }
+  return spawned;
+}
+
+function wave1OpeningActiveCount(){
+  let count = 0;
+  for(const enemy of enemies){
+    if(enemy.openingWave1) count++;
+  }
+  return count;
+}
+
+function placeWave1OpeningEnemy(enemy, index, distanceOverride = null){
+  if(!enemy) return;
+  const lane = WAVE1_OPENING_LANE_OFFSETS[index % WAVE1_OPENING_LANE_OFFSETS.length];
+  const plannedDistance = WAVE1_OPENING_Z_DISTANCES[index % WAVE1_OPENING_Z_DISTANCES.length];
+  const distance = Math.max(10, Number.isFinite(distanceOverride) ? distanceOverride : plannedDistance);
+  enemy.angle = normalizeAngle(state.roll + lane + (Math.random() - .5) * .035);
+  enemy.prevAngle = enemy.angle;
+  enemy.z = Math.max(PIPE_Z_FAR + 14, PLAYER_Z - distance - Math.random() * 2.5);
+  enemy.prevZ = enemy.z - Math.max(1.2, enemy.speed * .10);
+  enemy.radial = enemyApproachRadial(enemy, enemy.z);
+  enemy.baseRadial = ENEMY_RAISED_RADIAL;
+  enemy.prevRadial = enemy.radial;
+  enemy.sin = Math.sin(enemy.angle);
+  enemy.cos = Math.cos(enemy.angle);
+  enemy.openingWave1 = true;
+  enemy.spawnZ = enemy.z - ENEMY_FADE_DISTANCE * wave1OpeningPresence(index, plannedDistance);
+  setPipePositionFromTrig(enemy.root, enemy.sin, enemy.cos, enemy.z, enemy.radial);
+  applyEnemyVisual(enemy, performance.now() / 1000);
+}
+
+function wave1OpeningPresence(index, distance){
+  if(index < 4) return .86 - index * .08;
+  return clamp((130 - distance) / 160, .04, .42);
 }
 
 function spawnEnemy(offset = 0){
   const type = pickEnemyType();
   const root = acquireEnemyObject(type, false);
   tintEnemyObject(root, type.color, type.color, .72);
-  const wavePower = Math.pow(ENEMY_WAVE_HP_EXP, state.wave - 1);
-  const enemyHp = Math.ceil(type.hp * wavePower * (1 + state.wave * ENEMY_WAVE_HP_LINEAR) * ENEMY_HP_MULT);
+  const spawnWave = enemySpawnWave();
+  const wavePower = Math.pow(ENEMY_WAVE_HP_EXP, spawnWave - 1);
+  const enemyHp = Math.ceil(type.hp * wavePower * (1 + spawnWave * ENEMY_WAVE_HP_LINEAR) * ENEMY_HP_MULT);
   const enemy = {
     root,
     type,
@@ -39436,8 +39527,8 @@ function spawnEnemy(offset = 0){
     hp: enemyHp,
     maxHp: enemyHp,
     initialHp: enemyHp,
-    damage: Math.ceil(type.damage * (1 + state.wave * ENEMY_WAVE_DAMAGE_LINEAR)),
-    speed: 12.5 + Math.min(ENEMY_WAVE_SPEED_CAP, state.wave * ENEMY_WAVE_SPEED_LINEAR) + Math.random() * 2.2,
+    damage: Math.ceil(type.damage * (1 + spawnWave * ENEMY_WAVE_DAMAGE_LINEAR)),
+    speed: 12.5 + Math.min(ENEMY_WAVE_SPEED_CAP, spawnWave * ENEMY_WAVE_SPEED_LINEAR) + Math.random() * 2.2,
     radius: type.radius * ENEMY_HITBOX_MULT,
     radial:ENEMY_RAISED_RADIAL,
     baseRadial:ENEMY_RAISED_RADIAL,
@@ -40670,13 +40761,19 @@ function removeParticle(index){
 }
 
 function pickEnemyType(){
-  if(state.wave !== unlockedEnemyWave){
-    unlockedEnemyWave = state.wave;
-    unlockedEnemyTypes = ENEMY_TYPES.filter(t => state.wave >= t.unlock);
+  const spawnWave = enemySpawnWave();
+  if(spawnWave !== unlockedEnemyWave){
+    unlockedEnemyWave = spawnWave;
+    unlockedEnemyTypes = ENEMY_TYPES.filter(t => spawnWave >= t.unlock);
+    if(!unlockedEnemyTypes.length) unlockedEnemyTypes = ENEMY_TYPES.slice(0, 1);
   }
-  if(state.wave >= 100) return unlockedEnemyTypes[Math.floor(Math.random() * unlockedEnemyTypes.length)];
+  if(spawnWave >= 100) return unlockedEnemyTypes[Math.floor(Math.random() * unlockedEnemyTypes.length)];
   const top = unlockedEnemyTypes[unlockedEnemyTypes.length - 1];
   return Math.random() < .55 ? top : unlockedEnemyTypes[Math.floor(Math.random() * unlockedEnemyTypes.length)];
+}
+
+function enemySpawnWave(){
+  return Math.max(1, Math.floor(Number(state.wave) || 1));
 }
 
 function randomPipeAngle(){
@@ -40693,6 +40790,22 @@ function waveDuration(){
 
 function waveSeconds(){
   return Math.max(0, Math.ceil(waveDuration() - state.waveTime));
+}
+
+function waveTimeLabel(){
+  return state.wave > 0 ? `${waveSeconds()}s` : '待機';
+}
+
+function waveTimePrefix(){
+  return state.wave > 0 ? '残り' : '接敵';
+}
+
+function waveTimeMarkup(){
+  return `<span data-ref="waveTimePrefix">${waveTimePrefix()}</span> <i data-ref="time">${waveTimeLabel()}</i>`;
+}
+
+function waveProgressPercent(){
+  return state.wave > 0 ? Math.min(100, state.waveTime / waveDuration() * 100) : 0;
 }
 
 function setPipePosition(object, angle, z, radial = .78){
