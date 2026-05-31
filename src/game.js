@@ -72,6 +72,7 @@ const ENEMY_POOL_LIMIT = LOW_POWER_DEVICE ? 24 : 34;
 const ENEMY_DETAIL_Z = VISUAL_LOW_POWER ? -60 : -84;
 const PLAYER_HIT_FLASH_DECAY = 3.2;
 const PLAYER_HIT_CORE_DECAY = 5.0;
+const PLAYER_DEATH_CRASH_DURATION = 1.28;
 const HIT_CONFIRM_DECAY = 1.9;
 const BULLET_HIT_Z_PAD = .22;
 const BULLET_HIT_ANGLE_PAD = .020;
@@ -610,6 +611,7 @@ const state = {
   storeCategory: 'ship',
   storePreviewShipId: null,
   deathTimer: 0,
+  playerDeathAge: 0,
   deathSaved: false
 };
 
@@ -1045,7 +1047,8 @@ function applyUiPreviewMode(){
     state.input = 0;
     state.firing = 999;
     clearRunObjects();
-    triggerPlayerDamageEffect({angle:0, z:PLAYER_Z, t:0}, {taken:28});
+    state.hp = 0;
+    beginDeathCrash();
   }else if(preview === 'dead'){
     state.mode = 'dead';
     state.score = Math.max(state.score, 12840);
@@ -1302,6 +1305,7 @@ function resetSaveData(){
   state.storeCategory = 'ship';
   state.storePreviewShipId = DEFAULT_SHIP_ID;
   state.deathTimer = 0;
+  state.playerDeathAge = 0;
   state.deathSaved = false;
   state.keyboardThrottle = 0;
   state.pointerThrottle = 0;
@@ -33744,6 +33748,388 @@ function createUi(){
         font-size:10px !important;
       }
     }
+    /* Combat HUD readability v15: keep WAVE visible and remove the noisy white cutouts. */
+    #barrage-ui .game-hud.on .game-bottom{
+      overflow:hidden !important;
+      border:1px solid rgba(142,239,255,.32) !important;
+      border-bottom:3px solid #8eefff !important;
+      border-radius:8px !important;
+      background:
+        linear-gradient(120deg,rgba(142,239,255,.12) 0 16%,transparent 16%),
+        linear-gradient(180deg,rgba(8,18,21,.97),rgba(2,6,8,.99)) !important;
+      box-shadow:0 -18px 38px rgba(0,0,0,.50),0 0 0 1px rgba(255,255,255,.045) inset,0 0 24px rgba(142,239,255,.10) !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom::before,
+    #barrage-ui .game-hud.on .game-bottom::after,
+    #barrage-ui .game-hud.on .game-bottom > .game-wave::before,
+    #barrage-ui .game-hud.on .game-bottom > .game-wave::after{
+      display:none !important;
+      content:none !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave{
+      color:#f7ffff !important;
+      border:1px solid rgba(142,239,255,.30) !important;
+      border-left:3px solid #8eefff !important;
+      border-radius:6px !important;
+      background:
+        linear-gradient(120deg,rgba(142,239,255,.18) 0 22%,transparent 22%),
+        linear-gradient(180deg,rgba(14,31,35,.98),rgba(4,10,12,.98)) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 8px 18px rgba(0,0,0,.26),0 0 14px rgba(142,239,255,.10) !important;
+      clip-path:none !important;
+      text-shadow:0 1px 0 #000,0 0 12px rgba(142,239,255,.18) !important;
+      box-sizing:border-box !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave b{
+      color:#8eefff !important;
+      font-weight:1000 !important;
+      letter-spacing:0 !important;
+      opacity:1 !important;
+      text-shadow:0 0 12px rgba(142,239,255,.32),0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave span{
+      color:#f7ffff !important;
+      font-weight:1000 !important;
+      letter-spacing:0 !important;
+      opacity:1 !important;
+      text-shadow:0 0 14px rgba(142,239,255,.28),0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave small{
+      color:rgba(247,255,255,.88) !important;
+      font-weight:950 !important;
+      letter-spacing:0 !important;
+      opacity:1 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave .game-wave-track{
+      border:1px solid rgba(142,239,255,.26) !important;
+      border-radius:999px !important;
+      background:rgba(238,247,255,.10) !important;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.24) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on .game-bottom > .game-wave .game-wave-track i{
+      background:linear-gradient(90deg,#8eefff,#f7ffff 58%,#ffd36a) !important;
+      box-shadow:0 0 14px rgba(142,239,255,.40) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom{
+      width:min(430px,calc(100vw - var(--combat-opt-edge,10px) * 2)) !important;
+      max-width:430px !important;
+      height:172px !important;
+      min-height:172px !important;
+      max-height:172px !important;
+      padding:8px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) !important;
+      grid-template-rows:38px 31px 44px 39px !important;
+      gap:5px !important;
+      align-items:stretch !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      width:100% !important;
+      min-width:0 !important;
+      max-width:none !important;
+      height:38px !important;
+      min-height:38px !important;
+      max-height:38px !important;
+      padding:5px 9px 6px 10px !important;
+      display:grid !important;
+      grid-template-columns:auto auto minmax(0,1fr) !important;
+      grid-template-rows:17px 8px !important;
+      column-gap:8px !important;
+      row-gap:4px !important;
+      align-items:center !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave b{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      font-size:10px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave span{
+      grid-column:2 !important;
+      grid-row:1 !important;
+      min-width:28px !important;
+      font-size:22px !important;
+      line-height:.86 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave small{
+      grid-column:3 !important;
+      grid-row:1 !important;
+      justify-self:end !important;
+      min-width:0 !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      white-space:nowrap !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave .game-wave-track{
+      grid-column:1 / -1 !important;
+      grid-row:2 !important;
+      height:8px !important;
+      min-height:8px !important;
+      max-height:8px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots{
+      grid-column:1 !important;
+      grid-row:2 !important;
+      width:100% !important;
+      height:31px !important;
+      min-height:31px !important;
+      max-height:31px !important;
+      display:grid !important;
+      grid-template-columns:repeat(5,minmax(0,31px)) !important;
+      justify-content:center !important;
+      gap:5px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots .special-slot{
+      width:31px !important;
+      min-width:31px !important;
+      max-width:31px !important;
+      height:31px !important;
+      min-height:31px !important;
+      max-height:31px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots .special-slot b .special-icon{
+      width:19px !important;
+      height:19px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-bars,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bars{
+      grid-column:1 !important;
+      grid-row:3 !important;
+      width:100% !important;
+      height:44px !important;
+      min-height:44px !important;
+      max-height:44px !important;
+      padding:4px 8px !important;
+      display:grid !important;
+      grid-template-rows:22px 14px !important;
+      gap:4px !important;
+      align-content:center !important;
+      border:1px solid rgba(238,247,255,.13) !important;
+      border-radius:6px !important;
+      background:rgba(238,247,255,.045) !important;
+      box-sizing:border-box !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp{
+      height:22px !important;
+      min-height:22px !important;
+      max-height:22px !important;
+      padding:0 !important;
+      grid-template-columns:31px minmax(0,1fr) 60px !important;
+      gap:7px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo{
+      height:14px !important;
+      min-height:14px !important;
+      max-height:14px !important;
+      padding:0 !important;
+      grid-template-columns:39px minmax(0,1fr) 44px !important;
+      gap:7px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp b,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo b{
+      color:#f7ffff !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:1000 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp span,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo span{
+      color:#f7ffff !important;
+      font-size:10px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp .game-meter-track{
+      height:9px !important;
+      min-height:9px !important;
+      max-height:9px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo .game-meter-track{
+      height:7px !important;
+      min-height:7px !important;
+      max-height:7px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-console{
+      grid-column:1 !important;
+      grid-row:4 !important;
+      width:100% !important;
+      height:39px !important;
+      min-height:39px !important;
+      max-height:39px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 88px !important;
+      gap:6px !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chips{
+      height:39px !important;
+      min-height:39px !important;
+      max-height:39px !important;
+      gap:5px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip{
+      height:39px !important;
+      min-height:39px !important;
+      max-height:39px !important;
+      padding:5px 3px 4px !important;
+      grid-template-rows:9px minmax(0,1fr) !important;
+      border-color:rgba(238,247,255,.15) !important;
+      border-radius:5px !important;
+      background:linear-gradient(180deg,rgba(238,247,255,.07),rgba(3,7,9,.80)) !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip b{
+      color:rgba(142,239,255,.90) !important;
+      font-size:7px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip span{
+      color:#f7ffff !important;
+      font-size:12px !important;
+      line-height:1 !important;
+      font-weight:1000 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+      width:88px !important;
+      min-width:88px !important;
+      max-width:88px !important;
+      height:39px !important;
+      min-height:39px !important;
+      max-height:39px !important;
+      border-radius:6px !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom > .game-wave{
+      min-width:108px !important;
+      max-width:118px !important;
+      height:35px !important;
+      min-height:35px !important;
+      max-height:35px !important;
+      padding:5px 7px 5px 9px !important;
+      display:grid !important;
+      grid-template-columns:auto minmax(0,1fr) !important;
+      grid-template-rows:16px 7px !important;
+      column-gap:6px !important;
+      row-gap:4px !important;
+      align-items:center !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom > .game-wave b{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      font-size:8px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom > .game-wave span{
+      grid-column:2 !important;
+      grid-row:1 !important;
+      justify-self:start !important;
+      color:#f7ffff !important;
+      font-size:18px !important;
+      line-height:.88 !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom > .game-wave small{
+      grid-column:1 / -1 !important;
+      grid-row:2 !important;
+      justify-self:start !important;
+      color:#ffd36a !important;
+      font-size:8px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom > .game-wave .game-wave-track{
+      display:none !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom{
+        width:calc(100vw - 18px) !important;
+        max-width:none !important;
+        height:164px !important;
+        min-height:164px !important;
+        max-height:164px !important;
+        padding:7px !important;
+        grid-template-rows:36px 29px 42px 37px !important;
+        gap:4px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave{
+        height:36px !important;
+        min-height:36px !important;
+        max-height:36px !important;
+        padding:5px 8px 5px 9px !important;
+        grid-template-rows:16px 7px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave span{
+        font-size:20px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave small{
+        font-size:9px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave .game-wave-track{
+        height:7px !important;
+        min-height:7px !important;
+        max-height:7px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots{
+        height:29px !important;
+        min-height:29px !important;
+        max-height:29px !important;
+        grid-template-columns:repeat(5,minmax(0,29px)) !important;
+        gap:4px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots .special-slot{
+        width:29px !important;
+        min-width:29px !important;
+        max-width:29px !important;
+        height:29px !important;
+        min-height:29px !important;
+        max-height:29px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-bars,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bars{
+        height:42px !important;
+        min-height:42px !important;
+        max-height:42px !important;
+        grid-template-rows:21px 13px !important;
+        gap:4px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp{
+        height:21px !important;
+        min-height:21px !important;
+        max-height:21px !important;
+        grid-template-columns:29px minmax(0,1fr) 56px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo{
+        height:13px !important;
+        min-height:13px !important;
+        max-height:13px !important;
+        grid-template-columns:37px minmax(0,1fr) 42px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-console,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chips,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chip,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+        height:37px !important;
+        min-height:37px !important;
+        max-height:37px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-console{
+        grid-template-columns:minmax(0,1fr) 84px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+        width:84px !important;
+        min-width:84px !important;
+        max-width:84px !important;
+      }
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading .game-meter-track::before{
         animation:none !important;
@@ -35564,6 +35950,7 @@ function startRun(){
   state.bossAlive = false;
   state.nextHudAt = 0;
   state.deathTimer = 0;
+  state.playerDeathAge = 0;
   state.deathSaved = false;
   uiDirty = true;
   renderUi2();
@@ -36011,13 +36398,15 @@ function beginDeathCrash(){
   resetTurnHold();
   resetTouchStick();
   state.hp = 0;
-  state.deathTimer = 1.18;
+  state.deathTimer = PLAYER_DEATH_CRASH_DURATION;
+  state.playerDeathAge = 0;
   state.deathSaved = false;
   state.mode = 'crash';
   state.hurtFlash = Math.max(state.hurtFlash || 0, 1);
   state.playerHitFlash = Math.max(state.playerHitFlash || 0, 1);
   state.shake = Math.max(state.shake, .92);
   state.hitConfirm = 0;
+  preparePlayerBreakup();
   triggerPlayerDamageEffect({angle:state.roll, z:PLAYER_Z, t:0}, {taken:42});
   for(let i=0;i<3;i++){
     spawnPlayerDamageBurst(normalizeAngle(state.roll + (i - 1) * .18), PLAYER_Z + (i - 1) * .08, i === 1 ? 0xffd36a : 0xff3b62, false);
@@ -36042,15 +36431,17 @@ function updateDeathCrash(dt, t){
   state.playerHitFlash = Math.max(0, (state.playerHitFlash || 0) - dt * 1.55);
   state.shake = Math.max(0, (state.shake || 0) - dt * 1.05);
   state.deathTimer = Math.max(0, (state.deathTimer || 0) - dt);
-  const progress = 1 - clamp(state.deathTimer / 1.18, 0, 1);
+  state.playerDeathAge = (state.playerDeathAge || 0) + dt;
+  const progress = 1 - clamp(state.deathTimer / PLAYER_DEATH_CRASH_DURATION, 0, 1);
   const shudder = Math.sin(t * 58) * (1 - progress) * .035;
   player.root.visible = true;
-  player.root.position.z = PLAYER_Z + progress * .82;
-  player.root.rotation.x = -.13 + progress * .45;
-  player.root.rotation.y = Math.sin(t * 18) * progress * .22;
-  player.root.rotation.z = shudder + progress * 1.15;
-  player.root.scale.setScalar(PLAYER_VISUAL_SCALE * Math.max(.18, 1 - progress * .48));
-  if(progress > .38 && Math.random() < .48){
+  player.root.position.z = PLAYER_Z + progress * 1.05;
+  player.root.rotation.x = -.13 + progress * .34;
+  player.root.rotation.y = Math.sin(t * 18) * progress * .18;
+  player.root.rotation.z = shudder + progress * .72;
+  player.root.scale.setScalar(PLAYER_VISUAL_SCALE * Math.max(.72, 1 - progress * .18));
+  updatePlayerBreakupPieces(progress, state.playerDeathAge);
+  if(progress > .18 && Math.random() < .66){
     spawnPlayerDamageBurst(normalizeAngle(state.roll + (Math.random() - .5) * .50), PLAYER_Z + (Math.random() - .5) * .24, Math.random() < .45 ? 0xffd36a : 0xff3b62, false);
   }
   syncBulletInstances();
@@ -36092,6 +36483,124 @@ function resetPlayerRunPose(){
   player.root.rotation.set(-.13, 0, 0);
   player.root.scale.setScalar(PLAYER_VISUAL_SCALE);
   if(player.hitShield) player.hitShield.visible = false;
+  resetPlayerBreakup();
+}
+
+function playerBreakupPieces(){
+  if(player.breakupPieces) return player.breakupPieces;
+  const excluded = new Set([player.hitShield].filter(Boolean));
+  const pieces = [];
+  player.root.traverse(part => {
+    if(!part || part === player.root || excluded.has(part)) return;
+    if(!(part.isMesh || part.isLine || part.isLineSegments)) return;
+    for(let node = part.parent; node && node !== player.root; node = node.parent){
+      if(excluded.has(node) || node.isMesh || node.isLine || node.isLineSegments) return;
+    }
+    pieces.push(part);
+  });
+  player.breakupPieces = pieces;
+  capturePlayerBreakupBaseTransforms();
+  return pieces;
+}
+
+function capturePlayerBreakupBaseTransforms(){
+  const pieces = player.breakupPieces;
+  if(!pieces?.length) return;
+  for(const part of pieces){
+    part.userData.playerBreakupBasePosition = part.position.clone();
+    part.userData.playerBreakupBaseRotation = part.rotation.clone();
+    part.userData.playerBreakupBaseScale = part.scale.clone();
+  }
+}
+
+function resetPlayerBreakup(){
+  const pieces = player.breakupPieces || playerBreakupPieces();
+  const shouldRestore = pieces.some(part => part.userData.playerBreakup || part.userData.playerBreakupBaseVisible !== undefined);
+  for(const part of pieces){
+    const data = part.userData;
+    if(shouldRestore){
+      if(data.playerBreakupBasePosition) part.position.copy(data.playerBreakupBasePosition);
+      if(data.playerBreakupBaseRotation) part.rotation.copy(data.playerBreakupBaseRotation);
+      if(data.playerBreakupBaseScale) part.scale.copy(data.playerBreakupBaseScale);
+      if(data.playerBreakupBaseVisible !== undefined) part.visible = data.playerBreakupBaseVisible;
+    }
+    data.playerBreakup = null;
+    data.playerBreakupBaseVisible = undefined;
+  }
+  capturePlayerBreakupBaseTransforms();
+}
+
+function preparePlayerBreakup(){
+  resetPlayerBreakup();
+  const pieces = playerBreakupPieces();
+  const activePieces = pieces.filter(part => objectVisibleInHierarchy(part));
+  const fallbackStep = TAU / Math.max(1, activePieces.length);
+  for(let i=0;i<activePieces.length;i++){
+    const part = activePieces[i];
+    const data = part.userData;
+    const base = data.playerBreakupBasePosition;
+    const fromCenter = base && (Math.abs(base.x) + Math.abs(base.z) > .001);
+    const spray = fromCenter ? Math.atan2(base.z * .72, base.x) : i * fallbackStep;
+    const jitter = (Math.random() - .5) * .74;
+    const direction = spray + jitter;
+    const side = base ? Math.sign(base.x || Math.cos(direction)) || (Math.random() < .5 ? -1 : 1) : (Math.random() < .5 ? -1 : 1);
+    const edgeBoost = base ? clamp((Math.abs(base.x) + Math.abs(base.z) * .42) / 1.6, .15, 1.25) : .8;
+    const speed = .82 + Math.random() * .92 + edgeBoost * .74;
+    data.playerBreakupBaseVisible = part.visible;
+    data.playerBreakup = {
+      vx: Math.cos(direction) * speed + side * (.10 + Math.random() * .18),
+      vy: .28 + Math.random() * .78 + edgeBoost * .18,
+      vz: Math.sin(direction) * speed + (Math.random() - .5) * .62,
+      ax: Math.cos(direction) * (.34 + Math.random() * .38),
+      ay: -.38 - Math.random() * .34,
+      az: Math.sin(direction) * (.26 + Math.random() * .32) + .20,
+      rx: (Math.random() - .5) * 8.8,
+      ry: (Math.random() - .5) * 8.4,
+      rz: (Math.random() - .5) * 10.8 + side * 2.0,
+      scale: .88 + Math.random() * .18,
+      delay: Math.random() * .065
+    };
+    part.visible = true;
+  }
+  if(player.hitShield) player.hitShield.visible = false;
+}
+
+function updatePlayerBreakupPieces(progress, age){
+  const pieces = player.breakupPieces;
+  if(!pieces?.length) return;
+  for(const part of pieces){
+    const data = part.userData;
+    const breakup = data.playerBreakup;
+    if(!breakup) continue;
+    const localAge = Math.max(0, age - (breakup.delay || 0));
+    const burst = smoothstep(clamp(localAge / .20, 0, 1));
+    const age2 = localAge * localAge * .5;
+    const basePosition = data.playerBreakupBasePosition;
+    const baseRotation = data.playerBreakupBaseRotation;
+    const baseScale = data.playerBreakupBaseScale;
+    if(basePosition){
+      part.position.set(
+        basePosition.x + (breakup.vx * localAge + breakup.ax * age2) * burst,
+        basePosition.y + (breakup.vy * localAge + breakup.ay * age2) * burst,
+        basePosition.z + (breakup.vz * localAge + breakup.az * age2) * burst
+      );
+    }
+    if(baseRotation){
+      part.rotation.set(
+        baseRotation.x + breakup.rx * localAge,
+        baseRotation.y + breakup.ry * localAge,
+        baseRotation.z + breakup.rz * localAge
+      );
+    }
+    if(baseScale){
+      const fadeScale = Math.max(.38, 1 - progress * .42) * breakup.scale;
+      part.scale.set(
+        baseScale.x * fadeScale,
+        baseScale.y * fadeScale,
+        baseScale.z * fadeScale
+      );
+    }
+  }
 }
 
 function homePreviewModeKey(mode = state.mode){
@@ -37345,6 +37854,7 @@ function acquireEnemyObject(type, boss = false){
   root.rotation.set(0, 0, 0);
   root.scale.setScalar(1);
   if(root.userData){
+    resetEnemyBreakup(root);
     root.userData.detailVisible = null;
     root.userData.opacity = null;
     root.userData.attackCueActive = false;
@@ -37368,6 +37878,7 @@ function releaseEnemyObject(enemy){
   const pool = enemyPools.get(key) || [];
   enemy.root.visible = false;
   enemy.root.userData.defeatAnimating = false;
+  resetEnemyBreakup(enemy.root);
   setEnemyFlash(enemy.root, 0);
   for(const part of enemy.root.userData?.hitParts || []) part.visible = false;
   if(pool.length < ENEMY_POOL_LIMIT){
@@ -37385,14 +37896,15 @@ function startEnemyDefeatAnimation(enemy){
   root.visible = true;
   root.userData.defeatAnimating = true;
   for(const part of root.userData?.attackParts || []) part.visible = false;
+  prepareEnemyBreakup(enemy);
 
   enemy.deathAge = 0;
   enemy.deathMaxLife = enemy.boss ? 3.2 : 2.35;
   enemy.deathMinAirTime = enemy.boss ? .28 : .18;
   enemy.deathBaseScale = Math.max(.05, root.scale.x || 1);
   enemy.deathAngleVel = (Math.random() < .5 ? -1 : 1) * (enemy.boss ? .82 : 1.12);
-  enemy.deathZVel = enemy.boss ? -72 : -94;
-  enemy.deathRadialVel = enemy.boss ? .05 : .08;
+  enemy.deathZVel = enemy.boss ? -30 : -38;
+  enemy.deathRadialVel = enemy.boss ? .035 : .045;
   enemy.deathSpinBoost = (Math.random() < .5 ? -1 : 1) * (enemy.boss ? 5.8 : 8.6);
   enemy.radial = enemy.radial ?? enemy.baseRadial ?? (enemy.boss ? .68 : ENEMY_RAISED_RADIAL);
   enemy.hitCue = 1;
@@ -37420,9 +37932,10 @@ function updateEnemyDefeatAnimations(dt, t){
     enemy.root.rotation.x += dt * ((enemy.spinX || 0) + (enemy.deathSpinBoost || 0) * .48);
     enemy.root.rotation.y += dt * ((enemy.spinY || 0) - (enemy.deathSpinBoost || 0) * .34);
     enemy.root.rotation.z += dt * ((enemy.spinZ || 0) + (enemy.deathSpinBoost || 0));
+    updateEnemyBreakupPieces(enemy, progress);
     setEnemyOpacity(enemy.root, Math.max(.18, fallbackFade));
     setEnemyFlash(enemy.root, Math.max(0, (1 - clamp(enemy.deathAge / .52, 0, 1)) * .92));
-    enemy.hitCue = Math.max(0, 1 - clamp(enemy.deathAge / (enemy.boss ? .72 : .54), 0, 1));
+    enemy.hitCue = Math.max(0, 1 - clamp(enemy.deathAge / (enemy.boss ? .42 : .26), 0, 1));
     enemy.hitCueColor = enemy.deathAge < .28 ? 0xf4fbff : colorHexValue(enemy.type?.color);
     syncEnemyHitVisual(enemy, t, 1);
     const core = enemy.root.userData?.core;
@@ -37434,6 +37947,116 @@ function updateEnemyDefeatAnimations(dt, t){
       releaseEnemyObject(enemy);
       const last = enemyDefeatAnimations.pop();
       if(i < enemyDefeatAnimations.length) enemyDefeatAnimations[i] = last;
+    }
+  }
+}
+
+function enemyBreakupPieces(root){
+  const data = root?.userData;
+  if(!data) return [];
+  if(data.breakupPieces) return data.breakupPieces;
+  const excluded = new Set([
+    ...(data.hitParts || []),
+    ...(data.attackParts || []),
+    data.hpBar
+  ].filter(Boolean));
+  data.breakupPieces = root.children.filter(child =>
+    child
+    && !excluded.has(child)
+    && (child.isMesh || child.isLine || child.isLineSegments)
+  );
+  for(const part of data.breakupPieces){
+    part.userData.breakupBasePosition = part.position.clone();
+    part.userData.breakupBaseRotation = part.rotation.clone();
+    part.userData.breakupBaseScale = part.scale.clone();
+  }
+  return data.breakupPieces;
+}
+
+function resetEnemyBreakup(root){
+  const pieces = root?.userData?.breakupPieces;
+  if(!pieces) return;
+  for(const part of pieces){
+    const data = part.userData;
+    const basePosition = data.breakupBasePosition;
+    const baseRotation = data.breakupBaseRotation;
+    const baseScale = data.breakupBaseScale;
+    if(basePosition) part.position.copy(basePosition);
+    if(baseRotation) part.rotation.copy(baseRotation);
+    if(baseScale) part.scale.copy(baseScale);
+    if(data.breakupBaseVisible !== undefined) part.visible = data.breakupBaseVisible;
+    data.breakup = null;
+    data.breakupBaseVisible = undefined;
+  }
+}
+
+function prepareEnemyBreakup(enemy){
+  const pieces = enemyBreakupPieces(enemy.root);
+  if(!pieces.length) return;
+  const boss = !!enemy.boss;
+  const power = boss ? 1.32 : 1;
+  const spinPower = boss ? 1.15 : 1;
+  const fallbackStep = TAU / Math.max(1, pieces.length);
+  for(let i=0;i<pieces.length;i++){
+    const part = pieces[i];
+    const base = part.userData.breakupBasePosition;
+    const offsetAngle = base && (Math.abs(base.x) + Math.abs(base.y) > .001)
+      ? Math.atan2(base.y, base.x)
+      : (enemy.angle || 0) + i * fallbackStep;
+    const spray = offsetAngle + (Math.random() - .5) * .62;
+    const radialSpeed = (1.75 + Math.random() * 1.35 + i * .18) * power;
+    const zKick = ((Math.random() - .5) * (boss ? 4.2 : 3.2) - .18) * power;
+    part.userData.breakupBaseVisible = part.visible;
+    part.userData.breakup = {
+      vx: Math.cos(spray) * radialSpeed,
+      vy: Math.sin(spray) * radialSpeed,
+      vz: zKick,
+      ax: Math.cos(spray) * (.34 + Math.random() * .24) * power,
+      ay: Math.sin(spray) * (.34 + Math.random() * .24) * power,
+      az: (Math.random() - .5) * .38 * power,
+      rx: (Math.random() - .5) * 7.2 * spinPower,
+      ry: (Math.random() - .5) * 7.2 * spinPower,
+      rz: (Math.random() - .5) * 9.4 * spinPower,
+      scale: .82 + Math.random() * .24
+    };
+    part.visible = true;
+  }
+}
+
+function updateEnemyBreakupPieces(enemy, progress){
+  const pieces = enemy.root.userData?.breakupPieces;
+  if(!pieces?.length) return;
+  const age = enemy.deathAge || 0;
+  const burst = smoothstep(clamp(age / (enemy.boss ? .42 : .24), 0, 1));
+  const fadeScale = Math.max(.24, 1 - progress * (enemy.boss ? .34 : .46));
+  for(const part of pieces){
+    const data = part.userData;
+    const breakup = data.breakup;
+    if(!breakup) continue;
+    const basePosition = data.breakupBasePosition;
+    const baseRotation = data.breakupBaseRotation;
+    const baseScale = data.breakupBaseScale;
+    if(basePosition){
+      const age2 = age * age * .5;
+      part.position.set(
+        basePosition.x + (breakup.vx * age + breakup.ax * age2) * burst,
+        basePosition.y + (breakup.vy * age + breakup.ay * age2) * burst,
+        basePosition.z + (breakup.vz * age + breakup.az * age2) * burst
+      );
+    }
+    if(baseRotation){
+      part.rotation.set(
+        baseRotation.x + breakup.rx * age,
+        baseRotation.y + breakup.ry * age,
+        baseRotation.z + breakup.rz * age
+      );
+    }
+    if(baseScale){
+      part.scale.set(
+        baseScale.x * breakup.scale * fadeScale,
+        baseScale.y * breakup.scale * fadeScale,
+        baseScale.z * breakup.scale * fadeScale
+      );
     }
   }
 }
