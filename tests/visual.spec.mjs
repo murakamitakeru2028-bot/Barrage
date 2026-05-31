@@ -88,6 +88,7 @@ for (const { name, path } of VISUAL_SNAPSHOT_ROUTES) {
     await expect(page.locator('#barrage-ui')).toBeVisible();
     await expect(page.locator('#barrage-ui .on').first()).toBeVisible();
     await page.clock.runFor(3000);
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 50));
 
     const runtimeError = await page.evaluate(() => window.__BARRAGE_ERROR__ || '');
     expect(runtimeError).toBe('');

@@ -36439,6 +36439,338 @@ function createUi(){
       pointer-events:auto !important;
       touch-action:none !important;
     }
+    /* Audit polish: readable combat values, clearer horizontal rails, and safer mobile panels. */
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom{
+      height:192px !important;
+      min-height:192px !important;
+      max-height:192px !important;
+      grid-template-rows:48px 70px 45px !important;
+      gap:7px !important;
+      padding:9px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots{
+      height:48px !important;
+      min-height:48px !important;
+      max-height:48px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave{
+      grid-template-rows:22px 9px !important;
+      padding:7px 10px 6px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave span{
+      min-width:34px !important;
+      font-size:25px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave b,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave small{
+      font-size:10px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave .game-wave-track{
+      height:9px !important;
+      min-height:9px !important;
+      max-height:9px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-bars,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bars{
+      height:70px !important;
+      min-height:70px !important;
+      max-height:70px !important;
+      grid-template-rows:32px 32px !important;
+      gap:6px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading{
+      height:32px !important;
+      min-height:32px !important;
+      max-height:32px !important;
+      padding:6px 10px !important;
+      grid-template-columns:58px minmax(0,1fr) 74px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter b{
+      font-size:11px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter span{
+      font-size:14px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter-track,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp .game-meter-track,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo .game-meter-track{
+      height:14px !important;
+      min-height:14px !important;
+      max-height:14px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-console,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chips,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+      height:45px !important;
+      min-height:45px !important;
+      max-height:45px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-console{
+      grid-template-columns:minmax(0,1fr) 98px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip{
+      padding:7px 4px 6px !important;
+      grid-template-rows:11px minmax(0,1fr) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip b{
+      font-size:8px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip span{
+      font-size:14px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+      width:98px !important;
+      min-width:98px !important;
+      max-width:98px !important;
+      font-size:12px !important;
+    }
+    #barrage-ui .game-hud .boss-hp{
+      top:calc(52px + env(safe-area-inset-top)) !important;
+      width:min(288px,calc(100vw - 74px)) !important;
+      height:34px !important;
+      min-height:34px !important;
+      max-height:34px !important;
+      padding:5px 9px 6px !important;
+      opacity:0 !important;
+    }
+    #barrage-ui .game-hud .boss-hp.on{
+      opacity:.92 !important;
+    }
+    #barrage-ui .game-hud .boss-hp-head{
+      height:11px !important;
+      margin-bottom:4px !important;
+    }
+    #barrage-ui .game-hud .boss-hp-head b,
+    #barrage-ui .game-hud .boss-hp-head span{
+      font-size:7.5px !important;
+    }
+    #barrage-ui .game-hud .boss-hp-track{
+      height:7px !important;
+      min-height:7px !important;
+      max-height:7px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom{
+      height:218px !important;
+      min-height:218px !important;
+      max-height:218px !important;
+      grid-template-rows:36px 132px 34px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom > .game-bars,
+    #barrage-ui .game-hud.basic-open.on .game-bars,
+    #barrage-ui .game-hud.basic-open.on .game-meter.is-hp.is-basic-picker{
+      height:132px !important;
+      min-height:132px !important;
+      max-height:132px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-picker::after,
+    #barrage-ui .store-screen .store-market-v3::after,
+    #barrage-ui .garage-screen .garage-v3::after{
+      content:">" !important;
+      position:absolute !important;
+      right:0 !important;
+      top:0 !important;
+      bottom:0 !important;
+      width:28px !important;
+      display:grid !important;
+      place-items:center !important;
+      color:#061014 !important;
+      background:linear-gradient(90deg,transparent,rgba(142,239,255,.92)) !important;
+      font-size:18px !important;
+      font-weight:1000 !important;
+      text-shadow:none !important;
+      pointer-events:none !important;
+      z-index:4 !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-track{
+      padding-right:30px !important;
+      scroll-snap-type:x proximity !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card{
+      flex-basis:196px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > span strong{
+      font-size:10.5px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > small{
+      font-size:7.5px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+      bottom:8px !important;
+      height:264px !important;
+      min-height:264px !important;
+      max-height:264px !important;
+      grid-template-rows:36px minmax(0,1fr) 28px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on::before{
+      bottom:270px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+      gap:9px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card{
+      height:158px !important;
+      min-height:158px !important;
+      max-height:158px !important;
+      grid-template-rows:18px 34px 62px 26px !important;
+      padding:8px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > span.skill-name,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > span.skill-name{
+      font-size:12px !important;
+      line-height:1.18 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain{
+      font-size:9.3px !important;
+      line-height:1.28 !important;
+      -webkit-line-clamp:4 !important;
+    }
+    #barrage-ui .store-screen .store-market-v3,
+    #barrage-ui .garage-screen .garage-v3{
+      position:relative !important;
+    }
+    #barrage-ui .store-screen .store-offer-list,
+    #barrage-ui .garage-screen .garage-loadout-list,
+    #barrage-ui .garage-screen .garage-frame-rail{
+      padding-right:34px !important;
+      scroll-snap-type:x proximity !important;
+    }
+    #barrage-ui .store-screen .store-offer-card:last-child,
+    #barrage-ui .garage-screen .garage-loadout-card:last-child,
+    #barrage-ui .garage-screen .garage-frame-card:last-child{
+      margin-right:16px !important;
+    }
+    #barrage-ui .settings-screen .settings-panel{
+      padding-bottom:44px !important;
+      scroll-padding-bottom:44px !important;
+    }
+    #barrage-ui .settings-screen .settings-summary{
+      min-height:68px !important;
+      padding:9px 10px !important;
+    }
+    #barrage-ui .settings-screen .settings-row{
+      min-height:68px !important;
+      padding:9px 11px !important;
+    }
+    #barrage-ui .settings-screen .settings-toggle-row,
+    #barrage-ui .settings-screen .settings-danger-row{
+      min-height:108px !important;
+      grid-template-rows:auto auto auto 36px !important;
+      align-content:start !important;
+    }
+    #barrage-ui .settings-screen .settings-row span{
+      font-size:16px !important;
+    }
+    #barrage-ui .settings-screen .control-mode-row{
+      min-height:136px !important;
+      grid-template-rows:auto auto auto 38px !important;
+    }
+    #barrage-ui .settings-screen .settings-segment button{
+      height:38px !important;
+      min-height:38px !important;
+    }
+    #barrage-ui .ranking-empty{
+      height:156px !important;
+      align-content:center !important;
+      justify-items:start !important;
+      gap:10px !important;
+      padding:20px !important;
+      place-items:initial !important;
+    }
+    #barrage-ui .ranking-empty b{
+      color:#f7ffff !important;
+      font-size:28px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .ranking-empty span{
+      color:rgba(238,247,255,.78) !important;
+      font-size:12px !important;
+      line-height:1.35 !important;
+      font-weight:900 !important;
+    }
+    #barrage-ui .ranking-empty small{
+      color:#8eefff !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .gacha-screen .page-title h1{
+      font-size:25px !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom{
+        height:180px !important;
+        min-height:180px !important;
+        max-height:180px !important;
+        grid-template-rows:44px 64px 40px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots{
+        height:44px !important;
+        min-height:44px !important;
+        max-height:44px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-bars,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bars{
+        height:64px !important;
+        min-height:64px !important;
+        max-height:64px !important;
+        grid-template-rows:29px 29px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading{
+        height:29px !important;
+        min-height:29px !important;
+        max-height:29px !important;
+        grid-template-columns:52px minmax(0,1fr) 64px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-console,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chips,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chip,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+        height:40px !important;
+        min-height:40px !important;
+        max-height:40px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+        height:242px !important;
+        min-height:242px !important;
+        max-height:242px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on::before{
+        bottom:248px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card{
+        height:142px !important;
+        min-height:142px !important;
+        max-height:142px !important;
+        grid-template-rows:17px 30px 53px 24px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain{
+        font-size:8.5px !important;
+      }
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
       #barrage-ui .brand-lockup,
@@ -36859,7 +37191,7 @@ function renderUi2(){
 }
 
 function renderRankingRows(rows){
-  if(!rows.length) return '<div class="ranking-empty"><b>NO RECORD</b><span>Run history will appear here after your first score is saved.</span><small>LOCAL TOP 10</small></div>';
+  if(!rows.length) return '<div class="ranking-empty"><b>NO RECORD</b><span>初回スコア保存後に、ベスト10と到達WAVEがここへ記録されます。</span><small>START -> SCORE -> LOCAL TOP 10</small></div>';
   return rows.map(row => `
     <div class="ranking-row">
       <b>#${row.rank}</b>

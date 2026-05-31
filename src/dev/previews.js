@@ -22,15 +22,18 @@ export const PREVIEW_ROUTES = Object.freeze([
   { id: "dead", path: "/?ui=dead", label: "Game over" }
 ]);
 
-export const VISUAL_SNAPSHOT_ROUTES = Object.freeze([
-  { name: "home", path: "/" },
-  { name: "gameplay-basic", path: "/?ui=basic" },
-  { name: "skill-selection", path: "/?ui=special" },
-  { name: "garage", path: "/?ui=garage" },
-  { name: "gacha", path: "/?ui=gacha" },
-  { name: "settings", path: "/?ui=settings" },
-  { name: "game-over", path: "/?ui=dead" }
-]);
+const VISUAL_SNAPSHOT_NAMES_BY_ID = Object.freeze({
+  basic: "gameplay-basic",
+  special: "skill-selection",
+  dead: "game-over"
+});
+
+export const VISUAL_SNAPSHOT_ROUTES = Object.freeze(
+  PREVIEW_ROUTES.map(({ id, path }) => ({
+    name: VISUAL_SNAPSHOT_NAMES_BY_ID[id] || id,
+    path
+  }))
+);
 
 export function previewPath(id) {
   if (!id || id === "home") return "/";
