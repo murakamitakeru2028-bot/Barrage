@@ -21,6 +21,7 @@ await resetDist();
 await copyFile(join(projectRoot, "index.html"), join(distDir, "index.html"));
 await cp(join(projectRoot, "public"), distDir, { recursive: true });
 await cp(join(projectRoot, "src"), join(distDir, "src"), { recursive: true });
+await rm(join(distDir, "audio", "README.md"), { force: true });
 
 const crcTable = new Uint32Array(256);
 for (let i = 0; i < 256; i++) {

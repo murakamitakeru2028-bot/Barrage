@@ -52,23 +52,23 @@ const SMALL_SCREEN = Math.min(window.innerWidth || W, window.innerHeight || H) <
 const VISUAL_LOW_POWER = LOW_POWER_DEVICE || SMALL_SCREEN;
 const ENEMY_RENDER_ARC = VISUAL_LOW_POWER ? 2.05 : ENEMY_VISIBLE_ARC;
 const HIGH_DETAIL_CANVAS_MODES = new Set(['home', 'store', 'garage']);
-const RENDER_PLAY_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.45 : 1.25) : SMALL_SCREEN ? 1.82 : 1.55;
-const RENDER_SHOWROOM_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.90 : 1.60) : SMALL_SCREEN ? 2.25 : 1.75;
-const RENDER_PLAY_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 820000 : 950000) : SMALL_SCREEN ? 1080000 : 1500000;
-const RENDER_SHOWROOM_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1300000 : 1150000) : SMALL_SCREEN ? 1850000 : 1700000;
-const RENDER_QUALITY_MIN = LOW_POWER_DEVICE ? .72 : .80;
-const RENDER_QUALITY_DROP_FRAME_MS = LOW_POWER_DEVICE ? 23.5 : 21.5;
-const RENDER_QUALITY_RAISE_FRAME_MS = LOW_POWER_DEVICE ? 16.5 : 15.2;
+const RENDER_PLAY_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.32 : 1.18) : SMALL_SCREEN ? 1.58 : 1.48;
+const RENDER_SHOWROOM_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.65 : 1.45) : SMALL_SCREEN ? 1.95 : 1.68;
+const RENDER_PLAY_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 700000 : 780000) : SMALL_SCREEN ? 820000 : 1320000;
+const RENDER_SHOWROOM_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1000000 : 960000) : SMALL_SCREEN ? 1400000 : 1500000;
+const RENDER_QUALITY_MIN = LOW_POWER_DEVICE ? .66 : .74;
+const RENDER_QUALITY_DROP_FRAME_MS = LOW_POWER_DEVICE ? 22.5 : 20.5;
+const RENDER_QUALITY_RAISE_FRAME_MS = LOW_POWER_DEVICE ? 16.8 : 15.8;
 const RENDER_QUALITY_SAMPLE_MS = 900;
-const HUD_UPDATE_INTERVAL_MS = LOW_POWER_DEVICE ? 140 : 100;
-const HOME_IDLE_FRAME_MS = VISUAL_LOW_POWER ? 66 : 40;
-const SHOWROOM_IDLE_FRAME_MS = VISUAL_LOW_POWER ? 120 : 84;
+const HUD_UPDATE_INTERVAL_MS = LOW_POWER_DEVICE ? 160 : 120;
+const HOME_IDLE_FRAME_MS = VISUAL_LOW_POWER ? 74 : 44;
+const SHOWROOM_IDLE_FRAME_MS = VISUAL_LOW_POWER ? 136 : 92;
 const HIDDEN_UI_FRAME_MS = 240;
-const PASSIVE_3D_FRAME_MS = 140;
+const PASSIVE_3D_FRAME_MS = 170;
 const MAX_ENEMIES = LOW_POWER_DEVICE ? 24 : 30;
 const MAX_BULLETS = LOW_POWER_DEVICE ? 72 : 128;
-const MAX_PARTICLES = VISUAL_LOW_POWER ? 28 : 42;
-const ENEMY_POOL_LIMIT = LOW_POWER_DEVICE ? 24 : 34;
+const MAX_PARTICLES = VISUAL_LOW_POWER ? 22 : 34;
+const ENEMY_POOL_LIMIT = LOW_POWER_DEVICE ? 22 : 30;
 const ENEMY_DETAIL_Z = VISUAL_LOW_POWER ? -60 : -84;
 const PLAYER_HIT_FLASH_DECAY = 3.2;
 const PLAYER_HIT_CORE_DECAY = 5.0;
@@ -90,10 +90,10 @@ const MAGAZINE_BASE = 18;
 const MAGAZINE_STAT_BONUS = 2;
 const MAGAZINE_SPECIAL_BONUS = 5;
 const MAGAZINE_MAX = 72;
-const RELOAD_DURATION_BASE = 1.35;
-const RELOAD_DURATION_MIN = .55;
-const RELOAD_STAT_STEP = .055;
-const RELOAD_EMPTY_PENALTY = .16;
+const RELOAD_DURATION_BASE = 1.70;
+const RELOAD_DURATION_MIN = .74;
+const RELOAD_STAT_STEP = .045;
+const RELOAD_EMPTY_PENALTY = .24;
 const BULLET_TARGET_RADIAL = ENEMY_RAISED_RADIAL;
 const BULLET_VISUAL_RADIAL_SETTLE = 10;
 const BULLET_VISUAL_Z_SETTLE = 14;
@@ -163,14 +163,14 @@ const AFTERBURNER_PREVIEW_BASE = .78;
 const AFTERBURNER_DETAIL_LEVEL = VISUAL_LOW_POWER ? 1 : 2;
 const AFTERBURNER_UPDATE_INTERVAL = VISUAL_LOW_POWER ? 1 / 30 : 0;
 const PARTICLE_SYNC_INTERVAL = VISUAL_LOW_POWER ? 1 / 30 : 0;
-const STAGE_Z_SEGMENTS = VISUAL_LOW_POWER ? 28 : 34;
-const STAGE_ARC_SEGMENTS = VISUAL_LOW_POWER ? 32 : 38;
-const STAGE_RING_COUNT = VISUAL_LOW_POWER ? 22 : 28;
-const STAGE_RING_SEGMENTS = VISUAL_LOW_POWER ? 44 : 56;
-const STAR_COUNT = VISUAL_LOW_POWER ? 72 : 112;
-const SPACE_STAR_COUNT = VISUAL_LOW_POWER ? 200 : 300;
-const SPACE_DUST_COUNT = VISUAL_LOW_POWER ? 56 : 90;
-const VANISH_STAR_COUNT = VISUAL_LOW_POWER ? 54 : 84;
+const STAGE_Z_SEGMENTS = VISUAL_LOW_POWER ? 24 : 30;
+const STAGE_ARC_SEGMENTS = VISUAL_LOW_POWER ? 28 : 34;
+const STAGE_RING_COUNT = VISUAL_LOW_POWER ? 18 : 24;
+const STAGE_RING_SEGMENTS = VISUAL_LOW_POWER ? 36 : 48;
+const STAR_COUNT = VISUAL_LOW_POWER ? 56 : 92;
+const SPACE_STAR_COUNT = VISUAL_LOW_POWER ? 150 : 240;
+const SPACE_DUST_COUNT = VISUAL_LOW_POWER ? 42 : 72;
+const VANISH_STAR_COUNT = VISUAL_LOW_POWER ? 40 : 68;
 const SAVE_KEY = 'barrage-3d-save-v1';
 const XP_BASE = 80;
 const BASIC_POINT_UNIT = 60;
@@ -630,9 +630,9 @@ const renderPerf = {sum:0, count:0, windowStart:0, lastChange:0};
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: !LOW_POWER_DEVICE || SMALL_SCREEN,
+  antialias: !VISUAL_LOW_POWER,
   alpha: false,
-  powerPreference: 'high-performance'
+  powerPreference: VISUAL_LOW_POWER ? 'low-power' : 'high-performance'
 });
 renderer.setClearColor(COLORS.bg, 1);
 renderer.setPixelRatio(renderPixelRatioForSize(W, H));
@@ -691,6 +691,10 @@ const enemyHpBarWorldPosition = new THREE.Vector3();
 const enemyHpBarScreenUp = new THREE.Vector3();
 const enemyDefeatScreenPosition = new THREE.Vector3();
 const cameraHomeTarget = new THREE.Vector3();
+const enemyImpactEnemyStartPoint = {x:0, y:0, z:0};
+const enemyImpactEnemyEndPoint = {x:0, y:0, z:0};
+const enemyImpactPlayerStartPoint = {x:0, y:0, z:0};
+const enemyImpactPlayerEndPoint = {x:0, y:0, z:0};
 let ringPhase = 0;
 let uiDirty = true;
 let activePointer = null;
@@ -1524,7 +1528,7 @@ function specialMagazineBonus(){
 }
 
 function specialReloadMultiplier(){
-  return 1 + specialUpgradeLevel('quickLoader') * .16 + specialUpgradeLevel('overclockCore') * .035;
+  return 1 + specialUpgradeLevel('quickLoader') * .13 + specialUpgradeLevel('overclockCore') * .025;
 }
 
 function weaponRuntimeStats(){
@@ -2483,12 +2487,12 @@ function makeSharedAssets(){
   coreMaterials.set('boss', new THREE.MeshBasicMaterial({ color:0xffd36a, fog:false }));
 
   const geometries = {
-    shot: new THREE.SphereGeometry(.118, SMALL_SCREEN ? 14 : 10, SMALL_SCREEN ? 8 : 6),
-    bulletGlow: new THREE.SphereGeometry(.118, SMALL_SCREEN ? 14 : 10, SMALL_SCREEN ? 8 : 6),
-    afterburnerCone: new THREE.ConeGeometry(.5, 1, VISUAL_LOW_POWER ? 10 : 14, 1, true),
+    shot: new THREE.SphereGeometry(.118, VISUAL_LOW_POWER ? 9 : 12, VISUAL_LOW_POWER ? 5 : 7),
+    bulletGlow: new THREE.SphereGeometry(.118, VISUAL_LOW_POWER ? 9 : 12, VISUAL_LOW_POWER ? 5 : 7),
+    afterburnerCone: new THREE.ConeGeometry(.5, 1, VISUAL_LOW_POWER ? 8 : 12, 1, true),
     afterburnerStreak: makeAfterburnerStreakGeometry(),
-    particle: new THREE.SphereGeometry(.050, 5, 4),
-    enemyCore: new THREE.SphereGeometry(.24, 9, 6),
+    particle: new THREE.SphereGeometry(.050, VISUAL_LOW_POWER ? 4 : 5, 3),
+    enemyCore: new THREE.SphereGeometry(.24, VISUAL_LOW_POWER ? 7 : 9, VISUAL_LOW_POWER ? 5 : 6),
     enemyBlade: new THREE.BoxGeometry(.13, .58, .14),
     enemySpike: new THREE.ConeGeometry(.13, .48, 3, 1),
     hitCross: makeHitCrossGeometry(.92),
@@ -29733,6 +29737,306 @@ function createUi(){
       from{opacity:0;transform:translate(-50%,-46%) scale(.985)}
       to{opacity:1;transform:translate(-50%,-50%) scale(1)}
     }
+    /* Game over title placement: keep the GAMEOVER word at the screen center. */
+    #barrage-ui .dead-screen .gameover-card{
+      grid-template-rows:30px 214px 56px 42px 36px 46px !important;
+      gap:8px !important;
+    }
+    #barrage-ui .dead-screen .gameover-signal{
+      grid-row:1 !important;
+    }
+    #barrage-ui .dead-screen .gameover-title{
+      position:absolute !important;
+      left:50% !important;
+      top:50% !important;
+      z-index:4 !important;
+      width:min(352px,calc(100% - 22px)) !important;
+      height:auto !important;
+      min-height:0 !important;
+      transform:translate(-50%,-50%) !important;
+      font-size:clamp(42px,12vw,56px) !important;
+      line-height:.9 !important;
+      pointer-events:none !important;
+      animation:gameoverTitleCenterIn .48s cubic-bezier(.2,.9,.2,1) both !important;
+    }
+    #barrage-ui .dead-screen .gameover-summary{
+      grid-row:3 !important;
+      gap:8px !important;
+    }
+    #barrage-ui .dead-screen .gameover-score,
+    #barrage-ui .dead-screen .gameover-rank{
+      padding:7px 9px !important;
+      gap:3px !important;
+    }
+    #barrage-ui .dead-screen .gameover-score strong,
+    #barrage-ui .dead-screen .gameover-rank strong{
+      font-size:clamp(24px,7vw,32px) !important;
+      line-height:.94 !important;
+    }
+    #barrage-ui .dead-screen .gameover-score span,
+    #barrage-ui .dead-screen .gameover-rank span{
+      font-size:9px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .dead-screen .gameover-result-grid{
+      grid-row:4 !important;
+      gap:7px !important;
+    }
+    #barrage-ui .dead-screen .gameover-result-grid .result-stat{
+      padding:5px !important;
+      gap:3px !important;
+    }
+    #barrage-ui .dead-screen .gameover-result-grid b{
+      font-size:8px !important;
+    }
+    #barrage-ui .dead-screen .gameover-result-grid span,
+    #barrage-ui .dead-screen .gameover-result-grid .token-number{
+      font-size:clamp(15px,4.4vw,19px) !important;
+    }
+    #barrage-ui .dead-screen .gameover-log{
+      grid-row:5 !important;
+      min-height:0 !important;
+      padding:6px 10px !important;
+      row-gap:2px !important;
+    }
+    #barrage-ui .dead-screen .gameover-log b{
+      font-size:8px !important;
+    }
+    #barrage-ui .dead-screen .gameover-log span{
+      font-size:10px !important;
+    }
+    #barrage-ui .dead-screen .gameover-log i{
+      width:42px !important;
+      height:15px !important;
+    }
+    #barrage-ui .dead-screen .gameover-actions{
+      grid-row:6 !important;
+      gap:8px !important;
+    }
+    #barrage-ui .dead-screen .gameover-actions button{
+      height:46px !important;
+      padding:7px 10px !important;
+      gap:2px !important;
+    }
+    #barrage-ui .dead-screen .gameover-actions button b{
+      font-size:14px !important;
+    }
+    #barrage-ui .dead-screen .gameover-actions button span{
+      font-size:8px !important;
+    }
+    @media (max-width:360px), (max-height:640px){
+      #barrage-ui .dead-screen .gameover-card{
+        grid-template-rows:28px 182px 52px 40px 32px 44px !important;
+        gap:7px !important;
+      }
+      #barrage-ui .dead-screen .gameover-title{
+        font-size:clamp(36px,11.2vw,44px) !important;
+      }
+      #barrage-ui .dead-screen .gameover-log{
+        padding:5px 9px !important;
+      }
+      #barrage-ui .dead-screen .gameover-log span{
+        font-size:9px !important;
+      }
+      #barrage-ui .dead-screen .gameover-actions button{
+        height:44px !important;
+      }
+    }
+    @keyframes gameoverTitleCenterIn{
+      0%{opacity:0;transform:translate(-50%,-58%) scale(1.08);filter:blur(5px)}
+      64%{opacity:1;transform:translate(-50%,-50%) scale(.985);filter:blur(0)}
+      100%{opacity:1;transform:translate(-50%,-50%) scale(1);filter:drop-shadow(0 12px 22px rgba(0,0,0,.7))}
+    }
+    /* Comprehensive readability pass: tighten dense panels and enlarge action text. */
+    #barrage-ui .modal-screen.on .pause-dialog{
+      width:min(342px,calc(100vw - 28px)) !important;
+      left:50% !important;
+      right:auto !important;
+      top:50% !important;
+      transform:translate(-50%,-50%) !important;
+      padding:16px !important;
+    }
+    #barrage-ui .modal-screen.on .pause-dialog .dialog-title{
+      color:#f7ffff !important;
+      font-size:24px !important;
+      line-height:1.05 !important;
+      font-weight:1000 !important;
+      text-shadow:0 1px 0 #000,0 0 14px rgba(142,239,255,.16) !important;
+    }
+    #barrage-ui .modal-screen.on .pause-dialog .pause-actions{
+      gap:10px !important;
+    }
+    #barrage-ui .modal-screen.on .pause-dialog .pause-actions button{
+      height:48px !important;
+      min-height:48px !important;
+      padding:0 16px !important;
+      color:#061014 !important;
+      font-size:16px !important;
+      line-height:1 !important;
+      font-weight:1000 !important;
+      text-align:center !important;
+      background:linear-gradient(90deg,#f7ffff,#dffbff) !important;
+      text-shadow:none !important;
+      border:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+      min-height:136px !important;
+      padding-top:11px !important;
+      padding-bottom:34px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > span.skill-name,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card > span{
+      font-size:17px !important;
+      line-height:1.10 !important;
+      color:#f7ffff !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-short,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card .skill-short{
+      color:rgba(238,247,255,.92) !important;
+      font-size:11px !important;
+      line-height:1.34 !important;
+      font-weight:900 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card .skill-explain{
+      color:rgba(238,247,255,.84) !important;
+      font-size:10px !important;
+      line-height:1.38 !important;
+      font-weight:820 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > em,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card > em{
+      display:none !important;
+    }
+    #barrage-ui .gacha-screen.on .gacha-simple-banner b,
+    #barrage-ui .gacha-screen.on .gacha-simple-wallet small,
+    #barrage-ui .gacha-screen.on .signal-cost-card b,
+    #barrage-ui .gacha-screen.on .supply-odds b,
+    #barrage-ui .gacha-screen.on .supply-odds em,
+    #barrage-ui .gacha-screen.on .garage-section-head b,
+    #barrage-ui .gacha-screen.on .garage-section-head span{
+      color:rgba(238,247,255,.90) !important;
+      font-size:9px !important;
+      line-height:1.1 !important;
+      font-weight:950 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .gacha-screen.on .gacha-simple-banner span,
+    #barrage-ui .gacha-screen.on .signal-cost-card span{
+      color:rgba(238,247,255,.88) !important;
+      font-size:10px !important;
+      line-height:1.24 !important;
+      font-weight:850 !important;
+      white-space:normal !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .gacha-screen.on .equipped-card{
+      min-height:62px !important;
+      padding:8px 7px !important;
+      display:grid !important;
+      grid-template-columns:32px minmax(0,1fr) !important;
+      grid-template-rows:12px 17px 16px !important;
+      gap:2px 7px !important;
+      align-items:center !important;
+    }
+    #barrage-ui .gacha-screen.on .equipped-card .cosmetic-swatch,
+    #barrage-ui .gacha-screen.on .equipped-card .result-swatch{
+      grid-column:1 !important;
+      grid-row:1 / 4 !important;
+      width:28px !important;
+      height:28px !important;
+      align-self:center !important;
+    }
+    #barrage-ui .gacha-screen.on .equipped-card b,
+    #barrage-ui .gacha-screen.on .equipped-card span,
+    #barrage-ui .gacha-screen.on .equipped-card small{
+      grid-column:2 !important;
+      min-width:0 !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      white-space:nowrap !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .gacha-screen.on .equipped-card b{
+      font-size:8px !important;
+      color:rgba(142,239,255,.90) !important;
+    }
+    #barrage-ui .gacha-screen.on .equipped-card span{
+      font-size:11px !important;
+      color:#f7ffff !important;
+      font-weight:950 !important;
+    }
+    #barrage-ui .gacha-screen.on .equipped-card small{
+      font-size:8px !important;
+      color:rgba(238,247,255,.76) !important;
+    }
+    #barrage-ui .dead-screen .gameover-card{
+      grid-template-rows:30px 218px 56px 42px 44px 46px !important;
+      gap:8px !important;
+    }
+    #barrage-ui .dead-screen .gameover-title{
+      font-size:clamp(40px,11.5vw,54px) !important;
+    }
+    #barrage-ui .dead-screen .gameover-log{
+      padding:7px 10px !important;
+    }
+    #barrage-ui .dead-screen .gameover-log b{
+      font-size:9px !important;
+    }
+    #barrage-ui .dead-screen .gameover-log span{
+      font-size:11px !important;
+      line-height:1.18 !important;
+    }
+    #barrage-ui .dead-screen .gameover-actions button{
+      height:50px !important;
+      padding:8px 11px !important;
+    }
+    #barrage-ui .dead-screen .gameover-actions button b{
+      font-size:15px !important;
+      line-height:1 !important;
+    }
+    #barrage-ui .dead-screen .gameover-actions button span{
+      font-size:9px !important;
+    }
+    #barrage-ui .ranking-screen.on .ranking-empty span{
+      color:rgba(238,247,255,.92) !important;
+      font-size:13px !important;
+      line-height:1.38 !important;
+      max-width:300px !important;
+      white-space:normal !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card,
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+        min-height:130px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > span.skill-name,
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card > span{
+        font-size:16px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-short,
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card .skill-short{
+        font-size:10px !important;
+      }
+      #barrage-ui .gacha-screen.on .equipped-card{
+        min-height:58px !important;
+        padding:7px 6px !important;
+      }
+      #barrage-ui .dead-screen .gameover-card{
+        grid-template-rows:28px 188px 50px 38px 42px 44px !important;
+      }
+      #barrage-ui .dead-screen .gameover-log span{
+        font-size:10px !important;
+      }
+      #barrage-ui .dead-screen .gameover-actions button{
+        height:46px !important;
+      }
+    }
     /* Readability audit: keep small labels legible on vertical phones. */
     #barrage-ui :is(.page-title p,.settings-row small,.settings-summary small,.ranking-empty span,.level-note){
       color:rgba(238,247,255,.88) !important;
@@ -34047,6 +34351,110 @@ function createUi(){
     #barrage-ui .game-hud.basic-open.on .game-bottom > .game-wave .game-wave-track{
       display:none !important;
     }
+    /* Basic upgrade picker readability: use the old chip row space for longer descriptions. */
+    #barrage-ui .game-hud.basic-open.on .game-bottom{
+      height:252px !important;
+      min-height:252px !important;
+      max-height:252px !important;
+      grid-template-columns:118px minmax(0,1fr) !important;
+      grid-template-rows:35px 157px 30px !important;
+      gap:6px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom > .game-bars,
+    #barrage-ui .game-hud.basic-open.on .game-bars,
+    #barrage-ui .game-hud.basic-open.on .game-meter.is-hp.is-basic-picker{
+      height:157px !important;
+      min-height:157px !important;
+      max-height:157px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-picker{
+      grid-template-rows:31px minmax(0,1fr) !important;
+      gap:8px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-track{
+      height:118px !important;
+      min-height:118px !important;
+      max-height:118px !important;
+      gap:9px !important;
+      padding:0 2px 2px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card{
+      flex-basis:224px !important;
+      height:116px !important;
+      min-height:116px !important;
+      max-height:116px !important;
+      grid-template-columns:36px minmax(0,1fr) 50px !important;
+      grid-template-rows:17px 30px minmax(0,1fr) !important;
+      gap:4px 8px !important;
+      padding:10px 9px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > i{
+      width:34px !important;
+      height:34px !important;
+      margin-top:18px !important;
+      font-size:10px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > span{
+      padding-right:54px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > span b{
+      font-size:8px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > span strong{
+      font-size:14px !important;
+      line-height:1.10 !important;
+      white-space:normal !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:2 !important;
+      -webkit-box-orient:vertical !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > small{
+      grid-column:2 / 4 !important;
+      grid-row:3 !important;
+      padding-right:54px !important;
+      color:rgba(238,247,255,.90) !important;
+      font-size:10px !important;
+      line-height:1.28 !important;
+      -webkit-line-clamp:3 !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > em{
+      min-width:44px !important;
+      height:19px !important;
+      font-size:8px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .hud-basic-card > mark{
+      min-width:48px !important;
+      height:23px !important;
+      font-size:9px !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-bottom > .game-console,
+    #barrage-ui .game-hud.basic-open.on .game-console.is-basic-picker{
+      grid-column:1 / -1 !important;
+      grid-row:3 !important;
+      width:100% !important;
+      height:30px !important;
+      min-height:30px !important;
+      max-height:30px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) !important;
+      justify-items:end !important;
+      align-items:stretch !important;
+      overflow:visible !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-console.is-basic-picker .game-chips{
+      display:none !important;
+    }
+    #barrage-ui .game-hud.basic-open.on .game-console.is-basic-picker .game-upgrade{
+      width:94px !important;
+      min-width:94px !important;
+      max-width:94px !important;
+      height:30px !important;
+      min-height:30px !important;
+      max-height:30px !important;
+      justify-self:end !important;
+      font-size:11px !important;
+    }
     @media (max-width:370px), (max-height:760px){
       #barrage-ui .game-hud.on:not(.basic-open) .game-bottom{
         width:calc(100vw - 18px) !important;
@@ -34128,6 +34536,423 @@ function createUi(){
         width:84px !important;
         min-width:84px !important;
         max-width:84px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .game-bottom{
+        height:244px !important;
+        min-height:244px !important;
+        max-height:244px !important;
+        grid-template-columns:112px minmax(0,1fr) !important;
+        grid-template-rows:35px 151px 30px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .game-bottom > .game-bars,
+      #barrage-ui .game-hud.basic-open.on .game-bars,
+      #barrage-ui .game-hud.basic-open.on .game-meter.is-hp.is-basic-picker{
+        height:151px !important;
+        min-height:151px !important;
+        max-height:151px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .hud-basic-track{
+        height:112px !important;
+        min-height:112px !important;
+        max-height:112px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .hud-basic-card{
+        flex-basis:210px !important;
+        height:110px !important;
+        min-height:110px !important;
+        max-height:110px !important;
+        grid-template-columns:33px minmax(0,1fr) 48px !important;
+        padding:9px 8px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .hud-basic-card > i{
+        width:31px !important;
+        height:31px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .hud-basic-card > span strong{
+        font-size:13px !important;
+      }
+      #barrage-ui .game-hud.basic-open.on .hud-basic-card > small{
+        font-size:9px !important;
+        line-height:1.26 !important;
+      }
+    }
+    /* Skill picker tray: match the in-run upgrade picker position and command-card format. */
+    #barrage-ui .upgrade-overlay.special-overlay.on{
+      background:linear-gradient(180deg,rgba(0,0,0,.03) 0 42%,rgba(0,0,0,.42) 66%,rgba(0,0,0,.88) 100%) !important;
+      pointer-events:auto !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on::before{
+      top:auto !important;
+      bottom:252px !important;
+      height:2px !important;
+      opacity:.9 !important;
+      background:linear-gradient(90deg,transparent,rgba(142,239,255,.64),rgba(247,255,255,.72),transparent) !important;
+      box-shadow:0 0 18px rgba(142,239,255,.24) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+      position:absolute !important;
+      left:10px !important;
+      right:10px !important;
+      top:auto !important;
+      bottom:9px !important;
+      width:auto !important;
+      max-width:none !important;
+      height:252px !important;
+      min-height:252px !important;
+      max-height:252px !important;
+      padding:9px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) !important;
+      grid-template-rows:35px 157px 30px !important;
+      gap:6px !important;
+      transform:none !important;
+      border:1px solid rgba(142,239,255,.26) !important;
+      border-bottom:3px solid #8eefff !important;
+      border-radius:8px !important;
+      clip-path:none !important;
+      background:
+        linear-gradient(120deg,rgba(142,239,255,.10) 0 18%,transparent 18%),
+        linear-gradient(180deg,rgba(10,19,21,.96),rgba(3,7,9,.98)) !important;
+      box-shadow:0 -18px 38px rgba(0,0,0,.50),0 0 0 1px rgba(255,255,255,.045) inset,0 0 24px rgba(142,239,255,.10) !important;
+      overflow:hidden !important;
+      box-sizing:border-box !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog::before,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog::after{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-head{
+      grid-row:1 !important;
+      min-height:35px !important;
+      height:35px !important;
+      padding:0 4px 6px !important;
+      margin:0 !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      align-items:center !important;
+      gap:8px !important;
+      border-bottom:1px solid rgba(142,239,255,.18) !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-title{
+      color:#f7ffff !important;
+      font-size:18px !important;
+      font-weight:1000 !important;
+      line-height:1 !important;
+      letter-spacing:0 !important;
+      text-shadow:0 0 18px rgba(142,239,255,.22),0 1px 0 #000 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-note{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-sp{
+      min-width:56px !important;
+      height:28px !important;
+      min-height:28px !important;
+      padding:0 10px !important;
+      display:grid !important;
+      place-items:center !important;
+      border:1px solid rgba(142,239,255,.28) !important;
+      border-radius:6px !important;
+      background:rgba(142,239,255,.10) !important;
+      color:#f7ffff !important;
+      font-size:10px !important;
+      font-weight:950 !important;
+      text-shadow:0 1px 0 #000 !important;
+      clip-path:none !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+      grid-row:2 !important;
+      width:100% !important;
+      height:157px !important;
+      min-height:157px !important;
+      max-height:157px !important;
+      padding:0 2px 2px !important;
+      margin:0 !important;
+      display:flex !important;
+      grid-template-columns:none !important;
+      grid-template-rows:none !important;
+      grid-auto-rows:auto !important;
+      gap:9px !important;
+      overflow-x:auto !important;
+      overflow-y:hidden !important;
+      scroll-snap-type:x proximity !important;
+      scrollbar-width:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid::-webkit-scrollbar{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+      position:relative !important;
+      flex:0 0 224px !important;
+      width:224px !important;
+      min-width:224px !important;
+      max-width:224px !important;
+      height:116px !important;
+      min-height:116px !important;
+      max-height:116px !important;
+      padding:10px 9px !important;
+      display:grid !important;
+      grid-template-columns:36px minmax(0,1fr) 50px !important;
+      grid-template-rows:17px 30px minmax(0,1fr) !important;
+      gap:4px 8px !important;
+      align-items:start !important;
+      text-align:left !important;
+      scroll-snap-align:start !important;
+      border:1px solid rgba(238,247,255,.17) !important;
+      border-top:2px solid var(--accent,#8eefff) !important;
+      border-left:1px solid rgba(238,247,255,.17) !important;
+      border-radius:6px !important;
+      background:
+        linear-gradient(135deg,color-mix(in srgb,var(--accent,#8eefff) 14%,transparent),transparent 30%),
+        linear-gradient(180deg,rgba(238,247,255,.075),rgba(5,9,11,.93)) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 9px 18px rgba(0,0,0,.28) !important;
+      clip-path:none !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon{
+      grid-column:1 !important;
+      grid-row:1 / 4 !important;
+      position:relative !important;
+      left:auto !important;
+      top:auto !important;
+      width:34px !important;
+      height:34px !important;
+      min-width:34px !important;
+      min-height:34px !important;
+      margin-top:18px !important;
+      align-self:start !important;
+      display:grid !important;
+      place-items:center !important;
+      border:1px solid rgba(238,247,255,.18) !important;
+      border-radius:5px !important;
+      color:var(--accent,#8eefff) !important;
+      background:rgba(238,247,255,.055) !important;
+      box-shadow:none !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon .special-icon{
+      width:24px !important;
+      height:24px !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > b{
+      grid-column:2 / 4 !important;
+      grid-row:1 !important;
+      min-width:0 !important;
+      padding-right:54px !important;
+      color:color-mix(in srgb,var(--accent,#8eefff) 78%,#ffffff) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      font-weight:950 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name{
+      grid-column:2 / 4 !important;
+      grid-row:2 !important;
+      min-width:0 !important;
+      padding-right:54px !important;
+      color:#f7ffff !important;
+      font-size:14px !important;
+      line-height:1.10 !important;
+      font-weight:1000 !important;
+      white-space:normal !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:2 !important;
+      -webkit-box-orient:vertical !important;
+      overflow:hidden !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-short{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain{
+      grid-column:2 / 4 !important;
+      grid-row:3 !important;
+      min-width:0 !important;
+      padding-right:54px !important;
+      color:rgba(238,247,255,.90) !important;
+      font-size:10px !important;
+      line-height:1.28 !important;
+      font-weight:900 !important;
+      white-space:normal !important;
+      display:-webkit-box !important;
+      -webkit-line-clamp:3 !important;
+      -webkit-box-orient:vertical !important;
+      overflow:hidden !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > em{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > strong{
+      position:absolute !important;
+      left:auto !important;
+      right:8px !important;
+      top:auto !important;
+      bottom:8px !important;
+      grid-area:auto !important;
+      width:auto !important;
+      min-width:48px !important;
+      height:23px !important;
+      min-height:23px !important;
+      margin:0 !important;
+      padding:0 8px !important;
+      display:grid !important;
+      place-items:center !important;
+      border:1px solid color-mix(in srgb,var(--accent,#8eefff) 52%,rgba(238,247,255,.18)) !important;
+      border-radius:5px !important;
+      background:color-mix(in srgb,var(--accent,#8eefff) 16%,rgba(238,247,255,.07)) !important;
+      color:#f7ffff !important;
+      font-size:9px !important;
+      font-weight:1000 !important;
+      line-height:1 !important;
+      text-shadow:0 1px 0 #000 !important;
+      transform:none !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row{
+      grid-row:3 !important;
+      min-height:30px !important;
+      height:30px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 94px !important;
+      gap:8px !important;
+      align-items:stretch !important;
+      margin:0 !important;
+      overflow:hidden !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button{
+      grid-column:2 !important;
+      grid-row:1 !important;
+      width:94px !important;
+      min-width:94px !important;
+      max-width:94px !important;
+      height:30px !important;
+      min-height:30px !important;
+      max-height:30px !important;
+      padding:0 8px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) auto !important;
+      gap:4px !important;
+      align-items:center !important;
+      color:#071216 !important;
+      border:0 !important;
+      border-radius:6px !important;
+      background:linear-gradient(116deg,#f7ffff 0 36%,#8eefff 36% 100%) !important;
+      box-shadow:0 0 18px rgba(142,239,255,.25),inset 0 1px 0 rgba(255,255,255,.42) !important;
+      clip-path:none !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button:disabled{
+      color:rgba(238,247,255,.62) !important;
+      border:1px solid rgba(238,247,255,.12) !important;
+      background:rgba(238,247,255,.06) !important;
+      box-shadow:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button :is(b,span){
+      min-width:0 !important;
+      color:inherit !important;
+      font-size:9px !important;
+      line-height:1 !important;
+      font-weight:1000 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row small{
+      grid-column:1 !important;
+      grid-row:1 !important;
+      min-width:0 !important;
+      align-self:center !important;
+      color:rgba(238,247,255,.78) !important;
+      font-size:9px !important;
+      line-height:1.16 !important;
+      font-weight:850 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .upgrade-overlay.special-overlay.on::before{
+        bottom:244px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+        left:9px !important;
+        right:9px !important;
+        bottom:8px !important;
+        width:auto !important;
+        height:244px !important;
+        min-height:244px !important;
+        max-height:244px !important;
+        grid-template-rows:35px 151px 30px !important;
+        gap:6px !important;
+        padding:9px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+        height:151px !important;
+        min-height:151px !important;
+        max-height:151px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+        flex-basis:210px !important;
+        width:210px !important;
+        min-width:210px !important;
+        max-width:210px !important;
+        height:110px !important;
+        min-height:110px !important;
+        max-height:110px !important;
+        grid-template-columns:33px minmax(0,1fr) 48px !important;
+        padding:9px 8px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon{
+        width:31px !important;
+        height:31px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name{
+        font-size:13px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain{
+        font-size:9px !important;
+        line-height:1.26 !important;
+      }
+    }
+    /* Gameplay HUD audit: keep the upgrade button readable on combat previews. */
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-console{
+      grid-template-columns:minmax(0,1fr) 96px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+      width:96px !important;
+      min-width:96px !important;
+      max-width:96px !important;
+      padding:0 8px !important;
+      font-size:12px !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-console{
+        grid-template-columns:minmax(0,1fr) 92px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+        width:92px !important;
+        min-width:92px !important;
+        max-width:92px !important;
+        font-size:11px !important;
       }
     }
     @media (prefers-reduced-motion: reduce){
@@ -34432,13 +35257,15 @@ function renderUi2(){
             </div>
           `}
         </div>
-        <div class="game-console">
-          <div class="game-chips">
-            <div class="game-chip"><b>LV</b><span data-ref="levelChip">${state.level}</span></div>
-            <div class="game-chip"><b>SP</b><span data-ref="specialPointChip">${state.skillPoints}</span></div>
-            <div class="game-chip"><b>BP</b><span data-ref="bpChip">${state.basicPoints}</span></div>
-            <div class="game-chip"><b>TK</b><span>${tokenAmount(tokenReward, 'token-gain', '+', 'tokenPreview')}</span></div>
-          </div>
+        <div class="game-console ${basicPickerOpen ? 'is-basic-picker' : ''}">
+          ${basicPickerOpen ? '' : `
+            <div class="game-chips">
+              <div class="game-chip"><b>LV</b><span data-ref="levelChip">${state.level}</span></div>
+              <div class="game-chip"><b>SP</b><span data-ref="specialPointChip">${state.skillPoints}</span></div>
+              <div class="game-chip"><b>BP</b><span data-ref="bpChip">${state.basicPoints}</span></div>
+              <div class="game-chip"><b>TK</b><span>${tokenAmount(tokenReward, 'token-gain', '+', 'tokenPreview')}</span></div>
+            </div>
+          `}
           <button class="game-upgrade" data-ref="skillControl" data-action="openUpgrade">${basicPickerOpen ? '閉じる' : `強化 ${state.basicPoints}`}</button>
         </div>
       </div>
@@ -37105,6 +37932,14 @@ function pipePoint(angle, radial, z){
   };
 }
 
+function setPipePoint(out, angle, radial, z){
+  const radius = PIPE_RADIUS * radial;
+  out.x = Math.sin(angle) * radius;
+  out.y = -Math.cos(angle) * radius;
+  out.z = z;
+  return out;
+}
+
 function playerCollisionPoint(angle, z = PLAYER_Z, lateral = 0){
   const point = pipePoint(angle, PLAYER_COLLISION_RADIAL, z);
   if(lateral){
@@ -37112,6 +37947,20 @@ function playerCollisionPoint(angle, z = PLAYER_Z, lateral = 0){
     point.y += Math.sin(angle) * lateral;
   }
   return point;
+}
+
+function setPlayerCollisionPoint(out, angle, z = PLAYER_Z, lateral = 0){
+  const sin = Math.sin(angle);
+  const cos = Math.cos(angle);
+  const radius = PIPE_RADIUS * PLAYER_COLLISION_RADIAL;
+  out.x = sin * radius;
+  out.y = -cos * radius;
+  out.z = z;
+  if(lateral){
+    out.x += cos * lateral;
+    out.y += sin * lateral;
+  }
+  return out;
 }
 
 function interpolateAngle(from, to, t){
@@ -37215,8 +38064,10 @@ function enemyHitAngleWindow(enemy){
 
 function enemyPlayerImpact(enemy){
   const regions = enemyPlayerHitRegions(enemy);
-  const hitBox = combinePlayerHitRegions(regions);
-  const zPad = hitBox.z;
+  let zPad = 0;
+  for(const region of regions){
+    zPad = Math.max(zPad, Math.abs(region.zOffset) + region.z);
+  }
   const startZ = enemy.prevZ ?? enemy.z;
   if(!zRangesOverlap(startZ, enemy.z, PLAYER_Z, PLAYER_Z, zPad)) return null;
 
@@ -37227,12 +38078,12 @@ function enemyPlayerImpact(enemy){
   const playerStartAngle = normalizeAngle(state.prevRoll ?? state.roll);
   const playerEndAngle = normalizeAngle(state.roll);
 
-  const enemyStart = pipePoint(enemyStartAngle, enemyStartRadial, startZ);
-  const enemyEnd = pipePoint(enemyEndAngle, enemyEndRadial, enemy.z);
+  const enemyStart = setPipePoint(enemyImpactEnemyStartPoint, enemyStartAngle, enemyStartRadial, startZ);
+  const enemyEnd = setPipePoint(enemyImpactEnemyEndPoint, enemyEndAngle, enemyEndRadial, enemy.z);
   let impact = null;
   for(const region of regions){
-    const playerStart = playerCollisionPoint(playerStartAngle, PLAYER_Z + region.zOffset, region.lateral);
-    const playerEnd = playerCollisionPoint(playerEndAngle, PLAYER_Z + region.zOffset, region.lateral);
+    const playerStart = setPlayerCollisionPoint(enemyImpactPlayerStartPoint, playerStartAngle, PLAYER_Z + region.zOffset, region.lateral);
+    const playerEnd = setPlayerCollisionPoint(enemyImpactPlayerEndPoint, playerEndAngle, PLAYER_Z + region.zOffset, region.lateral);
     const regionImpact = sweptEllipsoidImpact(
       enemyStart.x, enemyStart.y, enemyStart.z,
       enemyEnd.x, enemyEnd.y, enemyEnd.z,
@@ -37269,10 +38120,12 @@ function enemyPlayerHitBox(enemy){
 }
 
 function combinePlayerHitRegions(regions){
-  return regions.reduce((box, region) => ({
-    x: Math.max(box.x, Math.abs(region.lateral) + region.x),
-    z: Math.max(box.z, Math.abs(region.zOffset) + region.z)
-  }), {x:0, z:0});
+  const box = {x:0, z:0};
+  for(const region of regions){
+    box.x = Math.max(box.x, Math.abs(region.lateral) + region.x);
+    box.z = Math.max(box.z, Math.abs(region.zOffset) + region.z);
+  }
+  return box;
 }
 
 function enemyPlayerHitRegions(enemy){
@@ -37735,14 +38588,14 @@ function spawnBossShard(boss){
 function spawnBossAttackBeam(originAngle, originZ, originRadial, targetAngle, targetZ, targetRadial, centered = false){
   const beam = bossAttackBeamPool.pop() || makeBossAttackBeam();
   const positions = beam.geometry.attributes.position.array;
-  const start = pipePoint(originAngle, originRadial, originZ);
-  const end = pipePoint(targetAngle, targetRadial, targetZ);
-  positions[0] = start.x;
-  positions[1] = start.y;
-  positions[2] = start.z;
-  positions[3] = end.x;
-  positions[4] = end.y;
-  positions[5] = end.z;
+  const startRadius = PIPE_RADIUS * originRadial;
+  const endRadius = PIPE_RADIUS * targetRadial;
+  positions[0] = Math.sin(originAngle) * startRadius;
+  positions[1] = -Math.cos(originAngle) * startRadius;
+  positions[2] = originZ;
+  positions[3] = Math.sin(targetAngle) * endRadius;
+  positions[4] = -Math.cos(targetAngle) * endRadius;
+  positions[5] = targetZ;
   beam.geometry.attributes.position.needsUpdate = true;
   beam.geometry.computeBoundingSphere();
   beam.userData.life = centered ? .52 : .42;
