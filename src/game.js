@@ -40,6 +40,7 @@ const CONTROL_STICK_RANGE_MIN = 58;
 const CONTROL_STICK_RANGE_MAX = 96;
 const CONTROL_STICK_RANGE_RATIO = .22;
 const CONTROL_STICK_DEADZONE = .045;
+const CONTROL_UI_DRAG_START_PX = 8;
 const CONTROL_HOLD_DEADZONE = .08;
 const CONTROL_HOLD_RAMP_DELAY = .10;
 const CONTROL_HOLD_RAMP_TIME = 1.15;
@@ -52,11 +53,12 @@ const SMALL_SCREEN = Math.min(window.innerWidth || W, window.innerHeight || H) <
 const VISUAL_LOW_POWER = LOW_POWER_DEVICE || SMALL_SCREEN;
 const ENEMY_RENDER_ARC = VISUAL_LOW_POWER ? 2.05 : ENEMY_VISIBLE_ARC;
 const HIGH_DETAIL_CANVAS_MODES = new Set(['home', 'store', 'garage']);
-const RENDER_PLAY_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.32 : 1.18) : SMALL_SCREEN ? 1.58 : 1.48;
+const RENDER_OBJECT_ANTIALIAS = true;
+const RENDER_PLAY_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.50 : 1.28) : SMALL_SCREEN ? 1.88 : 1.62;
 const RENDER_SHOWROOM_DPR_CAP = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1.65 : 1.45) : SMALL_SCREEN ? 1.95 : 1.68;
-const RENDER_PLAY_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 700000 : 780000) : SMALL_SCREEN ? 820000 : 1320000;
+const RENDER_PLAY_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 860000 : 900000) : SMALL_SCREEN ? 1120000 : 1500000;
 const RENDER_SHOWROOM_PIXEL_BUDGET = LOW_POWER_DEVICE ? (SMALL_SCREEN ? 1000000 : 960000) : SMALL_SCREEN ? 1400000 : 1500000;
-const RENDER_QUALITY_MIN = LOW_POWER_DEVICE ? .66 : .74;
+const RENDER_QUALITY_MIN = LOW_POWER_DEVICE ? .72 : .80;
 const RENDER_QUALITY_DROP_FRAME_MS = LOW_POWER_DEVICE ? 22.5 : 20.5;
 const RENDER_QUALITY_RAISE_FRAME_MS = LOW_POWER_DEVICE ? 16.8 : 15.8;
 const RENDER_QUALITY_SAMPLE_MS = 900;
@@ -69,7 +71,7 @@ const MAX_ENEMIES = LOW_POWER_DEVICE ? 24 : 30;
 const MAX_BULLETS = LOW_POWER_DEVICE ? 72 : 128;
 const MAX_PARTICLES = VISUAL_LOW_POWER ? 22 : 34;
 const ENEMY_POOL_LIMIT = LOW_POWER_DEVICE ? 22 : 30;
-const ENEMY_DETAIL_Z = VISUAL_LOW_POWER ? -60 : -84;
+const ENEMY_DETAIL_Z = VISUAL_LOW_POWER ? -82 : -110;
 const PLAYER_HIT_FLASH_DECAY = 3.2;
 const PLAYER_HIT_CORE_DECAY = 5.0;
 const PLAYER_DEATH_CRASH_DURATION = 1.28;
@@ -150,16 +152,11 @@ const ENEMY_PACK_WAVE_STEP = 7;
 const ENEMY_SPAWN_INTERVAL_START = .92;
 const ENEMY_SPAWN_INTERVAL_WAVE_REDUCTION = .012;
 const ENEMY_SPAWN_INTERVAL_MIN = .28;
-const WAVE1_OPENING_ENEMY_COUNT = 12;
-const WAVE1_OPENING_LANE_OFFSETS = [-.42, .38, .08, -.22, .52, -.56, .24, -.08, .64, -.68, .16, -.34];
-const WAVE1_OPENING_Z_DISTANCES = [11, 24, 39, 56, 75, 96, 119, 144, 171, 200, 230, 260];
-const WAVE1_OPENING_SPEED_ESTIMATE = 13.8;
-const WAVE1_OPENING_INITIAL_LOOKAHEAD = 72;
-const WAVE1_OPENING_LOOKAHEAD = 74;
-const WAVE1_OPENING_ACTIVE_CAP = VISUAL_LOW_POWER ? 6 : 7;
-const WAVE0_INTRO_ENEMY_DISTANCE = 34;
-const WAVE0_INTRO_LANE_OFFSET = .46;
-const WAVE0_INTRO_FADE_PRESENCE = .72;
+const WAVE0_INTRO_ENEMY_DISTANCE = 210;
+const WAVE0_TO_WAVE1_DISTANCE = 92;
+const WAVE0_INTRO_LANE_JITTER = .18;
+const WAVE0_INTRO_SPAWN_INTERVAL = 1.08;
+const WAVE0_INTRO_ACTIVE_CAP = VISUAL_LOW_POWER ? 6 : 8;
 const BOSS_HP_MULT = 1.24;
 const BOSS_SHARD_HP_MULT = 1.18;
 const ENEMY_HP_BAR_VISIBLE_TIME = 4.15;
@@ -599,8 +596,6 @@ const state = {
   reloading: false,
   spawnTimer: 0,
   wave0IntroSpawned: false,
-  wave1OpeningIndex: WAVE1_OPENING_ENEMY_COUNT,
-  wave1OpeningStartedAt: 0,
   bossAlive: false,
   shake: 0,
   hurtFlash: 0,
@@ -643,7 +638,7 @@ const renderPerf = {sum:0, count:0, windowStart:0, lastChange:0};
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: !VISUAL_LOW_POWER,
+  antialias: RENDER_OBJECT_ANTIALIAS,
   alpha: false,
   powerPreference: VISUAL_LOW_POWER ? 'low-power' : 'high-performance'
 });
@@ -754,6 +749,20 @@ const touchStick = {
   knobX: 0,
   knobY: 0
 };
+const hudControlDrag = {
+  pointer: null,
+  startX: 0,
+  startY: 0,
+  started: false
+};
+const touchStickHudCache = {
+  active: null,
+  left: null,
+  top: null,
+  knobX: null,
+  knobY: null
+};
+let suppressUiClickUntil = 0;
 const homePreviewMotion = {
   initialized: false,
   mode: 'home',
@@ -1767,7 +1776,7 @@ function refreshLoadoutVitals(){
   const before = visibleHpMax();
   const next = safeHpMax();
   state.maxHp = next;
-  if(state.mode === 'play'){
+  if(isRunControlMode()){
     state.hp = Math.min(next, state.hp + Math.max(0, next - before));
   }else{
     state.hp = Math.min(next, state.hp || next);
@@ -1826,7 +1835,7 @@ function activeBoss(){
 
 function bossHpInfo(){
   const boss = activeBoss();
-  const visible = state.mode === 'play' && state.bossAlive && !!boss;
+  const visible = isRunControlMode() && state.bossAlive && !!boss;
   const max = Math.max(1, Math.ceil(Number(boss?.maxHp ?? boss?.initialHp ?? boss?.hp) || 1));
   const hp = visible ? Math.max(0, Math.min(max, Math.ceil(Number(boss.hp) || 0))) : 0;
   return {
@@ -1969,13 +1978,6 @@ function rollUpgradeOptions(){
 }
 
 function openLevelUp(){
-  if(activePointer !== null) canvas.releasePointerCapture?.(activePointer);
-  activePointer = null;
-  state.pointer = 0;
-  state.pointerThrottle = 0;
-  resetTurnHold();
-  resetTouchStick();
-  state.rollVel *= .35;
   state.upgradeOptions = rollUpgradeOptions();
   if(!state.upgradeOptions.length) return;
   setMode('levelup');
@@ -2433,6 +2435,9 @@ function syncPlayerShipVariant(){
 }
 
 function makeSharedAssets(){
+  const shipRoundSegments = SMALL_SCREEN ? 24 : VISUAL_LOW_POWER ? 16 : 20;
+  const enemyRoundSegments = SMALL_SCREEN ? 16 : VISUAL_LOW_POWER ? 10 : 14;
+  const enemyRoundRings = SMALL_SCREEN ? 10 : VISUAL_LOW_POWER ? 6 : 8;
   const materials = {
     pipe: new THREE.MeshBasicMaterial({ color:0x07111f, side:THREE.DoubleSide, transparent:true, opacity:.86, depthWrite:false }),
     pipeSide: new THREE.MeshBasicMaterial({ color:0x102533, side:THREE.DoubleSide, transparent:true, opacity:.34, depthWrite:false }),
@@ -2501,24 +2506,24 @@ function makeSharedAssets(){
   coreMaterials.set('boss', new THREE.MeshBasicMaterial({ color:0xffd36a, fog:false }));
 
   const geometries = {
-    shot: new THREE.SphereGeometry(.118, VISUAL_LOW_POWER ? 9 : 12, VISUAL_LOW_POWER ? 5 : 7),
-    bulletGlow: new THREE.SphereGeometry(.118, VISUAL_LOW_POWER ? 9 : 12, VISUAL_LOW_POWER ? 5 : 7),
-    afterburnerCone: new THREE.ConeGeometry(.5, 1, VISUAL_LOW_POWER ? 8 : 12, 1, true),
+    shot: new THREE.SphereGeometry(.118, SMALL_SCREEN ? 14 : VISUAL_LOW_POWER ? 9 : 12, SMALL_SCREEN ? 8 : VISUAL_LOW_POWER ? 5 : 7),
+    bulletGlow: new THREE.SphereGeometry(.118, SMALL_SCREEN ? 14 : VISUAL_LOW_POWER ? 9 : 12, SMALL_SCREEN ? 8 : VISUAL_LOW_POWER ? 5 : 7),
+    afterburnerCone: new THREE.ConeGeometry(.5, 1, SMALL_SCREEN ? 14 : VISUAL_LOW_POWER ? 8 : 12, 1, true),
     afterburnerStreak: makeAfterburnerStreakGeometry(),
     particle: new THREE.SphereGeometry(.050, VISUAL_LOW_POWER ? 4 : 5, 3),
-    enemyCore: new THREE.SphereGeometry(.24, VISUAL_LOW_POWER ? 7 : 9, VISUAL_LOW_POWER ? 5 : 6),
+    enemyCore: new THREE.SphereGeometry(.24, enemyRoundSegments, enemyRoundRings),
     enemyBlade: new THREE.BoxGeometry(.13, .58, .14),
     enemySpike: new THREE.ConeGeometry(.13, .48, 3, 1),
     hitCross: makeHitCrossGeometry(.92),
     bossBlade: new THREE.BoxGeometry(.26, 1.18, .18),
-    bossCore: new THREE.OctahedronGeometry(.58, 0),
-    orb: new THREE.IcosahedronGeometry(.55, 1),
+    bossCore: new THREE.SphereGeometry(.48, shipRoundSegments, Math.max(8, Math.floor(shipRoundSegments * .58))),
+    orb: new THREE.IcosahedronGeometry(.55, SMALL_SCREEN ? 2 : 1),
     tri: new THREE.ConeGeometry(.62, .92, 3, 1),
     quad: new THREE.BoxGeometry(.86, .86, .86),
     octa: new THREE.OctahedronGeometry(.68, 0),
     dodeca: new THREE.DodecahedronGeometry(.68, 0),
     icosa: new THREE.IcosahedronGeometry(.68, 0),
-    boss: new THREE.ConeGeometry(1.45, 2.15, 3, 2)
+    boss: new THREE.ConeGeometry(1.45, 2.15, 3, SMALL_SCREEN ? 3 : 2)
   };
   const enemyGeometryIds = new Set([...ENEMY_TYPES.map(type => type.id), 'boss']);
   const edgeGeometries = new Map();
@@ -35675,7 +35680,7 @@ function createUi(){
     #barrage-ui .game-hud.on:not(.leveling):not(.basic-open) .game-pause,
     #barrage-ui .game-hud.on:not(.leveling):not(.basic-open).has-bp .game-upgrade{
       pointer-events:auto !important;
-      touch-action:manipulation !important;
+      touch-action:none !important;
     }
     #barrage-ui .game-hud.on:not(.leveling):not(.basic-open):not(.has-bp) .game-upgrade{
       pointer-events:none !important;
@@ -35910,6 +35915,530 @@ function createUi(){
         line-height:1.24 !important;
       }
     }
+    /* Home-style combat footer: HP/AMMO/WAVE use the same hard command panels as the hangar. */
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom{
+      --combat-home-cyan:#8eefff;
+      --combat-home-paper:#e8e1d3;
+      --combat-home-text:#f7ffff;
+      --combat-home-muted:rgba(238,247,255,.70);
+      height:178px !important;
+      min-height:178px !important;
+      max-height:178px !important;
+      padding:8px !important;
+      grid-template-rows:45px 62px 40px !important;
+      gap:7px !important;
+      border:1px solid rgba(238,247,255,.20) !important;
+      border-left:4px solid var(--combat-home-cyan) !important;
+      border-top:2px solid rgba(247,255,255,.70) !important;
+      border-bottom:3px solid var(--combat-home-cyan) !important;
+      border-radius:0 !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+      background:
+        linear-gradient(118deg,rgba(142,239,255,.12) 0 14%,transparent 14%),
+        linear-gradient(180deg,rgba(9,10,12,.98),rgba(4,5,6,.97)) !important;
+      box-shadow:0 -18px 38px rgba(0,0,0,.48),0 0 0 1px rgba(255,255,255,.055) inset,0 0 24px rgba(142,239,255,.10) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+      border:1px solid rgba(238,247,255,.18) !important;
+      border-left:3px solid var(--accent,var(--combat-home-cyan)) !important;
+      border-top:2px solid rgba(247,255,255,.62) !important;
+      border-radius:0 !important;
+      clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--accent,var(--combat-home-cyan)) 13%,transparent) 0 18%,transparent 18%),
+        rgba(9,10,12,.94) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.05) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave{
+      --accent:var(--combat-home-cyan);
+      height:45px !important;
+      min-height:45px !important;
+      max-height:45px !important;
+      grid-template-rows:19px 8px !important;
+      padding:7px 9px 6px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave b,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter b,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip b{
+      color:color-mix(in srgb,var(--accent,var(--combat-home-cyan)) 78%,#ffffff) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave span,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip span,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter span{
+      color:var(--combat-home-text) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave small{
+      color:var(--combat-home-muted) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) :is(.game-wave-track,.game-meter-track,.game-meter.is-hp .game-meter-track,.game-meter.is-ammo .game-meter-track){
+      height:11px !important;
+      min-height:11px !important;
+      max-height:11px !important;
+      border:1px solid rgba(238,247,255,.16) !important;
+      border-radius:0 !important;
+      clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px) !important;
+      background:rgba(238,247,255,.08) !important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.045) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) :is(.game-wave-track i,.game-meter-track i){
+      border-radius:0 !important;
+      clip-path:none !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots{
+      --accent:rgba(232,225,211,.92);
+      height:45px !important;
+      min-height:45px !important;
+      max-height:45px !important;
+      padding:6px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots .special-slot{
+      border-radius:0 !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+      background:rgba(238,247,255,.055) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-bars,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bars{
+      height:62px !important;
+      min-height:62px !important;
+      max-height:62px !important;
+      grid-template-rows:28px 28px !important;
+      gap:6px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading{
+      height:28px !important;
+      min-height:28px !important;
+      max-height:28px !important;
+      padding:5px 8px !important;
+      grid-template-columns:50px minmax(0,1fr) 66px !important;
+      gap:8px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo{--accent:#ffd36a}
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp{--accent:#ff6b93}
+    #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading{
+      box-shadow:0 0 18px rgba(255,211,106,.18),0 10px 20px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.05) !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-console{
+      height:40px !important;
+      min-height:40px !important;
+      max-height:40px !important;
+      grid-template-columns:minmax(0,1fr) 92px !important;
+      gap:7px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chips,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+      height:40px !important;
+      min-height:40px !important;
+      max-height:40px !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip:nth-child(1){--accent:#8eefff}
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip:nth-child(2){--accent:#d8e2ea}
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip:nth-child(3){--accent:#36f39b}
+    #barrage-ui .game-hud.on:not(.basic-open) .game-chip:nth-child(4){--accent:#e8e1d3}
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+      --accent:var(--combat-home-cyan);
+      width:92px !important;
+      min-width:92px !important;
+      max-width:92px !important;
+      color:#061014 !important;
+      background:
+        linear-gradient(118deg,rgba(255,255,255,.42) 0 20%,transparent 20%),
+        linear-gradient(180deg,#f7ffff 0 48%,var(--combat-home-cyan) 48% 100%) !important;
+      text-shadow:none !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade::before,
+    #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade::after{
+      display:block !important;
+      content:"" !important;
+      color:#061014 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open):not(.has-bp) .game-upgrade{
+      color:rgba(238,247,255,.46) !important;
+      background:
+        linear-gradient(118deg,rgba(238,247,255,.055) 0 18%,transparent 18%),
+        rgba(8,9,11,.70) !important;
+      text-shadow:0 1px 0 #000 !important;
+    }
+    #barrage-ui .game-hud.on:not(.basic-open):not(.has-bp) .game-upgrade::before,
+    #barrage-ui .game-hud.on:not(.basic-open):not(.has-bp) .game-upgrade::after{
+      color:rgba(238,247,255,.46) !important;
+    }
+    @media (max-width:370px), (max-height:760px){
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom{
+        height:164px !important;
+        min-height:164px !important;
+        max-height:164px !important;
+        grid-template-rows:40px 56px 36px !important;
+        gap:6px !important;
+        padding:7px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-wave,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-special-slots{
+        height:40px !important;
+        min-height:40px !important;
+        max-height:40px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-bars,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bars{
+        height:56px !important;
+        min-height:56px !important;
+        max-height:56px !important;
+        grid-template-rows:25px 25px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-hp,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-meter.is-ammo.reloading{
+        height:25px !important;
+        min-height:25px !important;
+        max-height:25px !important;
+        padding:4px 7px !important;
+        grid-template-columns:46px minmax(0,1fr) 58px !important;
+        gap:6px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-bottom > .game-console,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-console,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chips,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-chip,
+      #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+        height:36px !important;
+        min-height:36px !important;
+        max-height:36px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-console{
+        grid-template-columns:minmax(0,1fr) 84px !important;
+      }
+      #barrage-ui .game-hud.on:not(.basic-open) .game-upgrade{
+        width:84px !important;
+        min-width:84px !important;
+        max-width:84px !important;
+      }
+    }
+    /* Home-style skill picker: same hard command-panel language as the hangar actions. */
+    #barrage-ui .upgrade-overlay.special-overlay.on{
+      --skill-home-text:#f7ffff;
+      --skill-home-muted:rgba(238,247,255,.72);
+      --skill-home-cyan:#8eefff;
+      --skill-home-paper:#e8e1d3;
+      background:linear-gradient(180deg,transparent 0 44%,rgba(5,6,7,.30) 62%,rgba(5,6,7,.88) 100%) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on::before{
+      bottom:250px !important;
+      height:3px !important;
+      background:repeating-linear-gradient(90deg,transparent 0 12px,rgba(142,239,255,.68) 12px 54px,rgba(247,255,255,.82) 54px 66px,transparent 66px 82px) !important;
+      box-shadow:0 0 18px rgba(142,239,255,.24) !important;
+      opacity:.86 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+      left:10px !important;
+      right:10px !important;
+      bottom:9px !important;
+      height:244px !important;
+      min-height:244px !important;
+      max-height:244px !important;
+      padding:10px !important;
+      grid-template-rows:34px minmax(0,1fr) 28px !important;
+      gap:7px !important;
+      border:1px solid rgba(238,247,255,.22) !important;
+      border-left:4px solid var(--skill-home-cyan) !important;
+      border-top:2px solid rgba(247,255,255,.72) !important;
+      border-bottom:2px solid rgba(142,239,255,.76) !important;
+      border-radius:0 !important;
+      clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px) !important;
+      background:
+        linear-gradient(118deg,rgba(142,239,255,.12) 0 16%,transparent 16%),
+        linear-gradient(180deg,rgba(9,10,12,.98),rgba(4,5,6,.97)) !important;
+      box-shadow:0 -18px 38px rgba(0,0,0,.50),0 0 0 1px rgba(255,255,255,.05) inset,0 0 24px rgba(142,239,255,.10) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-head{
+      height:34px !important;
+      min-height:34px !important;
+      padding:0 4px 7px !important;
+      border-bottom:1px solid rgba(238,247,255,.18) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-title{
+      color:var(--skill-home-text) !important;
+      font-size:20px !important;
+      text-shadow:0 0 18px rgba(142,239,255,.24),0 1px 0 #000 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-sp{
+      height:26px !important;
+      min-height:26px !important;
+      min-width:54px !important;
+      border:1px solid rgba(238,247,255,.22) !important;
+      border-top:2px solid rgba(247,255,255,.72) !important;
+      border-radius:0 !important;
+      clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px) !important;
+      background:rgba(8,9,11,.94) !important;
+      color:var(--skill-home-text) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+      height:auto !important;
+      min-height:0 !important;
+      max-height:none !important;
+      padding:0 !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:8px !important;
+      overflow:visible !important;
+      scroll-snap-type:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card{
+      flex:1 1 auto !important;
+      width:auto !important;
+      min-width:0 !important;
+      max-width:none !important;
+      height:142px !important;
+      min-height:142px !important;
+      max-height:142px !important;
+      padding:8px 7px 7px !important;
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) !important;
+      grid-template-rows:19px 32px 48px 24px !important;
+      gap:4px !important;
+      border:1px solid rgba(238,247,255,.20) !important;
+      border-left:3px solid var(--accent,var(--skill-home-cyan)) !important;
+      border-top:2px solid rgba(247,255,255,.62) !important;
+      border-radius:0 !important;
+      clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px) !important;
+      background:
+        linear-gradient(118deg,color-mix(in srgb,var(--accent,var(--skill-home-cyan)) 15%,transparent) 0 18%,transparent 18%),
+        rgba(9,10,12,.95) !important;
+      box-shadow:0 10px 20px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.05) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice::before,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice::before{
+      content:"" !important;
+      display:block !important;
+      position:absolute !important;
+      left:8px !important;
+      top:8px !important;
+      width:7px !important;
+      height:7px !important;
+      border:2px solid var(--accent,var(--skill-home-cyan)) !important;
+      opacity:.78 !important;
+      background:transparent !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice::after,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice::after{
+      right:8px !important;
+      bottom:8px !important;
+      width:20px !important;
+      height:2px !important;
+      background:var(--accent,var(--skill-home-cyan)) !important;
+      opacity:.68 !important;
+      box-shadow:0 0 10px color-mix(in srgb,var(--accent,var(--skill-home-cyan)) 45%,transparent) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice .special-card-icon{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > :is(b,span,small,strong),
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > :is(b,span,small,strong){
+      position:static !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      transform:none !important;
+      min-width:0 !important;
+      max-width:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > :is(i.special-card-icon,em,.skill-short),
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > :is(i.special-card-icon,em,.skill-short){
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > b,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > b{
+      display:block !important;
+      grid-row:1 !important;
+      padding:0 0 0 16px !important;
+      color:color-mix(in srgb,var(--accent,var(--skill-home-cyan)) 70%,#ffffff) !important;
+      font-size:7px !important;
+      line-height:1.1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name{
+      grid-row:2 !important;
+      padding:0 !important;
+      color:var(--skill-home-text) !important;
+      font-size:11px !important;
+      line-height:1.16 !important;
+      font-weight:1000 !important;
+      -webkit-line-clamp:2 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain{
+      grid-row:3 !important;
+      padding:0 !important;
+      color:var(--skill-home-muted) !important;
+      font-size:8.2px !important;
+      line-height:1.22 !important;
+      font-weight:850 !important;
+      -webkit-line-clamp:3 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > strong,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > strong{
+      grid-row:4 !important;
+      align-self:end !important;
+      height:23px !important;
+      min-height:23px !important;
+      padding:0 6px !important;
+      display:grid !important;
+      place-items:center !important;
+      border:1px solid rgba(238,247,255,.22) !important;
+      border-top:2px solid rgba(247,255,255,.62) !important;
+      background:rgba(8,9,11,.96) !important;
+      color:var(--skill-home-text) !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row{
+      height:28px !important;
+      min-height:28px !important;
+      display:grid !important;
+      grid-template-columns:98px minmax(0,1fr) !important;
+      gap:8px !important;
+      align-items:center !important;
+      margin:0 !important;
+      padding:0 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button{
+      height:28px !important;
+      min-height:28px !important;
+      border-left:3px solid var(--skill-home-paper) !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row small{
+      color:rgba(238,247,255,.62) !important;
+      font-size:8px !important;
+      line-height:1.15 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    @media (max-width:370px), (max-height:720px){
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog{
+        height:226px !important;
+        min-height:226px !important;
+        max-height:226px !important;
+        grid-template-rows:32px minmax(0,1fr) 26px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on::before{
+        bottom:232px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice{
+        height:130px !important;
+        min-height:130px !important;
+        max-height:130px !important;
+        grid-template-rows:17px 28px 43px 22px !important;
+        gap:3px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > span.skill-name{
+        font-size:10px !important;
+      }
+      #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain,
+      #barrage-ui .upgrade-overlay.on .level-dialog button.special-upgrade-card.upgrade-choice > small.skill-explain{
+        font-size:7.7px !important;
+      }
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > i.special-card-icon,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > i.special-card-icon,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > em,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > em,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-short,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-short{
+      display:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > :is(b,span,small,strong),
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > :is(b,span,small,strong){
+      position:static !important;
+      left:auto !important;
+      right:auto !important;
+      top:auto !important;
+      bottom:auto !important;
+      transform:none !important;
+      min-width:0 !important;
+      max-width:none !important;
+      width:auto !important;
+      text-align:left !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > b,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > b{
+      display:block !important;
+      grid-row:1 !important;
+      padding:0 0 0 16px !important;
+      font-size:7px !important;
+      line-height:1.1 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > span.skill-name,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > span.skill-name{
+      grid-row:2 !important;
+      padding:0 !important;
+      font-size:11px !important;
+      line-height:1.16 !important;
+      -webkit-line-clamp:2 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > small.skill-explain{
+      grid-row:3 !important;
+      padding:0 !important;
+      font-size:8.2px !important;
+      line-height:1.22 !important;
+      -webkit-line-clamp:3 !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > strong,
+    #barrage-ui .upgrade-overlay.on .level-dialog button.upgrade-card.upgrade-choice.special-upgrade-card > strong{
+      grid-row:4 !important;
+      justify-self:stretch !important;
+      align-self:end !important;
+      height:23px !important;
+      min-height:23px !important;
+      padding:0 6px !important;
+      display:grid !important;
+      place-items:center !important;
+      font-size:8px !important;
+      line-height:1 !important;
+      text-align:center !important;
+    }
+    /* Skill selection stays live: empty tray space lets steering touches pass through to the canvas. */
+    #barrage-ui .upgrade-overlay.special-overlay.on,
+    #barrage-ui .upgrade-overlay.special-overlay.on::before,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-head,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-special-slots,
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row,
+    #barrage-ui .upgrade-overlay.special-overlay.on .level-dialog .upgrade-grid{
+      pointer-events:none !important;
+      touch-action:none !important;
+    }
+    #barrage-ui .upgrade-overlay.special-overlay.on button,
+    #barrage-ui .upgrade-overlay.special-overlay.on .special-upgrade-card,
+    #barrage-ui .upgrade-overlay.special-overlay.on .skill-reroll-row button{
+      pointer-events:auto !important;
+      touch-action:none !important;
+    }
     @media (prefers-reduced-motion: reduce){
       #barrage-ui .home-hub::before,
       #barrage-ui .brand-lockup,
@@ -35957,6 +36486,11 @@ function createUi(){
   const root = document.createElement('div');
   root.id = 'barrage-ui';
   root.addEventListener('click', e => {
+    if(shouldSuppressUiClick()){
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const button = e.target?.closest?.('[data-action]');
     if(!button || !root.contains(button) || button.disabled) return;
     e.preventDefault();
@@ -35986,6 +36520,10 @@ function createUi(){
 
 function uiMotionAllowed(){
   return !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+function shouldSuppressUiClick(){
+  return performance.now() < suppressUiClickUntil;
 }
 
 function uiTapPoint(target, event){
@@ -37496,7 +38034,7 @@ function updateBossHud(info = bossHpInfo()){
 function updateDamageHudEffect(){
   const hud = ui.refs?.hud;
   if(!hud) return;
-  const alpha = state.mode === 'play' ? clamp(state.hurtFlash || 0, 0, 1) : 0;
+  const alpha = isRunControlMode() ? clamp(state.hurtFlash || 0, 0, 1) : 0;
   const rgb = state.hurtFlashRgb || '255,59,98';
   const alphaText = alpha.toFixed(3);
   if(hudCache.damageAlpha !== alphaText){
@@ -37571,6 +38109,10 @@ function closeSettings(){
   setMode(returnMode);
 }
 
+function isRunControlMode(mode = state.mode){
+  return mode === 'play' || mode === 'levelup';
+}
+
 function handleAction(action){
   if(action === 'start') startRun();
   else if(action === 'store') setMode('store');
@@ -37602,7 +38144,7 @@ function handleAction(action){
     state.basicPickerOpen = state.basicPoints > 0 && !state.basicPickerOpen;
     renderUi2();
   }
-  else if(action === 'pause' && state.mode === 'play') setMode('pause');
+  else if(action === 'pause' && isRunControlMode()) setMode('pause');
   else if(action === 'resume' && (state.mode === 'pause' || state.mode === 'basicUpgrade')) setMode('play');
   else if(action === 'home') {
     state.settingsReturnMode = 'home';
@@ -37666,6 +38208,8 @@ function setMode(mode){
   }
   if(mode !== 'play'){
     state.basicPickerOpen = false;
+  }
+  if(!isRunControlMode(mode)){
     activePointer = null;
     state.pointer = 0;
     state.pointerThrottle = 0;
@@ -37718,8 +38262,6 @@ function startRun(){
   resetTurnHold();
   state.shake = 0;
   state.wave0IntroSpawned = false;
-  state.wave1OpeningIndex = WAVE1_OPENING_ENEMY_COUNT;
-  state.wave1OpeningStartedAt = 0;
   state.hurtFlash = 0;
   state.hurtEvade = false;
   state.playerHitFlash = 0;
@@ -37729,7 +38271,7 @@ function startRun(){
   resetPlayerRunPose();
   camera.position.set(0, CAMERA_BASE_Y, CAMERA_BASE_Z);
   camera.lookAt(0, CAMERA_LOOK_Y, CAMERA_LOOK_Z);
-  state.spawnTimer = .72;
+  state.spawnTimer = WAVE0_INTRO_SPAWN_INTERVAL;
   state.bossAlive = false;
   spawnWave0IntroEnemy();
   state.nextHudAt = 0;
@@ -37785,11 +38327,8 @@ function bindInput(){
       beginHomeShipDrag(e);
       return;
     }
-    if(state.mode !== 'play') return;
-    activePointer = e.pointerId;
-    canvas.setPointerCapture?.(e.pointerId);
-    beginPointerControl(e);
-    e.preventDefault();
+    if(!isRunControlMode()) return;
+    startRunPointerControl(e, e);
   });
   canvas.addEventListener('pointermove', e => {
     if(homeShipDrag.pointer === e.pointerId){
@@ -37805,22 +38344,91 @@ function bindInput(){
       endHomeShipDrag(e);
       return;
     }
-    if(activePointer === e.pointerId){
-      activePointer = null;
-      state.pointer = 0;
-      state.pointerThrottle = 0;
-      if(!state.keyboard) resetTurnHold();
-      resetTouchStick();
-      canvas.releasePointerCapture?.(e.pointerId);
-    }
+    endRunPointerControl(e);
   };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('pointerdown', beginHudControlDrag, {capture:true, passive:false});
+  document.addEventListener('pointermove', updateHudControlDrag, {capture:true, passive:false});
+  document.addEventListener('pointerup', endHudControlDrag, {capture:true, passive:false});
+  document.addEventListener('pointercancel', endHudControlDrag, {capture:true, passive:false});
   document.addEventListener('visibilitychange', () => {
     state.last = performance.now();
     lastVisualFrameAt = 0;
   });
+}
+
+function startRunPointerControl(e, origin = e){
+  activePointer = e.pointerId;
+  try{
+    canvas.setPointerCapture?.(e.pointerId);
+  }catch{}
+  beginPointerControl(origin);
+  if(origin !== e) updatePointerControl(e);
+  e.preventDefault();
+}
+
+function endRunPointerControl(e){
+  if(activePointer !== e.pointerId) return false;
+  activePointer = null;
+  state.pointer = 0;
+  state.pointerThrottle = 0;
+  if(!state.keyboard) resetTurnHold();
+  resetTouchStick();
+  try{
+    canvas.releasePointerCapture?.(e.pointerId);
+  }catch{}
+  return true;
+}
+
+function beginHudControlDrag(e){
+  if(!isRunControlMode() || activePointer !== null || e.target === canvas) return;
+  if(!pointerInsideCanvas(e) || !e.target?.closest?.('#barrage-ui')) return;
+  hudControlDrag.pointer = e.pointerId;
+  hudControlDrag.startX = e.clientX;
+  hudControlDrag.startY = e.clientY;
+  hudControlDrag.started = false;
+}
+
+function updateHudControlDrag(e){
+  if(activePointer === e.pointerId){
+    if(e.target !== canvas){
+      updatePointerControl(e);
+      e.preventDefault();
+    }
+    return;
+  }
+  if(hudControlDrag.pointer !== e.pointerId || !isRunControlMode()) return;
+  const dx = e.clientX - hudControlDrag.startX;
+  const dy = e.clientY - hudControlDrag.startY;
+  if(!hudControlDrag.started && Math.hypot(dx, dy) < CONTROL_UI_DRAG_START_PX) return;
+  hudControlDrag.started = true;
+  suppressUiClickUntil = performance.now() + 450;
+  startRunPointerControl(e, {
+    pointerId: e.pointerId,
+    clientX: hudControlDrag.startX,
+    clientY: hudControlDrag.startY,
+    preventDefault(){}
+  });
+  e.stopPropagation();
+}
+
+function endHudControlDrag(e){
+  if(hudControlDrag.pointer === e.pointerId){
+    if(hudControlDrag.started) suppressUiClickUntil = performance.now() + 450;
+    hudControlDrag.pointer = null;
+    hudControlDrag.started = false;
+  }
+  if(endRunPointerControl(e)) e.preventDefault();
+}
+
+function pointerInsideCanvas(e, pad = 0){
+  const rect = canvasBoundsCache.width > 0 ? canvasBoundsCache : canvas.getBoundingClientRect();
+  return e.clientX >= rect.left - pad
+    && e.clientX <= rect.left + rect.width + pad
+    && e.clientY >= rect.top - pad
+    && e.clientY <= rect.top + rect.height + pad;
 }
 
 function beginHomeShipDrag(e){
@@ -37931,15 +38539,30 @@ function resetTouchStick(){
 function syncTouchStickHud(){
   const stick = ui.refs?.touchStick;
   if(!stick) return;
-  const active = state.mode === 'play' && controlMode() === 'stick' && touchStick.active;
-  stick.classList.toggle('on', active);
+  const active = isRunControlMode() && controlMode() === 'stick' && touchStick.active;
+  if(touchStickHudCache.active !== active){
+    touchStickHudCache.active = active;
+    stick.classList.toggle('on', active);
+  }
   if(!active) return;
   const left = touchStick.startX - (canvasBoundsCache.left || 0);
   const top = touchStick.startY - (canvasBoundsCache.top || 0);
-  stick.style.setProperty('--stick-left', `${left}px`);
-  stick.style.setProperty('--stick-top', `${top}px`);
-  stick.style.setProperty('--stick-knob-x', `${touchStick.knobX}px`);
-  stick.style.setProperty('--stick-knob-y', `${touchStick.knobY}px`);
+  if(Math.abs((touchStickHudCache.left ?? Infinity) - left) > .25){
+    touchStickHudCache.left = left;
+    stick.style.setProperty('--stick-left', `${left}px`);
+  }
+  if(Math.abs((touchStickHudCache.top ?? Infinity) - top) > .25){
+    touchStickHudCache.top = top;
+    stick.style.setProperty('--stick-top', `${top}px`);
+  }
+  if(Math.abs((touchStickHudCache.knobX ?? Infinity) - touchStick.knobX) > .25){
+    touchStickHudCache.knobX = touchStick.knobX;
+    stick.style.setProperty('--stick-knob-x', `${touchStick.knobX}px`);
+  }
+  if(Math.abs((touchStickHudCache.knobY ?? Infinity) - touchStick.knobY) > .25){
+    touchStickHudCache.knobY = touchStick.knobY;
+    stick.style.setProperty('--stick-knob-y', `${touchStick.knobY}px`);
+  }
 }
 
 function resize(){
@@ -37975,7 +38598,7 @@ function resetRenderPerf(now){
 }
 
 function updateRenderQuality(frameMs, now){
-  if(state.mode !== 'play'){
+  if(!isRunControlMode()){
     resetRenderPerf(now);
     if(renderQualityScale < 1 && now - renderPerf.lastChange > 900){
       renderQualityScale = Math.min(1, renderQualityScale * 1.08 + .02);
@@ -38153,6 +38776,10 @@ function updatePlay(dt, t){
     state.hp = Math.min(state.maxHp, state.hp + regen * dt);
   }
 
+  if(state.wave === 0){
+    updateWaveZeroIntro(dt);
+  }
+
   if(state.wave > 0 && state.waveTime >= waveDuration()){
     state.wave++;
     state.waveTime = 0;
@@ -38161,9 +38788,6 @@ function updatePlay(dt, t){
   }
 
   updateWeaponFire(dt);
-  if(state.wave === 1 && state.wave1OpeningIndex < WAVE1_OPENING_ENEMY_COUNT){
-    spawnWave1OpeningEnemies();
-  }
 
   if(state.wave > 0){
     state.spawnTimer -= dt;
@@ -38540,7 +39164,7 @@ function updateStage(dt, t){
   keyLight.position.set(0, -2, 6);
   rimLight.position.set(-6, 4, -18);
 
-  const speed = state.mode === 'play' ? (14 + Math.min(18, state.wave * .35)) : 8;
+  const speed = isRunControlMode() ? (14 + Math.min(18, state.wave * .35)) : 8;
   ringPhase = (ringPhase + speed * dt) % PIPE_RING_LOOP;
   for(let i=0;i<stage.starLayers.length;i++){
     const layer = stage.starLayers[i];
@@ -38681,6 +39305,9 @@ function updateEnemies(dt, t, syncVisuals = true){
     e.sin = Math.sin(e.angle);
     e.cos = Math.cos(e.angle);
     e.radial = enemyApproachRadial(e, e.z);
+    if(e.openingIntro && state.wave === 0 && e.z >= PLAYER_Z - WAVE0_TO_WAVE1_DISTANCE){
+      beginWaveOneFromIntro();
+    }
     const rollDistance = angleDistance(e.angle, state.roll);
     const visible = rollDistance < ENEMY_RENDER_ARC || (e.boss && e.z <= BOSS_SIGHT_Z);
     e.root.visible = visible;
@@ -39420,11 +40047,33 @@ function spawnEnemyPack(){
   }
 }
 
+function updateWaveZeroIntro(dt){
+  if(state.wave !== 0) return;
+  let hasLeadEnemy = false;
+  let activeIntroEnemies = 0;
+  for(const enemy of enemies){
+    if(enemy.boss) continue;
+    activeIntroEnemies++;
+    if(enemy.openingIntro) hasLeadEnemy = true;
+  }
+  if(!hasLeadEnemy){
+    state.wave0IntroSpawned = false;
+    spawnWave0IntroEnemy();
+    activeIntroEnemies = Math.max(activeIntroEnemies, 1);
+  }
+  state.spawnTimer -= dt;
+  if(state.spawnTimer > 0 || state.bossAlive) return;
+  if(activeIntroEnemies < Math.min(MAX_ENEMIES, WAVE0_INTRO_ACTIVE_CAP)){
+    spawnWave0QueueEnemy();
+  }
+  state.spawnTimer = WAVE0_INTRO_SPAWN_INTERVAL * (.86 + Math.random() * .34);
+}
+
 function spawnWave0IntroEnemy(){
   if(state.wave !== 0 || state.wave0IntroSpawned || enemies.length >= MAX_ENEMIES) return null;
   const enemy = spawnEnemy(0);
-  const distance = WAVE0_INTRO_ENEMY_DISTANCE;
-  enemy.angle = normalizeAngle(state.roll + WAVE0_INTRO_LANE_OFFSET + (Math.random() - .5) * .025);
+  const distance = WAVE0_INTRO_ENEMY_DISTANCE + Math.random() * 12;
+  enemy.angle = normalizeAngle(state.roll + (Math.random() - .5) * WAVE0_INTRO_LANE_JITTER);
   enemy.prevAngle = enemy.angle;
   enemy.z = Math.max(PIPE_Z_FAR + 14, PLAYER_Z - distance);
   enemy.prevZ = enemy.z - Math.max(1.2, enemy.speed * .10);
@@ -39434,11 +40083,17 @@ function spawnWave0IntroEnemy(){
   enemy.sin = Math.sin(enemy.angle);
   enemy.cos = Math.cos(enemy.angle);
   enemy.openingIntro = true;
-  enemy.openingWave1 = false;
-  enemy.spawnZ = enemy.z - ENEMY_FADE_DISTANCE * WAVE0_INTRO_FADE_PRESENCE;
+  enemy.spawnZ = enemy.z;
   state.wave0IntroSpawned = true;
   setPipePositionFromTrig(enemy.root, enemy.sin, enemy.cos, enemy.z, enemy.radial);
   applyEnemyVisual(enemy, performance.now() / 1000);
+  return enemy;
+}
+
+function spawnWave0QueueEnemy(){
+  if(state.wave !== 0 || enemies.length >= MAX_ENEMIES) return null;
+  const enemy = spawnEnemy(Math.random() * .18);
+  enemy.openingIntro = false;
   return enemy;
 }
 
@@ -39446,69 +40101,9 @@ function beginWaveOneFromIntro(){
   if(state.wave !== 0) return;
   state.wave = 1;
   state.waveTime = 0;
-  state.spawnTimer = .72;
-  state.wave1OpeningIndex = 0;
-  state.wave1OpeningStartedAt = state.runTime;
+  state.spawnTimer = Math.min(Math.max(.42, state.spawnTimer || .42), .78);
   state.nextHudAt = 0;
   updateHud();
-  spawnWave1OpeningEnemies();
-}
-
-function spawnWave1OpeningEnemies(){
-  if(state.wave !== 1 || state.wave1OpeningIndex >= WAVE1_OPENING_ENEMY_COUNT || state.bossAlive) return false;
-  const openingElapsed = Math.max(0, state.runTime - (state.wave1OpeningStartedAt || 0));
-  const lead = openingElapsed <= .04 ? WAVE1_OPENING_INITIAL_LOOKAHEAD : WAVE1_OPENING_LOOKAHEAD;
-  let activeOpening = wave1OpeningActiveCount();
-  let spawned = false;
-  while(
-    state.wave1OpeningIndex < WAVE1_OPENING_ENEMY_COUNT &&
-    activeOpening < WAVE1_OPENING_ACTIVE_CAP &&
-    enemies.length < MAX_ENEMIES
-  ){
-    const index = state.wave1OpeningIndex;
-    const plannedDistance = WAVE1_OPENING_Z_DISTANCES[index % WAVE1_OPENING_Z_DISTANCES.length];
-    const currentDistance = plannedDistance - openingElapsed * WAVE1_OPENING_SPEED_ESTIMATE;
-    if(currentDistance > lead) break;
-    const enemy = spawnEnemy(index * .05);
-    placeWave1OpeningEnemy(enemy, index, currentDistance);
-    state.wave1OpeningIndex++;
-    activeOpening++;
-    spawned = true;
-  }
-  return spawned;
-}
-
-function wave1OpeningActiveCount(){
-  let count = 0;
-  for(const enemy of enemies){
-    if(enemy.openingWave1) count++;
-  }
-  return count;
-}
-
-function placeWave1OpeningEnemy(enemy, index, distanceOverride = null){
-  if(!enemy) return;
-  const lane = WAVE1_OPENING_LANE_OFFSETS[index % WAVE1_OPENING_LANE_OFFSETS.length];
-  const plannedDistance = WAVE1_OPENING_Z_DISTANCES[index % WAVE1_OPENING_Z_DISTANCES.length];
-  const distance = Math.max(10, Number.isFinite(distanceOverride) ? distanceOverride : plannedDistance);
-  enemy.angle = normalizeAngle(state.roll + lane + (Math.random() - .5) * .035);
-  enemy.prevAngle = enemy.angle;
-  enemy.z = Math.max(PIPE_Z_FAR + 14, PLAYER_Z - distance - Math.random() * 2.5);
-  enemy.prevZ = enemy.z - Math.max(1.2, enemy.speed * .10);
-  enemy.radial = enemyApproachRadial(enemy, enemy.z);
-  enemy.baseRadial = ENEMY_RAISED_RADIAL;
-  enemy.prevRadial = enemy.radial;
-  enemy.sin = Math.sin(enemy.angle);
-  enemy.cos = Math.cos(enemy.angle);
-  enemy.openingWave1 = true;
-  enemy.spawnZ = enemy.z - ENEMY_FADE_DISTANCE * wave1OpeningPresence(index, plannedDistance);
-  setPipePositionFromTrig(enemy.root, enemy.sin, enemy.cos, enemy.z, enemy.radial);
-  applyEnemyVisual(enemy, performance.now() / 1000);
-}
-
-function wave1OpeningPresence(index, distance){
-  if(index < 4) return .86 - index * .08;
-  return clamp((130 - distance) / 160, .04, .42);
 }
 
 function spawnEnemy(offset = 0){
@@ -39790,6 +40385,7 @@ function acquireEnemyObject(type, boss = false){
       root.userData.hpBar.visible = false;
       root.userData.hpBar.userData.owner = null;
     }
+    for(const part of root.userData.detailParts || []) part.visible = false;
     for(const part of root.userData.attackParts || []) part.visible = false;
     for(const part of root.userData.hitParts || []) part.visible = false;
   }
@@ -40037,6 +40633,7 @@ function decorateEnemyObject(root, type, boss, key){
     addEnemyHitCue(root, true);
     return;
   }
+  addEnemySurfaceDetails(root, type, key);
   addBossAttackCue(root);
   addEnemyHitCue(root, false);
 }
@@ -40044,6 +40641,7 @@ function decorateEnemyObject(root, type, boss, key){
 function prepareEnemyVisualMaterials(root){
   root.userData.opacityMaterials = [];
   root.traverse(child => {
+    if(child.userData?.skipEnemyOpacity) return;
     if(!child.material) return;
     const materials = Array.isArray(child.material)
       ? child.material.map(material => material.clone())
@@ -40090,6 +40688,51 @@ function addEnemyBlade(root, angle, radius, geometry, material, sx = 1, sy = 1, 
   root.userData.detailParts.push(blade);
   root.add(blade);
   return blade;
+}
+
+function addEnemyDetailPart(root, part){
+  part.userData.skipEnemyOpacity = true;
+  part.visible = false;
+  root.userData.detailParts.push(part);
+  root.add(part);
+  return part;
+}
+
+function addEnemySurfaceDetails(root, type, key){
+  const sides = Math.max(3, type?.sides || 6);
+  const bladeCount = type?.id === 'orb' ? 4 : Math.min(6, sides);
+  const bladeRadius = type?.id === 'orb' ? .60 : .66;
+  for(let i=0;i<bladeCount;i++){
+    const angle = TAU * i / bladeCount + (type?.id === 'tri' ? Math.PI / 6 : 0);
+    const blade = addEnemyBlade(
+      root,
+      angle,
+      bladeRadius,
+      shared.geometries.enemyBlade,
+      shared.materials.enemyArmorLight,
+      type?.id === 'orb' ? .72 : .82,
+      type?.id === 'quad' ? .62 : .52,
+      .54
+    );
+    blade.userData.skipEnemyOpacity = true;
+    blade.visible = false;
+    blade.position.z = (i % 2 ? .055 : -.055);
+  }
+
+  const edgeMaterial = shared.edgeMaterials.get(key);
+  if(edgeMaterial){
+    const ringSegments = SMALL_SCREEN ? 48 : 36;
+    const innerRing = new THREE.Line(makeRingCircleGeometry(type?.id === 'orb' ? .42 : .48, ringSegments), edgeMaterial);
+    innerRing.rotation.x = Math.PI / 2;
+    innerRing.position.z = .012;
+    addEnemyDetailPart(root, innerRing);
+
+    const outerRing = new THREE.Line(makeRingCircleGeometry(type?.id === 'orb' ? .70 : .76, ringSegments), edgeMaterial);
+    outerRing.rotation.x = Math.PI / 2;
+    outerRing.position.z = -.018;
+    outerRing.scale.y = .72;
+    addEnemyDetailPart(root, outerRing);
+  }
 }
 
 function removeEnemy(index, killed){
